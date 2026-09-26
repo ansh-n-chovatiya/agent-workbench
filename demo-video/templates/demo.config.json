@@ -1,0 +1,56 @@
+{
+  "baseURL": "http://localhost:3000",
+  "storageState": null,
+  "outDir": null,
+  "deliverDir": null,
+  "laptop": {
+    "width": 1920,
+    "height": 1080
+  },
+  "phone": {
+    "enabled": false,
+    "width": 390,
+    "height": 844
+  },
+  "busySelector": "[aria-busy=\"true\"]",
+  "maxWaitMs": 1200,
+  "allowWrites": [],
+  "allowWebSockets": false,
+  "blur": [],
+  "caption": {
+    "position": "bottom",
+    "background": "#111827e6",
+    "color": "#ffffff",
+    "font": "Inter, system-ui, sans-serif",
+    "mode": "band",
+    "bandHeight": 120
+  },
+  "title": {
+    "text": null,
+    "subtitle": null
+  },
+  "end": {
+    "text": "Thank you"
+  },
+  "voice": {
+    "name": null,
+    "rate": 160
+  },
+  "pace": {
+    "msPerChar": 55,
+    "minStepMs": 1800,
+    "captionLeadMs": 300,
+    "settleMs": 400,
+    "typeCps": 14,
+    "breathMs": 450,
+    "voiceLeadMs": 250
+  },
+  "recordly": "auto",
+  "recordlyTimeoutMin": 10,
+  "timeoutMin": 10,
+  "actionTimeoutSec": 60,
+  "rehearsalActionTimeoutMs": 5000,
+  "stopOn": [],
+  "nextBuildDir": null,
+  "allowDevSockets": true
+}
