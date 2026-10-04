@@ -75,7 +75,12 @@ covering it), `overlay` (pills over the picture) or `off`. All write `.srt`/`.vt
 
 ## Voice
 
-`record --voice` speaks each caption at `voice.rate` (160 words a minute),
+`record --voice` narrates with [Voicebox](https://github.com/jamiepine/voicebox)
+when its app is running (`voice.engine` `"auto"`; `voice.name` is the profile,
+default its first), else with `say` / `espeak-ng` / `espeak` as before. Nothing
+leaves the machine either way.
+
+It speaks each caption at `voice.rate` (160 words a minute; `say`/espeak only),
 `pace.voiceLeadMs` (250 ms) after the caption appears, with at least
 `pace.breathMs` (450 ms) of silence before the next sentence and no pause
 beyond what the step needs. `render` includes it; `render --no-voice` drops it.

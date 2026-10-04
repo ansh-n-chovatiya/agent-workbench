@@ -8,7 +8,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { SKILL_ROOT, run, log, warn, playwrightCli, ensureGitignore, inGitRepo } from './env.mjs';
 import { resolveProject, deliverFolder, laptopViewport, scenarioSlug, abs } from './paths.mjs';
-import { ttsAvailable } from './tts.mjs';
+import { ttsAvailable, warmUp } from './tts.mjs';
 import { ACTION_NAME } from './timeline.mjs';
 
 export const FIXTURE = path.join(SKILL_ROOT, 'scripts', 'lib', 'fixture.mjs');
@@ -496,9 +496,21 @@ export async function main(argv, ctx) {
     : config.recordly === 'auto' ? !!ctx.doctor?.items?.find((i) => i.name === 'Recordly')?.ok
       : config.recordly;
   let voice = args.voice;
-  if (voice && !(await ttsAvailable())) {
-    log('No text-to-speech tool found (say, espeak-ng or espeak); recording without narration.');
-    voice = false;
+  const ttsOpts = { engine: config.voice.engine, voiceboxUrl: config.voice.voiceboxUrl, voice: config.voice.name || undefined };
+  if (voice) {
+    // With engine "voicebox" this throws, stopping the run before anything records.
+    const tts = await ttsAvailable(ttsOpts);
+    if (!tts) {
+      log('No text-to-speech tool found (Voicebox, say, espeak-ng or espeak); recording without narration.');
+      voice = false;
+    } else if (tts.tool === 'voicebox') {
+      log(`Narrating with Voicebox, profile ${tts.voice}.`);
+      // Its first request loads the model, which can outlast a step's wait for narration.
+      await warmUp(ttsOpts).catch((err) => {
+        if (config.voice.engine === 'voicebox') throw err;
+        warn(`Voicebox warm-up failed (${err.message.split('\n')[0]}); clips fall back to the system voice if it keeps failing`);
+      });
+    }
   }
 
   const date = new Date();
@@ -547,7 +559,7 @@ export async function main(argv, ctx) {
   // the fixture must already guard.
   const setEnv = (over = {}) => {
     process.env.DEMO_RECORD = JSON.stringify({
-      runDir, baseURL: config.baseURL, voice, voiceName: config.voice.name, voiceRate: config.voice.rate, pace: config.pace,
+      runDir, baseURL: config.baseURL, voice, voiceName: config.voice.name, voiceRate: config.voice.rate, voiceEngine: config.voice.engine, voiceboxUrl: config.voice.voiceboxUrl, pace: config.pace,
       allowWrites, allowWebSockets: config.allowWebSockets, allowDevSockets: config.allowDevSockets,
       blur: config.blur, busySelector: config.busySelector, maxWaitMs: config.maxWaitMs, stopOn: config.stopOn, ...over,
     });

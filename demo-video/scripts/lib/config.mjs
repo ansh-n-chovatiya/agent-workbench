@@ -25,7 +25,7 @@ export const DEFAULTS = Object.freeze({
   caption: { position: 'bottom', background: '#111827e6', color: '#ffffff', font: 'Inter, system-ui, sans-serif', mode: 'band', bandHeight: 120 },
   title: { text: null, subtitle: null },
   end: { text: 'Thank you' },
-  voice: { name: null, rate: 160 }, // rate: spoken words per minute, calm rather than brisk
+  voice: { name: null, rate: 160, engine: 'auto', voiceboxUrl: 'http://127.0.0.1:17493' }, // rate: say/espeak words per minute, calm rather than brisk
   // breathMs: least silence after each spoken sentence; voiceLeadMs: caption-to-voice lead.
   pace: { msPerChar: 55, minStepMs: 1800, captionLeadMs: 300, settleMs: 400, typeCps: 14, breathMs: 450, voiceLeadMs: 250 },
   recordly: 'auto',
@@ -72,6 +72,8 @@ export function mergeConfig(user, name = CONFIG_FILE) {
   }
   if (out.project !== null && /[\\/]|^\.\.?$/.test(out.project)) throw new Error(`${name}: "project" must be a plain name, not a path`);
   if (!['band', 'overlay', 'off'].includes(out.caption.mode)) throw new Error(`${name}: "caption.mode" must be "band", "overlay" or "off"`);
+  if (!['auto', 'voicebox', 'say', 'espeak'].includes(out.voice.engine)) throw new Error(`${name}: "voice.engine" must be "auto", "voicebox", "say" or "espeak"`);
+  if (typeof out.voice.voiceboxUrl !== 'string' || !/^https?:\/\/\S+$/.test(out.voice.voiceboxUrl)) throw new Error(`${name}: "voice.voiceboxUrl" must be an http(s) address (e.g. "http://127.0.0.1:17493")`);
   for (const key of ['pace.breathMs', 'pace.voiceLeadMs']) {
     const v = key.split('.').reduce((o, k) => o[k], out);
     if (typeof v !== 'number' || !(v >= 0) || !Number.isFinite(v)) throw new Error(`${name}: "${key}" must be a number of milliseconds, 0 or more`);
