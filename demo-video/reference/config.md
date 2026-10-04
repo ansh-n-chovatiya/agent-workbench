@@ -37,8 +37,10 @@ resolve against the folder the command runs in.
 | `title.text` | string \| null | `null` | Title card heading; `null` derives it from the scenario file name. |
 | `title.subtitle` | string \| null | `null` | Line under the title; `null` shows the recording date. |
 | `end.text` | string | `Thank you` | End card text. |
-| `voice.name` | string \| null | `null` | TTS voice for `record --voice`; `null` picks the best installed English voice. |
-| `voice.rate` | number | `160` | Speaking rate in words per minute (`say -r`, espeak `-s`): calm rather than brisk. |
+| `voice.engine` | `"auto"` \| `"voicebox"` \| `"say"` \| `"espeak"` | `"auto"` | Which TTS `record --voice` uses. `"auto"`: [Voicebox](https://github.com/jamiepine/voicebox) if its app is running (natural, local, free), else `say`, else `espeak-ng`/`espeak`; if Voicebox fails on one clip, that clip is spoken by the system voice with one warning. `"voicebox"`: Voicebox required; `record` stops early if it is not running. `"say"` / `"espeak"`: never contact Voicebox. |
+| `voice.voiceboxUrl` | string | `http://127.0.0.1:17493` | Where Voicebox's local server listens, for a non-default port. |
+| `voice.name` | string \| null | `null` | Voice for `record --voice`. With Voicebox: a profile name or id (`null` = its first profile; with `"voicebox"` an unknown name fails listing the profiles, with `"auto"` it is taken as a `say`/espeak voice). For `say`/espeak: the voice name; `null` picks the best installed English voice. |
+| `voice.rate` | number | `160` | Speaking rate in words per minute (`say -r`, espeak `-s`): calm rather than brisk. Not used by Voicebox, which speaks at its natural pace; step lengths follow each clip's real duration either way. |
 | `pace.msPerChar` | number | `55` | Caption reading time per character. |
 | `pace.minStepMs` | number | `1800` | Minimum on-screen time of a step without narration. A narrated step lasts at least its speech plus the larger of `pace.breathMs` and `pace.voiceLeadMs` instead. |
 | `pace.captionLeadMs` | number | `300` | Caption appears this long before its step's first action. |

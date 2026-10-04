@@ -12,6 +12,7 @@ const FILTERS = ['overlay', 'xfade', 'amix', 'freezedetect', 'perspective', 'alp
 const mac = process.platform === 'darwin';
 const pkgFix = (name) => (mac ? `brew install ${name}` : `sudo apt install ${name}`);
 const inSkill = (cmd) => `cd "${SKILL_ROOT}" && ${cmd}`;
+const VOICEBOX_HINT = 'Voicebox (https://github.com/jamiepine/voicebox, then open the app) for natural voices';
 const BETTER_VOICES = 'System Settings > Accessibility > Spoken Content > System voice > Manage voices';
 
 function item(name, required, ok, detail, fix) {
@@ -81,9 +82,10 @@ async function checkRecordly() {
 
 async function checkTts() {
   const tts = await ttsAvailable();
-  if (!tts) return item('TTS', false, false, 'no say, espeak-ng or espeak', pkgFix('espeak-ng'));
+  if (!tts) return item('TTS', false, false, 'no Voicebox, say, espeak-ng or espeak', pkgFix('espeak-ng'));
+  if (tts.tool === 'voicebox') return item('TTS', false, true, `voicebox, profile ${tts.voice}`);
   const premium = /\((Premium|Enhanced)\)/.test(tts.voice || '');
-  const hint = tts.tool === 'say' && !premium ? `; better free voices: ${BETTER_VOICES}` : '';
+  const hint = tts.tool === 'say' && !premium ? `; better free voices: ${VOICEBOX_HINT}, or ${BETTER_VOICES}` : '';
   return item('TTS', false, true, `${tts.tool}, voice ${tts.voice ?? 'default'}${hint}`);
 }
 

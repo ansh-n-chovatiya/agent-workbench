@@ -34,7 +34,9 @@
   },
   "voice": {
     "name": null,
-    "rate": 160
+    "rate": 160,
+    "engine": "auto",
+    "voiceboxUrl": "http://127.0.0.1:17493"
   },
   "pace": {
     "msPerChar": 55,

@@ -1,7 +1,7 @@
 // Playwright fixture that turns an ordinary test into a human-paced demo.
 // record.mjs rewrites the scenario's `@playwright/test` import to this file
 // and passes its settings in the DEMO_RECORD env var (JSON):
-//   {runDir, baseURL, voice, voiceName, voiceRate, pace, allowWrites, allowWebSockets, allowDevSockets, blur, busySelector, maxWaitMs, stopOn, rehearse}
+//   {runDir, baseURL, voice, voiceName, voiceRate, voiceEngine, voiceboxUrl, pace, allowWrites, allowWebSockets, allowDevSockets, blur, busySelector, maxWaitMs, stopOn, rehearse}
 // With `rehearse` the scenario runs unpaced (no glide, typing, holds or voice)
 // behind the same guard. Without DEMO_RECORD the fixture is a plain pass-through.
 import { test as base, request, mergeTests as baseMergeTests } from '@playwright/test';
@@ -361,6 +361,9 @@ const absolute = (raw, own) => {
 // check. Database drivers and raw sockets are not HTTP and stay unguarded.
 function guardNode() {
   const fetch = globalThis.fetch;
+  // tts.mjs speaks through Voicebox with POST /generate: the skill's own
+  // narration, not the scenario's, so it keeps the unguarded fetch.
+  globalThis[Symbol.for('demo-video.realFetch')] = fetch;
   globalThis.fetch = function (input, init) {
     const method = init?.method ?? input?.method ?? 'GET';
     const url = absolute(input?.url ?? String(input));
@@ -633,13 +636,15 @@ const guardedTest = !R ? base : base.extend({
 // without a TTS tool.
 async function synthFor(title, index) {
   const { ttsAvailable, synth } = await import('./tts.mjs');
-  const tts = await ttsAvailable();
+  const opts = { engine: R.voiceEngine, voiceboxUrl: R.voiceboxUrl, voice: R.voiceName || undefined };
+  const tts = await ttsAvailable(opts);
   if (!tts) return null;
+  // Always .wav except for say; synth converts when a clip falls back mid-run.
   const file = path.join('voice', clip, `${index}.${tts.tool === 'say' ? 'aiff' : 'wav'}`);
   mkdirSync(path.join(R.runDir, 'voice', clip), { recursive: true });
   // The clip carries pace.voiceLeadMs of silence up front: placed at its
   // caption's start, the voice follows the caption. duration is the speech alone.
-  const duration = await synth(title, path.join(R.runDir, file), { voice: R.voiceName || undefined, rate: R.voiceRate, leadMs: R.pace.voiceLeadMs });
+  const duration = await synth(title, path.join(R.runDir, file), { ...opts, rate: R.voiceRate, leadMs: R.pace.voiceLeadMs });
   return { file, duration };
 }
 
