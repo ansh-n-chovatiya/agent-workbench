@@ -411,7 +411,7 @@ class SecurityPolicyTests(unittest.TestCase):
         """The channel must be one that actually exists. GitHub's private
         reporting form lives at a fixed path under the repository."""
         self.assertIn(
-            "https://github.com/ansh-n-chovatiya/context-ledger/security/advisories/new",
+            "https://github.com/ansh-n-chovatiya/agent-workbench/security/advisories/new",
             self.text,
         )
 

@@ -14,8 +14,8 @@ Running it, measuring it, and working on it.
 ## Install scopes
 
 ```bash
-/plugin install ctx@context-ledger --scope project         # this project only
-claude plugin install ctx@context-ledger --scope project   # same, from a shell
+/plugin install ctx@agent-workbench --scope project         # this project only
+claude plugin install ctx@agent-workbench --scope project   # same, from a shell
 ```
 
 | Scope | Available in | Trade-off |
@@ -32,9 +32,9 @@ It's the command descriptions that cost tokens: [What it costs](#what-it-costs).
 For hacking on the plugin itself:
 
 ```bash
-git clone https://github.com/ansh-n-chovatiya/context-ledger.git ~/tools/context-ledger
-claude plugin marketplace add ~/tools/context-ledger    # or /plugin marketplace add
-claude plugin install ctx@context-ledger                # or /plugin install
+git clone https://github.com/ansh-n-chovatiya/agent-workbench.git ~/tools/agent-workbench
+claude plugin marketplace add ~/tools/agent-workbench    # or /plugin marketplace add
+claude plugin install ctx@agent-workbench                # or /plugin install
 ```
 
 A local-directory marketplace loads **live from that directory**: edits take
@@ -104,7 +104,7 @@ jobs:
       - name: Get Context Ledger, pinned
         run: |
           git clone --filter=blob:none --no-checkout \
-            https://github.com/ansh-n-chovatiya/context-ledger /tmp/ctx
+            https://github.com/ansh-n-chovatiya/agent-workbench /tmp/ctx
           git -C /tmp/ctx checkout --detach "$CTX_REF"
       - name: Ledger schema is current
         run: /tmp/ctx/bin/ctx migrate --check
@@ -113,6 +113,8 @@ jobs:
       - name: Ledger checks
         run: /tmp/ctx/bin/ctx ci
 ```
+
+**Repository layout.** Context Ledger now lives in the `agent-workbench` repository, under `plugins/ctx`. The tags `ctx-v1.0.0` to `ctx-v1.2.0` point at the standalone layout, so the recipe above (`/tmp/ctx/bin/ctx`) is correct for them. For a tag cut from the monorepo, use `/tmp/ctx/plugins/ctx/bin/ctx` instead.
 
 Two things there are load-bearing, and simplifying either is how a pull request
 gets a shell in your CI. **The clone is pinned** — `--depth 1` of a default branch
@@ -437,18 +439,17 @@ crashes and `Ctrl-C`.
 ## Security
 
 Report a vulnerability through **GitHub private vulnerability reporting**:
-<https://github.com/ansh-n-chovatiya/context-ledger/security/advisories/new>
+<https://github.com/ansh-n-chovatiya/agent-workbench/security/advisories/new>
 
 That form, and not email: this project publishes no security mailbox, and an
 address in a commit trailer or a package manifest is authorship metadata, not a
 monitored intake. Not a public issue either — the right place for a bug, the
 wrong place for a working exploit.
 
-> **Private vulnerability reporting is off by default on GitHub, and it is off on
-> this repository.** The link above will not accept a report until a maintainer
-> switches it on in *Settings → Advanced Security*. That is a repository setting,
-> not something a commit can fix, and until it is on there is no working private
-> channel — said here rather than left for a reporter to discover.
+> **Private vulnerability reporting is a repository setting, not something a
+> commit can fix.** It is enabled on `agent-workbench` (verified 2026-10-18 with
+> the GitHub API). If you fork this repository it is off in your fork until a
+> maintainer switches it on in *Settings → Advanced Security*.
 
 **Supported versions:** the latest released minor only. Fixes ship as a new patch
 from `main`; there are no LTS branches and no backports.

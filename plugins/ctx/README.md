@@ -60,25 +60,25 @@ Nothing is installed into your project: no `node_modules`, no
 In an interactive Claude Code session:
 
 ```
-/plugin marketplace add ansh-n-chovatiya/context-ledger
-/plugin install ctx@context-ledger
+/plugin marketplace add ansh-n-chovatiya/agent-workbench
+/plugin install ctx@agent-workbench
 ```
 
 Or from any shell — VSCode, SSH, CI — where `/plugin` doesn't exist, and then
 verify what you got:
 
 ```bash
-claude plugin marketplace add ansh-n-chovatiya/context-ledger
-claude plugin install ctx@context-ledger
-claude plugin list                 # ctx@context-ledger  1.2.0  ✔ enabled
+claude plugin marketplace add ansh-n-chovatiya/agent-workbench
+claude plugin install ctx@agent-workbench
+claude plugin list                 # ctx@agent-workbench  1.2.0  ✔ enabled
 claude plugin details ctx          # component inventory + token cost
 ```
 
 **Updating is two commands, not one:**
 
 ```bash
-claude plugin marketplace update context-ledger   # fetch the new commits
-claude plugin update ctx@context-ledger           # install them
+claude plugin marketplace update agent-workbench  # fetch the new commits
+claude plugin update ctx@agent-workbench           # install them
 ```
 
 `claude plugin update` fetches nothing: it reads the marketplace clone already on
@@ -86,7 +86,7 @@ disk, so without the first command it reports you are current while sitting on a
 months-old build. It compares **declared version numbers, not commits**, so a
 stale clone downgrades you. Restart Claude Code afterwards, then check what you
 are running rather than trusting the output: `claude plugin list`, and `ls
-~/.claude/plugins/cache/context-ledger/ctx/` for one directory per version.
+~/.claude/plugins/cache/agent-workbench/ctx/` for one directory per version.
 
 ### As a Python package
 
@@ -294,10 +294,10 @@ ctx unit 03-rotate          # arms the done-gate for this unit
 ## Security
 
 Report a vulnerability through **GitHub private vulnerability reporting**:
-<https://github.com/ansh-n-chovatiya/context-ledger/security/advisories/new> —
-that form, and not email or a public issue. **It is off on this repository until
-a maintainer switches it on**, so read [Security](docs/operations.md#security)
-before you rely on it. Scope and Windows specifics: [SECURITY.md](SECURITY.md).
+<https://github.com/ansh-n-chovatiya/agent-workbench/security/advisories/new> —
+that form, and not email or a public issue. It is enabled on this repository.
+Scope and Windows specifics: [SECURITY.md](SECURITY.md) and
+[Security](docs/operations.md#security).
 
 ## License
 

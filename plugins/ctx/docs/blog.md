@@ -63,15 +63,15 @@ There is even a command, `/ctx:preview`, that turns the plan into one readable p
 You need Claude Code. Then, inside a Claude Code session, run:
 
 ```text
-/plugin marketplace add ansh-n-chovatiya/context-ledger
-/plugin install ctx@context-ledger
+/plugin marketplace add ansh-n-chovatiya/agent-workbench
+/plugin install ctx@agent-workbench
 ```
 
 Prefer a regular terminal? These do the same thing:
 
 ```bash
-claude plugin marketplace add ansh-n-chovatiya/context-ledger
-claude plugin install ctx@context-ledger
+claude plugin marketplace add ansh-n-chovatiya/agent-workbench
+claude plugin install ctx@agent-workbench
 ```
 
 Then, in any project, type this once:
@@ -82,7 +82,7 @@ Then, in any project, type this once:
 
 That is the whole setup. It creates the `.ctx/` folder and stays quiet until you ask for more. It uses only Python, which already comes with macOS and Linux, so nothing is added to your project.
 
-The full source, a plain-language guide and the complete command list are in the [Context Ledger repository on GitHub](https://github.com/ansh-n-chovatiya/context-ledger).
+The full source, a plain-language guide and the complete command list are in the [agent-workbench repository on GitHub](https://github.com/ansh-n-chovatiya/agent-workbench), where Context Ledger lives in `plugins/ctx`.
 
 ## The commands you will actually use
 

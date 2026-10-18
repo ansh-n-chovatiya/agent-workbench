@@ -17,7 +17,7 @@ Report a problem privately through GitHub private vulnerability reporting,
 which is enabled on this repository and reaches the maintainers without being
 public:
 
-<https://github.com/ansh-n-chovatiya/context-ledger/security/advisories/new>
+<https://github.com/ansh-n-chovatiya/agent-workbench/security/advisories/new>
 
 That channel is for conduct as well as vulnerabilities; there is deliberately
 no email address here, because an address in a public file is a spam target and

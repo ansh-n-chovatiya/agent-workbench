@@ -64,9 +64,9 @@ dependencies = []
 ctx = "ctx.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ansh-n-chovatiya/context-ledger"
-Source = "https://github.com/ansh-n-chovatiya/context-ledger"
-Changelog = "https://github.com/ansh-n-chovatiya/context-ledger/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/ansh-n-chovatiya/agent-workbench"
+Source = "https://github.com/ansh-n-chovatiya/agent-workbench"
+Changelog = "https://github.com/ansh-n-chovatiya/agent-workbench/blob/main/plugins/ctx/CHANGELOG.md"
 
 # One source of truth for the version. `.claude-plugin/plugin.json` is held to
 # the same string by a test here and by the `ledger` job in CI.

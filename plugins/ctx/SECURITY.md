@@ -11,7 +11,7 @@ and reports about it are wanted.
 
 **Use GitHub private vulnerability reporting:**
 
-<https://github.com/ansh-n-chovatiya/context-ledger/security/advisories/new>
+<https://github.com/ansh-n-chovatiya/agent-workbench/security/advisories/new>
 
 That form is the disclosure channel for this project. It is deliberately the
 only one: this project publishes no security mailbox, so please do not send

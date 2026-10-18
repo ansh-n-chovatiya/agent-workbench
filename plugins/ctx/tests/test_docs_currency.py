@@ -271,7 +271,7 @@ class VersionCurrencyTests(unittest.TestCase):
         """
         text = read(README)
         self.assertIn(
-            f"ctx@context-ledger  {__version__}", text,
+            f"ctx@agent-workbench  {__version__}", text,
             f"README's `claude plugin list` example does not show "
             f"ctx.__version__ ({__version__})",
         )
