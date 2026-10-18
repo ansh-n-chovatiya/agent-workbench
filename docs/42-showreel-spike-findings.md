@@ -1,6 +1,6 @@
 # Showreel spike findings
 
-Status: **partial, 2026-10-18.** B0, S1, S2, S2b, S2c, S5, S6, S7 and S8 are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
+Status: **partial, 2026-10-18.** B0, S1, S2, S2b, S2c, S4, S5, S6, S7 and S8 are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
 `spikes/showreel/results/*.json`. Test machine: Apple M4, 16 GB, macOS; Playwright 1.63.0; Node 24.
 
 ## B0: baseline token cost of the old skill
@@ -203,6 +203,24 @@ Findings:
 
 Proposed role: **Kokoro as the default voice; Kitten nano as an instant draft voice** in the editor (hear the script immediately, then render the final with Kokoro) and as the fallback tier for slow PCs. Because the Kitten port is unofficial and needs a patch, vendor the 62 KB package (Apache-2.0, keep its NOTICE) and fix the one line, rather than depending on npm.
 **Quality verdict (owner's blind listen, 2026-10-18): Kokoro was clearly the best and clearest.** Of four anonymised samples (A Kokoro, B Kitten micro, C Kitten mini, D Kitten nano) the owner picked A. Consequences: Kokoro stays the default and the voice for every final render; the Kitten models are less clear, so they are limited to an optional instant *draft* preview and the slow-PC fallback, and the fallback must warn that clarity is lower. If draft clarity proves too poor in the editor, drop Kitten and use Kokoro alone (its 1-thread RTF of 0.47 is already fast enough for drafts on this machine).
+
+## S4: Guide mode selector capture: **go, with a design change (resolve at replay, not at capture)**
+
+First attempt (the plan's design: Node checks each candidate selector for uniqueness when the event arrives), with the owner clicking five things on the
+portfolio: 4 of 5 steps had a unique selector at capture, and **only 3 of 5 resolved on replay**. Two failure classes:
+1. **Uniqueness was checked after the click had already acted** (events reach Node asynchronously), so the page had changed: step 0 ("View my work") had no unique candidate even though a fresh load matches it exactly once.
+2. **The URL was recorded after the navigation** (`page.url()` in the callback), so replay opened the wrong page for the next step and the selector matched nothing.
+
+Redesign (now `spikes/showreel/s4-guide/{recorder,guide,resolve}.mjs`): the in-page listener captures everything **synchronously at click time** (all ordered candidate selectors, accessible name, role, tag, `location.href`, and the element's box in page coordinates); nothing is judged at capture. A **resolver replays the steps in order** and, at each step, picks the first candidate that matches exactly one element at that moment; if only multi-match candidates exist it picks the match nearest the recorded box (`candidate >> nth=k`, accepted only within 40 px).
+
+| Test | Result |
+|---|---|
+| Live portfolio, automated clicker (4 link clicks, incl. the two that failed before) | **4 of 4 resolved uniquely and replayed** |
+| Local page with three identical "Read more" links and "Save" buttons, plus a search box | **3 of 3 resolved, and each selector points at the element used** (checked by href and enclosing card heading) |
+
+Also found: **a crash in the CSS-path fallback on shallow pages** (it walked up to `<html>`, which has no parent); fixed. The deep live site had hidden it.
+
+`guide.json` needs per step: `action`, ordered `candidates`, `name`, `role`, `tag`, `url` at click time, `box` (page coordinates), and `value` for fills; the resolver adds `selector` and `how`. Improvements to build in Phase 2: prefer scoped semantic selectors (for example by the enclosing card heading) over long structural CSS paths, which resolved correctly here but are brittle; capture hover, keyboard and scroll actions; handle new tabs and external links (the owner's first run clicked a link to another site); iframes, shadow DOM and canvas are untested.
 
 ## Tooling notes (2026-10-18)
 

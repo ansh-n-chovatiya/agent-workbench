@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Read more",
+    "selector": "html > body > section:nth-of-type(2) > a",
+    "how": "unique",
+    "href": "#c2",
+    "section": "Card two"
+  },
+  {
+    "name": "Save",
+    "selector": "html > body > section:nth-of-type(3) > button",
+    "how": "unique",
+    "href": null,
+    "section": "Card three"
+  },
+  {
+    "name": "Search",
+    "selector": "role=textbox[name=\"Search\"i]",
+    "how": "unique",
+    "href": null,
+    "section": "none"
+  }
+]

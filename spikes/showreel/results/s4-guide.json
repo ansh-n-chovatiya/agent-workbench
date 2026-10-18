@@ -1,0 +1,14 @@
+{
+  "steps": 5,
+  "uniqueOnReplay": 3,
+  "failures": [
+    {
+      "i": 0,
+      "why": "no unique selector at capture"
+    },
+    {
+      "i": 4,
+      "why": "selector matched 0"
+    }
+  ]
+}
