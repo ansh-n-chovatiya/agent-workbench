@@ -68,7 +68,17 @@ async function helperBundle() {
             return { matches, pixels };
           });
           const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', data))].map((b) => b.toString(16).padStart(2, '0')).join('');
-          frames.push({ boxes, samples, digest }); index++;
+          const grid = []; const gw = 32, gh = 18;
+          for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+            let r = 0, g = 0, b = 0, n = 0;
+            for (let y = Math.floor(gy * height / gh); y < Math.floor((gy + 1) * height / gh); y += 4) {
+              for (let x = Math.floor(gx * width / gw); x < Math.floor((gx + 1) * width / gw); x += 4) {
+                const o = (y * width + x) * 4; r += data[o]; g += data[o + 1]; b += data[o + 2]; n++;
+              }
+            }
+            grid.push(r / n, g / n, b / n);
+          }
+          frames.push({ boxes, samples, digest, grid }); index++;
         }
         return { width: await track.getDisplayWidth(), height: await track.getDisplayHeight(), codec: await track.getCodec(),
           duration: await track.computeDuration(), fps: stats.averagePacketRate, frames };
