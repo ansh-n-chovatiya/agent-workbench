@@ -298,6 +298,26 @@ decision; (2) the borrow is roughly ten small pure modules plus adapted exporter
 are 83 to 93 KB and tied to the host app), so Phase 5 UI work is mostly ours; (3) write the time-map API and the click effect ourselves; (4) all
 art (cursors, backgrounds, themes) is created or sourced under a verified licence.
 
+## Phase 1: three-OS smoke results (CI, 2026-10-18)
+
+The Phase 1 smoke tests ran on GitHub's CPU-only runners (Ubuntu, macOS and Windows, Playwright's bundled headless Chromium, Node 22) against the fixture app,
+unattended, in run 39119947503. They answer the main risk carried out of Phase 0: does it work off a Mac?
+
+| Check | Ubuntu | macOS | Windows |
+|---|---|---|---|
+| H.264 (and VP9, AV1) WebCodecs export | yes (643 KB MP4) | yes (642 KB) | yes (645 KB) |
+| 4K / 60 fps export, 4 s | completed, 16.6 fps, 1,066 MB peak | completed, 14.1 fps, 861 MB | completed, 22.3 fps, memory not sampled |
+| Capture fps at scale 1 / 1.33 / 1.67 / 2 | 59.7 / 59.1 / 42.5 / 22.5 | 36.7 / 43.2 / 52.5 / 39.4 (noisy) | 59.7 / 58.3 / 47.7 / 34.9 |
+| Layout drift at every scale | below 0.003 | below 0.003 | below 0.002 |
+| Benchmark's recommended capture scale | 1.33 | 1.67 | 1.33 |
+
+Findings:
+1. **H.264 export works on all three operating systems**, so the exporter design (WebCodecs through mediabunny) stands, with VP9 and AV1 as fallbacks that also work everywhere tested.
+2. **CSS-zoom capture keeps the layout on all three** (drift below 0.003 on the fixture) and the capture scale genuinely depends on the machine: CPU-only runners cannot hold 2x, and `doctor --benchmark` picks 1.33x or 1.67x for them. The adaptive capture scale in section 22 of the spec is therefore necessary, not optional.
+3. **Runners are noisy.** The macOS runner showed 36.7 fps at scale 1 with 19 dropped frames but 52.5 fps at 1.67, which is not monotonic. The benchmark needs a warm-up pass and the median of two runs before it recommends a scale (a Phase 3 item).
+4. **Benchmark method lessons (all fixed in `scripts/lib/capture-benchmark.mjs`):** (a) screencast emits a frame only when the page changes, so a heartbeat animation is needed to measure capture capacity; (b) scripted Playwright input lowers the screencast rate by itself (about 42 fps versus 60 on this Mac), so capacity is measured with no input and the recorder's input load is a separate Phase 3 concern; (c) layout drift is judged against the scale-1 noise floor, because an animated page differs from itself (0.077 on the real portfolio); (d) content complexity matters: the simple fixture allows 2x on this Mac while the real portfolio holds only 1.67x (44 fps at 2x), so the benchmark should run against the user's own app when a URL is given.
+5. **Still untested:** machines with a GPU or hardware video encoder on Windows and Linux, a real audio device, and sites with heavy canvas or iframes.
+
 ## Tooling notes (2026-10-18)
 
 - Gemini CLI could not be used: its free API-key quota (20 requests a day) was exhausted in minutes, and Google ended Google-account sign-in for Gemini CLI on 2026-06-18, so the owner's Jio plan cannot power it. Browser spikes were run by Claude directly.

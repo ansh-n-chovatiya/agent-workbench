@@ -1,6 +1,6 @@
 # Showreel Phase 1 plan: scaffold `plugins/showreel` side by side
 
-Status: executing from 2026-10-18. Spec: `docs/40-showreel-design.md` (sections 17, 22 to 24). Evidence: `docs/42-showreel-spike-findings.md`.
+Status: **complete 2026-10-18** (all acceptance lines met; results in `docs/42`). Spec: `docs/40-showreel-design.md` (sections 17, 22 to 24). Evidence: `docs/42-showreel-spike-findings.md`.
 Operating model: Claude writes these briefs and reviews every diff; Codex writes code and tests (no browser, no real network); Claude runs anything that
 launches a browser, measures timing or touches CI.
 

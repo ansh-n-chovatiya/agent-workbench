@@ -208,7 +208,7 @@ hard budget for showreel and track it with a per-run meter in CI-style benchmark
 | # | Phase | Acceptance |
 |---|---|---|
 | 0 | Baseline and spikes | **Done 2026-10-18.** Baseline and spikes S1 to S8 (plus S2b, S2c) answered in `docs/42`; gate: go. |
-| 1 | Scaffold `plugins/showreel` side by side | New plugin builds, validates and tests on three OSes; safe code reused from `skills-demo` (config, doctor, recorder safety, write blocking); `skills-demo` keeps working untouched. |
+| 1 | **Done 2026-10-18.** Scaffold `plugins/showreel` side by side | New plugin builds, validates and tests on three OSes; safe code reused from `skills-demo` (config, doctor, recorder safety, write blocking); `skills-demo` keeps working untouched. |
 | 2 | Intake, storyboard, Guide mode | A user-guided flow produces a working scenario with no exploration loop. |
 | 3 | Recorder and motion | `events.json` captured; cursor paths pass property tests; blind side-by-side beats the old cursor. |
 | 4 | Compositor and exporter | Golden frames match; export plays in QuickTime, VLC and browsers. |
@@ -278,7 +278,7 @@ A video passes when all of these hold:
 
 ## 22. Capture design (from spikes S2, S2b and S2c, 2026-10-18)
 
-Measured on an Apple M4 (see `docs/42-showreel-spike-findings.md`); verify on Windows and Linux in Phase 3.
+Measured on an Apple M4 and, for the smoke tests, on CPU-only CI runners for Ubuntu, macOS and Windows (see `docs/42-showreel-spike-findings.md`); H.264 export, capture and 4K export memory work on all three.
 
 - **Do not use Playwright's built-in video** (25 fps VP8, soft text) and **never store raw frames** (about 490 MB per minute at 1080p):
   capture with CDP screencast and stream-encode while recording.
@@ -311,3 +311,8 @@ Measured on an Apple M4 (see `docs/42-showreel-spike-findings.md`); verify on Wi
 - Voice: Kokoro is the default and final voice (owner's blind listen); the vendored, patched Kitten nano is a draft and fallback tier only.
 - The Phase 8 token budget is the baseline in `docs/42` (fresh tokens and cost for the simple flow); a harder-flow baseline is set at the start of Phase 8.
 - Early risks to close in Phase 1: the three-OS CI matrix for capture, export and encode, and a second test subject beyond the owner's portfolio.
+
+## 25. Phase 1 outcome (2026-10-18)
+
+- `plugins/showreel` 0.1.0 (preview) exists beside the untouched `skills-demo`: `doctor`, `doctor --benchmark`, `init`, a fixture app and server, three smoke tests, 34 unit tests, and a three-OS CI job that passes on Ubuntu, macOS and Windows.
+- The capture-scale benchmark must warm up and take the median of two runs, and should run on the user's own app when a URL is available (fixture results are optimistic); input load during recording is measured separately in Phase 3.
