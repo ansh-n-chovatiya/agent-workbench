@@ -5,109 +5,109 @@ import {
 } from '../scripts/lib/record/cursor-path.mjs';
 import { rngFor } from '../scripts/lib/record/rng.mjs';
 
-const jerk = (t) => 10 * t ** 3 - 15 * t ** 4 + 6 * t ** 5;
 const near = (a, b, epsilon = 1e-8) => assert.ok(Math.abs(a - b) <= epsilon, `${a} != ${b}`);
 const keys = Array.from({ length: 256 }, (_, i) => `s${i}:3`);
+const cases = [
+  [{ x: 0, y: 0 }, { x: 5, y: 0 }],
+  [{ x: 20, y: -10 }, { x: 20, y: -20 }],
+  [{ x: -10, y: 30 }, { x: -25, y: 10 }],
+  [{ x: -200, y: 50 }, { x: -160, y: 50 }],
+  [{ x: 0, y: 0 }, { x: 100, y: 0 }],
+  [{ x: 4, y: -80 }, { x: 4, y: 180 }],
+  [{ x: 100, y: 100 }, { x: -100, y: -100 }],
+  [{ x: 400, y: 0 }, { x: 0, y: 0 }],
+  [{ x: -200, y: 50 }, { x: 400, y: 50 }],
+  [{ x: 0, y: 600 }, { x: 0, y: -600 }],
+  [{ x: -500, y: -400 }, { x: 940, y: 680 }],
+  [{ x: 1000, y: 800 }, { x: -440, y: -280 }],
+  // Also exercise both duration clamps and the threshold above the early return.
+  [{ x: 0, y: 0 }, { x: 2, y: 0 }],
+  [{ x: 10000, y: 8000 }, { x: -20000, y: -10000 }],
+];
 
-// Reconstruct the unjittered geometry independently to measure the actual jitter residual.
-function geometry(from, to, key) {
-  const rng = rngFor(key);
-  const d = Math.hypot(to.x - from.x, to.y - from.y);
-  const duration = Math.max(280, Math.min(1100, 180 + 110 * Math.log2(1 + d / 40)))
-    * (0.9 + 0.2 * rng());
-  const u = { x: (to.x - from.x) / d, y: (to.y - from.y) / d };
-  const excess = d > 350 ? Math.min(18, 0.03 * d) : 0;
-  const end = { x: to.x + u.x * excess, y: to.y + u.y * excess };
-  const offsets = [rng(), rng()].map((r) => Math.max(-40, Math.min(40, d * 0.06 * (r * 2 - 1))));
-  const phases = [rng(), rng()].map((r) => r * 2 * Math.PI);
-  function at(tau) {
-    const split = excess ? 0.88 : 1;
-    if (tau > split) {
-      const s = jerk((tau - split) / (1 - split));
-      return { x: end.x + (to.x - end.x) * s, y: end.y + (to.y - end.y) * s };
-    }
-    const s = jerk(tau / split), q = 1 - s;
-    const value = (axis, perpendicular) => {
-      const c1 = from[axis] + (end[axis] - from[axis]) * 0.3 + perpendicular * offsets[0];
-      const c2 = from[axis] + (end[axis] - from[axis]) * 0.7 + perpendicular * offsets[1];
-      return q ** 3 * from[axis] + 3 * q ** 2 * s * c1 + 3 * q * s ** 2 * c2 + s ** 3 * end[axis];
+function speedsOf(samples) {
+  return samples.slice(1).map((point, i) => {
+    const prev = samples[i];
+    return {
+      speed: Math.hypot(point.x - prev.x, point.y - prev.y) / (point.t - prev.t),
+      t: (point.t + prev.t) / 2,
     };
-    return { x: value('x', -u.y), y: value('y', u.x) };
-  }
-  return { duration, u, d, phases, at };
+  });
 }
 
-test('256 seeds preserve endpoints, timing, bounds, overshoot limits and speed peaks', () => {
-  const cases = [
-    [{ x: 0, y: 0 }, { x: 2, y: 0 }],
-    [{ x: -200, y: 50 }, { x: -160, y: 50 }],
-    [{ x: 4, y: -80 }, { x: 4, y: 180 }],
-    [{ x: 100, y: 100 }, { x: -100, y: -100 }],
-    [{ x: 0, y: 0 }, { x: 350, y: 0 }],
-    [{ x: 0, y: 0 }, { x: 350.001, y: 0 }],
-    [{ x: -500, y: -400 }, { x: 1000, y: 700 }],
-    [{ x: 10000, y: 8000 }, { x: -20000, y: -10000 }],
-  ];
-  for (const [from, to] of cases) {
-    const outputs = new Set();
-    for (const key of keys) {
-      const move = planMove(from, to, { key });
-      const { durationMs: duration, samples } = move;
-      const { d, u, duration: expected } = geometry(from, to, key);
-      assert.deepEqual(samples[0], { t: 0, ...from });
-      assert.deepEqual(samples.at(-1), { t: duration, ...to });
-      assert.ok(duration >= 280 * 0.9 && duration <= 1100 * 1.1);
-      near(duration, expected);
-      assert.deepEqual(move, planMove(from, to, { key }));
-      outputs.add(JSON.stringify(move));
-      let peak = { speed: -1, tau: 0 };
-      let maxBeyond = -Infinity;
-      for (const [i, p] of samples.entries()) {
-        assert.ok(p.x >= Math.min(from.x, to.x) - 60 && p.x <= Math.max(from.x, to.x) + 60);
-        assert.ok(p.y >= Math.min(from.y, to.y) - 60 && p.y <= Math.max(from.y, to.y) + 60);
-        const beyond = (p.x - to.x) * u.x + (p.y - to.y) * u.y;
-        maxBeyond = Math.max(maxBeyond, beyond);
-        assert.ok(beyond <= (d > 350 ? Math.min(18, 0.03 * d) : 0) + 0.6 + 1e-8);
-        if (!i) continue;
-        const prev = samples[i - 1];
-        assert.ok(p.t > prev.t);
-        if (i < samples.length - 1) near(p.t - prev.t, 1000 / 60);
-        else assert.ok(p.t - prev.t <= 1000 / 60 + 1e-8);
-        const speed = Math.hypot(p.x - prev.x, p.y - prev.y) / (p.t - prev.t);
-        if (speed > peak.speed) peak = { speed, tau: (p.t + prev.t) / 2 / duration };
+test('256 seeds trace one bounded arc with exact endpoints, regular timing and one speed peak', () => {
+  for (const [from, to] of cases) for (const key of keys) for (const hz of [30, 60, 120]) {
+    const move = planMove(from, to, { key, hz });
+    const { durationMs, samples } = move;
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const distance = Math.hypot(dx, dy);
+    const label = `${key}, D=${distance}, hz=${hz}`;
+    assert.deepEqual(samples[0], { t: 0, ...from });
+    assert.deepEqual(samples.at(-1), { t: durationMs, ...to });
+    assert.ok(durationMs >= 320 * 0.97 && durationMs <= 1300 * 1.03, label);
+    assert.deepEqual(move, planMove(from, to, { key, hz }));
+    let remaining = distance;
+    let side = 0;
+    const margin = 0.04 * distance + 1;
+    for (const [i, point] of samples.entries()) {
+      for (const axis of ['x', 'y']) {
+        assert.ok(point[axis] >= Math.min(from[axis], to[axis]) - margin, label);
+        assert.ok(point[axis] <= Math.max(from[axis], to[axis]) + margin, label);
       }
-      if (d <= 350) {
-        assert.ok(maxBeyond <= 1e-8, `unexpected overshoot ${key}`);
-        assert.ok(peak.tau >= 0.3 && peak.tau <= 0.7, `peak at ${peak.tau} for ${key}, D=${d}`);
+      const nextRemaining = Math.hypot(point.x - to.x, point.y - to.y);
+      assert.ok(nextRemaining <= remaining + 1e-6, `extra movement: ${label}`);
+      remaining = nextRemaining;
+      const deviation = (dx * (point.y - from.y) - dy * (point.x - from.x)) / distance;
+      assert.ok(Math.abs(deviation) <= 0.04 * distance + 0.5, label);
+      if (Math.abs(deviation) > 1e-8) {
+        if (!side) side = Math.sign(deviation);
+        assert.equal(Math.sign(deviation), side, `changed arc side: ${label}`);
+      }
+      if (!i) continue;
+      const dt = point.t - samples[i - 1].t;
+      assert.ok(dt > 0, label);
+      if (i < samples.length - 1) near(dt, 1000 / hz);
+      else assert.ok(dt <= 1000 / hz + 1e-8, label);
+    }
+    const speeds = speedsOf(samples);
+    const peak = Math.max(...speeds.map(({ speed }) => speed));
+    const peakIndex = speeds.findIndex(({ speed }) => speed === peak);
+    const tolerance = peak * 1e-6;
+    for (let i = 1; i < speeds.length; i++) {
+      if (i <= peakIndex) {
+        assert.ok(speeds[i].speed >= speeds[i - 1].speed - tolerance, `speed dip: ${label}`);
       } else {
-        assert.ok(maxBeyond > 0, `missing overshoot ${key}`);
+        assert.ok(speeds[i].speed <= speeds[i - 1].speed + tolerance, `second speed peak: ${label}`);
       }
     }
-    assert.equal(outputs.size, keys.length);
+    if (distance > 60) {
+      const peakTime = speeds[peakIndex].t / durationMs;
+      assert.ok(peakTime >= 0.3 && peakTime <= 0.55, `peak at ${peakTime}: ${label}`);
+    }
   }
 });
 
-test('256 seeds have bounded two-sine jitter and smooth first/last 15% ramps', () => {
-  for (const key of keys) for (const d of [2, 80, 350, 351, 2000]) {
-    const from = { x: -20, y: 10 }, to = { x: from.x + d, y: from.y };
-    const model = geometry(from, to, key);
-    // Dense samples exercise the taper rather than only the exact endpoint overrides.
-    const { durationMs, samples } = planMove(from, to, { key, hz: 500 });
-    for (const p of samples) {
-      const tau = p.t / durationMs;
-      const base = model.at(tau);
-      const envelope = jerk(Math.min(1, tau / 0.15)) * jerk(Math.min(1, (1 - tau) / 0.15));
-      const amplitude = Math.min(0.6, d * 0.01);
-      const expected = amplitude / 2 * envelope * (
-        Math.sin(2 * Math.PI * tau + model.phases[0])
-        + Math.sin(4 * Math.PI * tau + model.phases[1])
-      );
-      near(p.x, base.x);
-      near(p.y - base.y, expected);
-      assert.ok(Math.hypot(p.x - base.x, p.y - base.y) <= 0.6 * envelope + 1e-8);
-      if (tau === 0 || tau === 1) near(p.y - base.y, 0);
+test('at least 90% of 200 seeded keys produce distinct paths for the same endpoints', () => {
+  for (const [from, to] of cases) {
+    const outputs = new Set(keys.slice(0, 200).map((key) => JSON.stringify(planMove(from, to, { key }))));
+    assert.ok(outputs.size >= 180, `${outputs.size} distinct paths`);
+  }
+});
+
+// Smoothness is a property of the curve, so it is measured at 1000 Hz: at 60 Hz a short 320 ms stroke has only about 19 frames, which
+// makes any per-frame ratio large however smooth the motion is (measured: 22% at 60 Hz for a 25 px move, 1.4% at 1000 Hz).
+test('256 seeds have a jolt-free speed curve: no step above 2% of peak when sampled at 1000 Hz', () => {
+  let worst = { ratio: 0 };
+  for (const [from, to] of cases) for (const key of keys) {
+    const { samples } = planMove(from, to, { key, hz: 1000 });
+    const speeds = speedsOf(samples.slice(0, -1));   // the last gap is shorter than the rest, which would inflate its ratio
+    const peak = Math.max(...speeds.map(({ speed }) => speed));
+    for (let i = 1; i < speeds.length; i++) {
+      const ratio = Math.abs(speeds[i].speed - speeds[i - 1].speed) / peak;
+      if (ratio > worst.ratio) worst = { ratio, key, from, to };
     }
   }
+  assert.ok(worst.ratio < 0.02, `largest speed step must be below 2% of peak: ${JSON.stringify(worst)}`);
 });
 
 test('sub-2px moves use one destination sample; custom sample rates retain the exact final time', () => {
@@ -142,8 +142,8 @@ test('seeded click timings and target points stay within all limits across 256 k
       for (const [axis, start, size] of [['x', box.x, w], ['y', box.y, h]]) {
         if (size < 8) assert.equal(point[axis], start + size / 2);
         else {
-          assert.ok(point[axis] >= start + Math.max(4, size / 4));
-          assert.ok(point[axis] <= start + size - Math.max(4, size / 4));
+          assert.ok(point[axis] >= start + Math.max(4, size * 0.35));
+          assert.ok(point[axis] <= start + size - Math.max(4, size * 0.35));
         }
       }
     }

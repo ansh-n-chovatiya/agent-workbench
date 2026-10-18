@@ -19,7 +19,7 @@ body{margin:36px;background:#10151b;color:#eef4fa;font:18px system-ui}
 main{display:flex;gap:24px;flex-wrap:wrap}h1{font-size:26px}h2{font-size:18px}
 canvas{width:600px;max-width:100%;background:#19222c;border:1px solid #405164}
 p{color:#b6c9d8}
-</style><h1>Cursor motion study</h1><p>Eight seeded moves. Long moves overshoot and settle.</p>
+</style><h1>Cursor motion study</h1><p>Eight seeded moves. Each move is one smooth stroke with a gentle arc and a soft landing.</p>
 <main><section><h2>planned</h2><canvas id="planned" width="600" height="500"></canvas></section>
 <section><h2>linear</h2><canvas id="linear" width="600" height="500"></canvas></section></main>
 <script>

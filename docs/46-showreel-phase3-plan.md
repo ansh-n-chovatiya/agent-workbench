@@ -8,6 +8,8 @@ Status: executing from 2026-10-18. Spec: `docs/40-showreel-design.md` (sections 
 `~/.showreel/projects/N/runs/<runId>/`, an H.264 `raw.mp4` plus `events.json` (everything the compositor will need to draw cursor, zoom and captions) and
 `record.json` (what happened). Nothing here composes the final video.
 
+> **Cursor motion revised 2026-10-18 after owner feedback** ("smooth, not robotic, easy to follow, visually good"): no overshoot, no jitter, one one-sided arc, duration `clamp(220 + 120 log2(1 + D/40), 320, 1300) x (0.97 to 1.03)`, speed `jerk(tau^0.8)` (peak near 42%), target point in the central 30% of the element. The Task A cursor section below describes the first version.
+
 ## Design decisions (and why)
 
 1. **The cursor is drawn in post from a planned path.** The real page mouse only needs coarse moves (about 20 Hz) so hover states fire. Scripted input

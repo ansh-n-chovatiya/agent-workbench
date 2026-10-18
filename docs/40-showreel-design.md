@@ -89,11 +89,7 @@ the DOM, which removes the expensive dry-run. *Spike:* build on Playwright's own
 
 ## 6. Motion that does not feel robotic
 
-- **Cursor path.** Curved path (cubic Bezier with a small perpendicular offset), minimum-jerk speed profile, duration from
-  distance (Fitts-style), a slight overshoot and correction on long moves, 1 to 2 px jitter at low speed, a dwell before a
-  click, a press-and-release effect. Parameters are theme settings. Playwright drives real mouse events along the same
-  path, so hover states fire naturally. The cursor is drawn in post from `events.json`, so style, size and smoothing stay
-  editable.
+- **Cursor path.** One smooth stroke per move, designed to look natural and be easy to follow, not mechanical: a single gentle one-sided arc (a straight line reads as robotic), a bell-shaped speed with a soft landing (peak speed at about 42% of the move, so it accelerates quickly and settles slowly), a duration that grows with distance (Fitts-style, 320 ms to 1.3 s), and a still pause before the click and a short settle after it. Deliberately **no overshoot-and-correct, no tremor and no wobble**: they read as extra movement in a demo (owner feedback, 2026-10-18). The curve is verified jolt-free (no speed step above 2% of peak at 1000 Hz). Playwright drives only coarse real mouse moves (about 20 Hz) so hover states fire; the cursor itself is drawn in post from the planned path, so style, size and smoothing stay editable.
 - **Element-aware zoom.** Because the recorder knows each target's bounding box, zoom frames the element with padding
   instead of guessing from the cursor. Triggers: click, text entry focus, a step marked "highlight". Spring easing, dwell
   and hold times, no zoom thrash on rapid clicks, smooth follow while the cursor moves inside a zoom.

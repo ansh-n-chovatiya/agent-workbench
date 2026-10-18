@@ -112,11 +112,21 @@ test('pipeline fps overrides capture fps without changing the drift guard', () =
   assert.equal(layoutDrift([[0, 20, 10, 10]], [null]), 1);
 });
 
-test('cursor comparison has eight continuous seeded paths including overshoot', () => {
+test('cursor comparison has eight continuous seeded paths with one smooth stroke each', () => {
   const moves = demoMoves();
   assert.equal(moves.length, 8);
   assert.deepEqual(moves, demoMoves());
-  assert.ok(moves.some((move) => move.samples.some((p) => p.x > move.to.x + 5)));
+  for (const { from, to, durationMs, samples } of moves) {
+    assert.deepEqual(samples[0], { t: 0, ...from });
+    assert.deepEqual(samples.at(-1), { t: durationMs, ...to });
+    let remaining = Math.hypot(to.x - from.x, to.y - from.y);
+    for (const point of samples) {
+      const distance = Math.hypot(to.x - point.x, to.y - point.y);
+      assert.ok(distance <= remaining + 1e-6);
+      remaining = distance;
+    }
+  }
+  assert.match(cursorDemoHtml(), /Each move is one smooth stroke with a gentle arc and a soft landing\./);
   for (let i = 1; i < moves.length; i++) assert.deepEqual(moves[i].from, moves[i - 1].to);
   assert.match(cursorDemoHtml(), /<h2>planned<\/h2>/);
   assert.match(cursorDemoHtml(), /<h2>linear<\/h2>/);
