@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, cp, writeFile, rm, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { chromium } from 'playwright';
@@ -26,7 +27,7 @@ after(async () => { await rm(temp, { recursive: true, force: true }); });
 
 const viewport = { width: 1440, height: 900 };
 const run = promisify(execFile);
-const cli = new URL('../scripts/showreel.mjs', import.meta.url).pathname;
+const cli = fileURLToPath(new URL('../scripts/showreel.mjs', import.meta.url));
 
 test('mixed guide resolves duplicate links, widgets, forms, secrets, popup and iframe', { timeout: 300000 }, async () => {
   const server = await startFixtureServer(fixture);

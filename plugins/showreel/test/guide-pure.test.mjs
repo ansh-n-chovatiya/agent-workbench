@@ -6,13 +6,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { orderedCandidates, pickNearestBox, formatResolvedStep, parseGuideAdd, sameDocument } from '../scripts/lib/guide/pure.mjs';
 import { chooseSelector } from '../scripts/lib/guide/resolver.mjs';
 import { pageScript, installRecorder } from '../scripts/lib/guide/recorder.mjs';
 import { formatSnapshot } from '../scripts/lib/snapshot.mjs';
 
 const run = promisify(execFile);
-const cli = new URL('../scripts/showreel.mjs', import.meta.url);
+const cli = fileURLToPath(new URL('../scripts/showreel.mjs', import.meta.url));   // never .pathname: on Windows it is '/D:/...'
 
 test('candidate ordering includes both scoped candidates and escapes quoted names', () => {
   const candidates = orderedCandidates({
@@ -163,7 +164,7 @@ test('installRecorder covers context pages and drains in-flight callbacks', asyn
 test('guide add CLI creates and appends using project storage and URL defaults', async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), 'showreel-guide-'));
   const env = { ...process.env, SHOWREEL_HOME: home };
-  const invoke = (args) => run(process.execPath, [cli.pathname, ...args], { env });
+  const invoke = (args) => run(process.execPath, [cli, ...args], { env });
   try {
     await invoke(['brief', 'init', '--name', 'demo', '--url', 'https://example.com/']);
     assert.equal((await invoke(['guide', 'add', ...addFlags])).stdout.trim(), '1');
