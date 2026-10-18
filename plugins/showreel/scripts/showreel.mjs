@@ -8,7 +8,7 @@ import { doctor, printDoctor } from './lib/doctor.mjs';
 const help = `Usage: showreel <command>
 
 Commands:
-  doctor [--json]                  Check the local environment
+  doctor [--json] [--benchmark]    Check the environment and optional capture performance
   init --name <name> --url <URL>    Create a project configuration
   --help                          Show this help
 `;
@@ -17,10 +17,28 @@ async function main(args) {
   const [command, ...flags] = args;
   if (command === '--help' && !flags.length) return console.log(help);
   if (command === 'doctor') {
-    if (flags.length > 1 || flags.some((flag) => flag !== '--json')) throw new Error('Usage: showreel doctor [--json]');
+    if (new Set(flags).size !== flags.length || flags.some((flag) => !['--json', '--benchmark'].includes(flag))) {
+      throw new Error('Usage: showreel doctor [--json] [--benchmark]');
+    }
     const result = await doctor();
+    if (flags.includes('--benchmark')) {
+      const { startFixtureServer } = await import('./lib/fixture-server.mjs');
+      const { benchmarkCapture, recommendScale } = await import('./lib/capture-benchmark.mjs');
+      let server;
+      try {
+        server = await startFixtureServer();
+        result.benchmark = await benchmarkCapture({ url: `${server.url}/index.html`, seconds: 3 });
+        result.recommendations.captureScale = recommendScale(result.benchmark);
+      } finally { await server?.close(); }
+    }
     if (flags.includes('--json')) console.log(JSON.stringify(result, null, 2));
-    else printDoctor(result);
+    else {
+      printDoctor(result);
+      if (result.benchmark) {
+        console.table(result.benchmark);
+        console.log(`recommended capture scale: ${result.recommendations.captureScale}`);
+      }
+    }
     process.exitCode = result.ok ? 0 : 1;
     return;
   }
