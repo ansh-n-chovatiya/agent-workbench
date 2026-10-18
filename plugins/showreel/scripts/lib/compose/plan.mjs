@@ -1,6 +1,7 @@
 import { buildTimeMap, sourceAt } from './timemap.mjs';
 import { planCamera, cameraAt } from './camera.mjs';
-import { cursorAt, pressAmount } from './cursor-track.mjs';
+import { directCursor } from './cursor-director.mjs';
+import { cursorAt, pressAmount, rippleAt } from './cursor-track.mjs';
 import { cuesFromRun, captionAlpha } from './captions.mjs';
 import { validateComposition, resolveComposition, zoomOptions } from './composition.mjs';
 import { layoutFor } from './layout.mjs';
@@ -32,7 +33,7 @@ export function planRender({ composition, brief, storyboard, events, record, sou
     camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
     cues: cuesFromRun({ storyboard, events, captionsEnabled: composition.captions.enabled }),
     captions: clone(composition.captions),
-    cursor: { samples: clone(events.cursor), sizePx: output.height * composition.cursor.sizePct / 100,
+    cursor: { ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }), sizePx: output.height * composition.cursor.sizePct / 100,
       color: THEMES[composition.theme].cursor.fill, ...composition.cursor },
     clicks: clone(events.clicks), ripples: clone(events.clicks), sourceSize: { ...sourceSize },
     viewport: { ...events.viewport }, scale: record.scale.used,
@@ -43,23 +44,21 @@ export function stateAt(plan, tOut) {
   const events = { cursor: plan.cursor.samples, clicks: plan.clicks, viewport: plan.viewport };
   const cue = plan.cues.find((c) => t >= c.start && t <= c.end);
   const press = 1 - (1 - pressAmount(events, t)) / 0.14 * (1 - plan.cursor.pressScale);
-  let lastActive = 0;
-  for (let i = 0; i < events.cursor.length; i++) {
-    const sample = events.cursor[i], previous = events.cursor[i - 1];
-    if (sample.t > t) {
-      if (previous && (sample.x !== previous.x || sample.y !== previous.y)) lastActive = t;
-      break;
-    }
-    if (!previous || sample.x !== previous.x || sample.y !== previous.y) lastActive = sample.t;
-  }
-  for (const click of events.clicks) if (click.t <= t) lastActive = Math.max(lastActive, click.t);
-  const alpha = plan.cursor.hideWhenIdleSec ? Math.max(0, Math.min(1, 1 - (t - lastActive - plan.cursor.hideWhenIdleSec) / 0.2)) : 1;
-  const click = events.clicks.findLast((c) => c.t <= t), effect = plan.cursor.clickEffect;
-  const ripple = effect.style !== 'none' && click && t - click.t < effect.durationSec
-    ? { x: click.x, y: click.y, progress: (t - click.t) / effect.durationSec } : null;
+  const frames = plan.cursor.alpha ?? [{ t: 0, a: 1 }];
+  let lo = 0, hi = frames.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (frames[mid].t <= t) lo = mid + 1; else hi = mid; }
+  const index = Math.max(0, lo - 1);
+  const a = frames[index], b = frames[index + 1];
+  const alpha = b ? a.a + (b.a - a.a) * Math.max(0, (t - a.t) / (b.t - a.t)) : a.a;
+  const shapeKey = plan.cursor.shapes?.findLast((k) => k.t <= t);
+  const age = t - (shapeKey?.t ?? -Infinity);
+  const pop = shapeKey && shapeKey !== plan.cursor.shapes[0] && age < 0.12
+    ? 1 + 0.12 * Math.sin(Math.PI * age / 0.12) : 1;
+  const effect = plan.cursor.clickEffect;
+  const ripple = effect.style !== 'none' ? rippleAt(events, t, effect.durationSec) : null;
   return { section: mapped.section, alphaTitle: mapped.alphaTitle, alphaOutro: mapped.alphaOutro,
     sourceT: t, camera: cameraAt(plan.camera, t),
-    cursor: { ...cursorAt(events, t), press, alpha },
+    cursor: { ...cursorAt(events, t), press, alpha, shape: shapeKey?.shape ?? 'arrow', pop },
     ripple,
     caption: cue ? { text: cue.text, alpha: captionAlpha(cue, t) } : null };
 }

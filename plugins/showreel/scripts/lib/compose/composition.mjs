@@ -16,7 +16,8 @@ export const DEFAULT_COMPOSITION = freeze({
     shadow: { enabled: true, blurPx: 40, offsetYPx: 16, opacity: 0.25 },
     border: { enabled: false, color: '#ffffff', widthPx: 1 }, background },
   cursor: { visible: true, style: 'arrow', sizePct: 3.4, fill: '#ffffff', stroke: '#111827', shadow: true,
-    scaleWithZoom: true, hideWhenIdleSec: 0, pressScale: 0.86,
+    scaleWithZoom: true, hideWhenIdleSec: 1.8, pressScale: 0.86,
+    autoShape: true, followThrough: { enabled: true, distancePx: 140, durationSec: 0.8, startAfterClickSec: 0.35 }, microCorrection: true, entrance: true,
     clickEffect: { style: 'ripple', color: null, sizeMult: 1, durationSec: 0.55 } },
   zoom: { enabled: true, depth: 'medium', autoSuggest: true, speed: 'normal', holdAfterClickSec: 0.9,
     leadInSec: 0.1, onlyKinds: ['click', 'fill'], regions: [] },
@@ -97,6 +98,7 @@ export function validateComposition(c) {
   for (const [p,min,max,int] of [
     ['output.width',2,7680,true],['output.height',2,4320,true],['frame.paddingXPct',0,25],['frame.paddingYPct',0,25],
     ['frame.radiusPx',0,300],['frame.shadow.blurPx',0,300],['frame.shadow.offsetYPx',-300,300],['frame.shadow.opacity',0,1],['frame.border.widthPx',0,30],
+    ['cursor.followThrough.distancePx',0,500],['cursor.followThrough.durationSec',0.1,5],['cursor.followThrough.startAfterClickSec',0,5],
     ['cursor.sizePct',1,8],['cursor.hideWhenIdleSec',0,60],['cursor.pressScale',0.1,1],['cursor.clickEffect.sizeMult',0.1,10],['cursor.clickEffect.durationSec',0.05,5],
     ['zoom.holdAfterClickSec',0,30],['zoom.leadInSec',0,5],['captions.bandHeightPct',6,25],['captions.fontSizePct',1,10],['cards.fade',0,1.5],
   ]) range(p,get(p),min,max,int);

@@ -91,9 +91,17 @@ async function executeAction(state, step, action, index, rehearsal) {
   if (!rect || rect.width <= 0 || rect.height <= 0) throw new Error('target has no visible box');
   const box = { x: rect.x / state.scale, y: rect.y / state.scale,
     w: rect.width / state.scale, h: rect.height / state.scale };
-  state.events.targets.push({ stepId: step.id, t: state.now(), kind: action.type,
-    box, sensitive: action.sensitive === true });
   const key = `${step.id}:${index}`;
+  let cursor;
+  try {
+    const point = targetPoint(box, { key });
+    cursor = await page.evaluate(({ x, y }) => {
+      const element = document.elementFromPoint(x, y);
+      return element ? getComputedStyle(element).cursor : undefined;
+    }, { x: point.x * state.scale, y: point.y * state.scale });
+  } catch { /* Styling metadata must never stop a recording. */ }
+  state.events.targets.push({ stepId: step.id, t: state.now(), kind: action.type,
+    box, sensitive: action.sensitive === true, ...(typeof cursor === 'string' ? { cursor } : {}) });
   if (action.type === 'click' || action.type === 'fill') {
     await moveAndClick(state, page, box, key, step.id, tab);
   }

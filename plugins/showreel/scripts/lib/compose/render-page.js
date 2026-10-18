@@ -117,7 +117,16 @@ function cursorShape(ctx, style) {
   ctx.beginPath();
   if (style === 'dot' || style === 'ring') ctx.arc(0, 0, 12, 0, Math.PI * 2);
   else if (style === 'crosshair') { ctx.moveTo(-12, 0); ctx.lineTo(12, 0); ctx.moveTo(0, -12); ctx.lineTo(0, 12); }
-  else if (style === 'pointer') {
+  else if (style === 'text') {
+    ctx.moveTo(0, -12); ctx.lineTo(0, 12);
+    ctx.moveTo(-4, -12); ctx.lineTo(4, -12); ctx.moveTo(-4, 12); ctx.lineTo(4, 12);
+  } else if (style === 'hand') {
+    ctx.moveTo(0, 0); ctx.bezierCurveTo(-2, 0, -2, 2, -2, 4); ctx.lineTo(-2, 13);
+    ctx.lineTo(-5, 10); ctx.quadraticCurveTo(-8, 9, -7, 13); ctx.lineTo(-2, 21);
+    ctx.quadraticCurveTo(0, 24, 3, 24); ctx.lineTo(9, 24); ctx.lineTo(12, 14);
+    ctx.quadraticCurveTo(13, 10, 9, 10); ctx.lineTo(2, 9); ctx.lineTo(2, 3);
+    ctx.quadraticCurveTo(2, 0, 0, 0); ctx.closePath();
+  } else if (style === 'pointer') {
     ctx.moveTo(0, 14); ctx.lineTo(0, 2); ctx.quadraticCurveTo(2, -2, 4, 2); ctx.lineTo(4, 9);
     ctx.lineTo(12, 10); ctx.quadraticCurveTo(16, 10, 15, 15); ctx.lineTo(13, 23); ctx.lineTo(5, 23); ctx.lineTo(-3, 15); ctx.closePath();
   } else {
@@ -161,14 +170,15 @@ function draw(canvas, plan, tOut, decoded) {
     }
     if (plan.cursor.visible) {
       const p = mapped(state.cursor);
-      const cursorScale = cursorH * state.cursor.press / 24;
+      const cursorScale = cursorH * state.cursor.press * state.cursor.pop / 24;
       ctx.save(); ctx.translate(p.x, p.y); ctx.scale(cursorScale, cursorScale);
-      cursorShape(ctx, plan.cursor.style);
+      const style = state.cursor.shape === 'arrow' ? plan.cursor.style : state.cursor.shape;
+      cursorShape(ctx, style);
       ctx.globalAlpha = state.cursor.alpha;
       ctx.fillStyle = plan.cursor.fill; ctx.strokeStyle = plan.cursor.stroke;
       ctx.lineWidth = 1.5 * unit / cursorScale; ctx.lineJoin = 'round';
       if (plan.cursor.shadow) { ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 3; }
-      if (!['ring', 'crosshair'].includes(plan.cursor.style)) ctx.fill();
+      if (!['ring', 'crosshair', 'text'].includes(style)) ctx.fill();
       ctx.stroke(); ctx.restore();
     }
     ctx.restore();

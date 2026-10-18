@@ -22,7 +22,7 @@ export function pressAmount(events, t) {
   }
   return amount;
 }
-export function rippleAt(events, t) {
+export function rippleAt(events, t, durationSec = 0.55) {
   const c = events.clicks[latest(events.clicks, t)];
-  return c && t < c.t + 0.55 ? { x: c.x, y: c.y, progress: (t - c.t) / 0.55 } : null;
+  return c && t < c.t + durationSec ? { x: c.x, y: c.y, progress: (t - c.t) / durationSec } : null;
 }

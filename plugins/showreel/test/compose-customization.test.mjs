@@ -76,7 +76,7 @@ test('zoom options drive suggestions and spring, cursor idle, effects and card c
   assert.equal(c.zoom.regions[0].tStart,1.3); assert.equal(c.zoom.regions[0].tEnd,3.5);
   const plan = planRender({ ...run, composition:c });
   assert.ok(plan.warnings.includes('overlay captions can cover the video'));
-  assert.equal(stateAt(plan,1).cursor.alpha,0); assert.equal(stateAt(plan,1.6).cursor.alpha,1);
+  assert.equal(stateAt(plan,1).cursor.alpha,1); // Click protection keeps the cursor visible. assert.equal(stateAt(plan,1.6).cursor.alpha,1);
   assert.ok(Math.abs(stateAt(plan,1.545).cursor.press-0.5)<1e-8);
   assert.equal(stateAt(plan,2.25).ripple.progress,0.75); assert.equal(stateAt(plan,2.5).ripple,null);
   const slow = planRender({ ...run, composition:changeComposition(c,'zoom.speed','slow') });

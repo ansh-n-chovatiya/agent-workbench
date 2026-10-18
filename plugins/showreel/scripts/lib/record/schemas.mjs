@@ -75,6 +75,7 @@ export function validateEvents(events) {
     stepId: text, t: nonnegative,
     kind: (value) => ['click', 'fill', 'press'].includes(value), sensitive: boolean,
   }, ['t'], (entry, key) => {
+    if (entry.cursor !== undefined && typeof entry.cursor !== 'string') v.fail(`${key}.cursor`, 'must be a string');
     v.fields(entry.box, `${key}.box`, { x: number, y: number, w: positive, h: positive });
   });
   v.ordered(events.moves, 'moves', position);

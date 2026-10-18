@@ -1,4 +1,4 @@
-// showreel render sources sha256: 7a1d6630508c4f48d7736b7bfd1647f65d4dbb64a5c52067f61bf4e145db6b6d
+// showreel render sources sha256: dfa68ef5b2486ad299440367d2ccf4f8cad96747cda8a2158437357f15a44b01
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -30024,6 +30024,10 @@
     }
     return amount;
   }
+  function rippleAt(events, t, durationSec = 0.55) {
+    const c = events.clicks[latest(events.clicks, t)];
+    return c && t < c.t + durationSec ? { x: c.x, y: c.y, progress: (t - c.t) / durationSec } : null;
+  }
 
   // scripts/lib/compose/captions.mjs
   var smooth2 = (t) => t * t * (3 - 2 * t);
@@ -30146,8 +30150,12 @@
       stroke: "#111827",
       shadow: true,
       scaleWithZoom: true,
-      hideWhenIdleSec: 0,
+      hideWhenIdleSec: 1.8,
       pressScale: 0.86,
+      autoShape: true,
+      followThrough: { enabled: true, distancePx: 140, durationSec: 0.8, startAfterClickSec: 0.35 },
+      microCorrection: true,
+      entrance: true,
       clickEffect: { style: "ripple", color: null, sizeMult: 1, durationSec: 0.55 }
     },
     zoom: {
@@ -30188,26 +30196,28 @@
     const events = { cursor: plan.cursor.samples, clicks: plan.clicks, viewport: plan.viewport };
     const cue = plan.cues.find((c) => t >= c.start && t <= c.end);
     const press = 1 - (1 - pressAmount(events, t)) / 0.14 * (1 - plan.cursor.pressScale);
-    let lastActive = 0;
-    for (let i = 0; i < events.cursor.length; i++) {
-      const sample = events.cursor[i], previous = events.cursor[i - 1];
-      if (sample.t > t) {
-        if (previous && (sample.x !== previous.x || sample.y !== previous.y)) lastActive = t;
-        break;
-      }
-      if (!previous || sample.x !== previous.x || sample.y !== previous.y) lastActive = sample.t;
+    const frames = plan.cursor.alpha ?? [{ t: 0, a: 1 }];
+    let lo = 0, hi = frames.length;
+    while (lo < hi) {
+      const mid = lo + hi >> 1;
+      if (frames[mid].t <= t) lo = mid + 1;
+      else hi = mid;
     }
-    for (const click2 of events.clicks) if (click2.t <= t) lastActive = Math.max(lastActive, click2.t);
-    const alpha = plan.cursor.hideWhenIdleSec ? Math.max(0, Math.min(1, 1 - (t - lastActive - plan.cursor.hideWhenIdleSec) / 0.2)) : 1;
-    const click = events.clicks.findLast((c) => c.t <= t), effect = plan.cursor.clickEffect;
-    const ripple = effect.style !== "none" && click && t - click.t < effect.durationSec ? { x: click.x, y: click.y, progress: (t - click.t) / effect.durationSec } : null;
+    const index = Math.max(0, lo - 1);
+    const a = frames[index], b = frames[index + 1];
+    const alpha = b ? a.a + (b.a - a.a) * Math.max(0, (t - a.t) / (b.t - a.t)) : a.a;
+    const shapeKey = plan.cursor.shapes?.findLast((k) => k.t <= t);
+    const age = t - (shapeKey?.t ?? -Infinity);
+    const pop = shapeKey && shapeKey !== plan.cursor.shapes[0] && age < 0.12 ? 1 + 0.12 * Math.sin(Math.PI * age / 0.12) : 1;
+    const effect = plan.cursor.clickEffect;
+    const ripple = effect.style !== "none" ? rippleAt(events, t, effect.durationSec) : null;
     return {
       section: mapped.section,
       alphaTitle: mapped.alphaTitle,
       alphaOutro: mapped.alphaOutro,
       sourceT: t,
       camera: cameraAt(plan.camera, t),
-      cursor: { ...cursorAt(events, t), press, alpha },
+      cursor: { ...cursorAt(events, t), press, alpha, shape: shapeKey?.shape ?? "arrow", pop },
       ripple,
       caption: cue ? { text: cue.text, alpha: captionAlpha(cue, t) } : null
     };
@@ -30383,6 +30393,28 @@
       ctx.lineTo(12, 0);
       ctx.moveTo(0, -12);
       ctx.lineTo(0, 12);
+    } else if (style === "text") {
+      ctx.moveTo(0, -12);
+      ctx.lineTo(0, 12);
+      ctx.moveTo(-4, -12);
+      ctx.lineTo(4, -12);
+      ctx.moveTo(-4, 12);
+      ctx.lineTo(4, 12);
+    } else if (style === "hand") {
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-2, 0, -2, 2, -2, 4);
+      ctx.lineTo(-2, 13);
+      ctx.lineTo(-5, 10);
+      ctx.quadraticCurveTo(-8, 9, -7, 13);
+      ctx.lineTo(-2, 21);
+      ctx.quadraticCurveTo(0, 24, 3, 24);
+      ctx.lineTo(9, 24);
+      ctx.lineTo(12, 14);
+      ctx.quadraticCurveTo(13, 10, 9, 10);
+      ctx.lineTo(2, 9);
+      ctx.lineTo(2, 3);
+      ctx.quadraticCurveTo(2, 0, 0, 0);
+      ctx.closePath();
     } else if (style === "pointer") {
       ctx.moveTo(0, 14);
       ctx.lineTo(0, 2);
@@ -30463,11 +30495,12 @@
       }
       if (plan.cursor.visible) {
         const p = mapped(state.cursor);
-        const cursorScale = cursorH * state.cursor.press / 24;
+        const cursorScale = cursorH * state.cursor.press * state.cursor.pop / 24;
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.scale(cursorScale, cursorScale);
-        cursorShape(ctx, plan.cursor.style);
+        const style = state.cursor.shape === "arrow" ? plan.cursor.style : state.cursor.shape;
+        cursorShape(ctx, style);
         ctx.globalAlpha = state.cursor.alpha;
         ctx.fillStyle = plan.cursor.fill;
         ctx.strokeStyle = plan.cursor.stroke;
@@ -30477,7 +30510,7 @@
           ctx.shadowColor = "rgba(0,0,0,0.3)";
           ctx.shadowBlur = 3;
         }
-        if (!["ring", "crosshair"].includes(plan.cursor.style)) ctx.fill();
+        if (!["ring", "crosshair", "text"].includes(style)) ctx.fill();
         ctx.stroke();
         ctx.restore();
       }

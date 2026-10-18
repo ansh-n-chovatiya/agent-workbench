@@ -160,3 +160,13 @@ test('records validate all required fields, counters, ISO time, bounds and warni
   input.version = 2; input.projectName = ''; input.video.width = 0; input.fps.dropped = -1;
   assert.equal(validateRecord(input).errors.length, 4);
 });
+
+ test('optional target cursor accepts CSS strings and rejects nonstrings', () => {
+  const input = events();
+  for (const cursor of ['pointer', 'text', 'default', 'crosshair', '']) {
+    input.targets[0].cursor = cursor; assert.equal(validateEvents(input).ok, true);
+  }
+  for (const cursor of [null, 1, {}, []]) {
+    input.targets[0].cursor = cursor; assert.equal(validateEvents(input).ok, false);
+  }
+});

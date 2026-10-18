@@ -154,6 +154,40 @@ test('synthetic offline compositor and exporter', { timeout: 300000 }, async (t)
         assert.deepEqual(await pixels(intro,0.5,[{x:10,y:10}]),[[101,67,33]]);
       } finally { sessions.delete(session); await session.close(); }
     });
+    await t.test('directed hand silhouette and centred text beam in stills', async () => {
+      const c = structuredClone(composition);
+      c.zoom.enabled = false; c.captions.enabled = false;
+      c.cards.title.enabled = false; c.cards.outro.enabled = false;
+      Object.assign(c.cursor, { fill: '#ffff00', shadow: false, entrance: false, hideWhenIdleSec: 0, scaleWithZoom: false });
+      c.cursor.clickEffect.style = 'none';
+      const p = planRender({ ...run, composition: c, sourceSize: { width: 1280, height: 720 } });
+      const session = await sessionFor(run.rawFile);
+      const probe = async (plan, time, x, y, dark = false) => {
+        const state = stateAt(plan, time), tip = point(plan, time, state.cursor);
+        const unit = plan.cursor.sizePx * state.cursor.press * state.cursor.pop / 24;
+        return session.page.evaluate(async ({ plan, time, x, y, dark }) => {
+          const img = new Image(); img.src = await window.renderStill(plan, time); await img.decode();
+          const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
+          const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0);
+          const data = ctx.getImageData(Math.round(x)-1, Math.round(y)-1, 3, 3).data;
+          let yellow = 0;
+          for (let i=0; i<data.length; i+=4) if (dark ? data[i]<50 && data[i+1]<50 && data[i+2]<65 : data[i]>220 && data[i+1]>220 && data[i+2]<35) yellow++;
+          return yellow;
+        }, { plan: serializable(plan), time, x: tip.x+x*unit, y: tip.y+y*unit, dark });
+      };
+      try {
+        // The hand palm extends left of its fingertip; the arrow lies entirely right of its tip.
+        assert.equal(stateAt(p, 1).cursor.shape, 'arrow');
+        assert.equal(await probe(p, 1, -3, 14), 0);
+        assert.equal(stateAt(p, 1.7).cursor.shape, 'hand');
+        assert.ok(await probe(p, 1.7, -3, 14) > 0, 'yellow hand palm left of fingertip');
+        const textRun = { ...run, events: structuredClone(run.events) };
+        textRun.events.targets[0].cursor = 'text';
+        const text = planRender({ ...textRun, composition: c, sourceSize: { width: 1280, height: 720 } });
+        // The I-beam's top cap is centred 12 vector units above the hotspot.
+        assert.ok(await probe(text, 1.7, 0, -12, true) > 0, 'text beam extends above its centred hotspot');
+      } finally { sessions.delete(session); await session.close(); }
+    });
     await t.test('stills have canvas dimensions and repeated renders decode identically', async () => {
       const repeated = await render(composition);
       assert.match(repeated.png, /^data:image\/png;base64,/);
