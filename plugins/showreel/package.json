@@ -8,7 +8,8 @@
   },
   "scripts": {
     "test": "node --test",
-    "smoke": "node scripts/smoke/run-all.mjs"
+    "smoke": "node scripts/smoke/run-all.mjs",
+    "test:browser": "node scripts/run-browser-tests.mjs"
   },
   "dependencies": {
     "playwright": "1.63.0"

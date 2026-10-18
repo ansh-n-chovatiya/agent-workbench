@@ -209,7 +209,7 @@ hard budget for showreel and track it with a per-run meter in CI-style benchmark
 |---|---|---|
 | 0 | Baseline and spikes | **Done 2026-10-18.** Baseline and spikes S1 to S8 (plus S2b, S2c) answered in `docs/42`; gate: go. |
 | 1 | **Done 2026-10-18.** Scaffold `plugins/showreel` side by side | New plugin builds, validates and tests on three OSes; safe code reused from `skills-demo` (config, doctor, recorder safety, write blocking); `skills-demo` keeps working untouched. |
-| 2 | Intake, storyboard, Guide mode | A user-guided flow produces a working scenario with no exploration loop. |
+| 2 | **Done 2026-10-18.** Intake, storyboard, Guide mode | A user-guided flow produces a working scenario with no exploration loop. |
 | 3 | Recorder and motion | `events.json` captured; cursor paths pass property tests; blind side-by-side beats the old cursor. |
 | 4 | Compositor and exporter | Golden frames match; export plays in QuickTime, VLC and browsers. |
 | 5 | Editor | All section 7 features work; edit-rule tests pass; preview matches export. |
@@ -316,3 +316,10 @@ Measured on an Apple M4 and, for the smoke tests, on CPU-only CI runners for Ubu
 
 - `plugins/showreel` 0.1.0 (preview) exists beside the untouched `skills-demo`: `doctor`, `doctor --benchmark`, `init`, a fixture app and server, three smoke tests, 34 unit tests, and a three-OS CI job that passes on Ubuntu, macOS and Windows.
 - The capture-scale benchmark must warm up and take the median of two runs, and should run on the user's own app when a URL is available (fixture results are optimistic); input load during recording is measured separately in Phase 3.
+
+## 26. Phase 2 outcome (2026-10-18)
+
+- Claude writes only captions and narration. Pipeline: `brief.json` -> `guide.json` -> `guide.resolved.json` -> `storyboard.json` -> declarative `scenario.json`; selectors come from the resolver, never from Claude. Measured Claude cost from intake to scenario: about 2 to 3 thousand tokens.
+- A guide step with `url: null` continues on the current page; two URLs are the same document when origin, path and query match (hash and trailing slash ignored).
+- A sensitive value is never stored. A sensitive fill is a pending secret: valid in the scenario, but the Phase 3 recorder must refuse to start until each pending step has a secret supplied at run time (environment variable or prompt).
+- `voice.enabled` is `null` until answered; null counts as off downstream.

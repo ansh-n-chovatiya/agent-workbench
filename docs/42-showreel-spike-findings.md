@@ -318,6 +318,20 @@ Findings:
 4. **Benchmark method lessons (all fixed in `scripts/lib/capture-benchmark.mjs`):** (a) screencast emits a frame only when the page changes, so a heartbeat animation is needed to measure capture capacity; (b) scripted Playwright input lowers the screencast rate by itself (about 42 fps versus 60 on this Mac), so capacity is measured with no input and the recorder's input load is a separate Phase 3 concern; (c) layout drift is judged against the scale-1 noise floor, because an animated page differs from itself (0.077 on the real portfolio); (d) content complexity matters: the simple fixture allows 2x on this Mac while the real portfolio holds only 1.67x (44 fps at 2x), so the benchmark should run against the user's own app when a URL is given.
 5. **Still untested:** machines with a GPU or hardware video encoder on Windows and Linux, a real audio device, and sites with heavy canvas or iframes.
 
+## Phase 2: Guide mode, intake and scenario (2026-10-18)
+
+Built `brief`, `storyboard` and `scenario` (pure logic, Codex) and the Guide-mode recorder, ordered resolver and page snapshot (Codex wrote, Claude ran every browser test). Results:
+
+- **Browser tests pass on real Chromium** (2 tests, about 81 s): a mixed flow resolves duplicate "Learn more" links (scoped selectors pointing at the right card), tabs, native accordions, a form, a password field (marked sensitive, value never stored), a new-tab link (the resolver follows the popup) and an iframe button, with **zero failures**; the fixture-page snapshot lists 12+ interactive elements with unique selectors in under 4 KB.
+- **End to end on the live portfolio, Auto mode through the real CLI:** `snapshot` (1,423 bytes, about 350 tokens) -> four `guide add` steps -> `guide resolve` **4 of 4** -> `storyboard draft` (936 bytes) -> captions written -> `storyboard validate` -> `scenario build` (1,541 bytes) -> `scenario validate`, all passing.
+- **Claude's token footprint for intake through scenario** (bytes divided by four, rough): the SKILL.md (about 800 tokens), the snapshot (about 350), a handful of short commands (about 300) and four captions (about 30 to 250 with edit overhead): **about 2 to 3 thousand tokens**, against the old skill's 42,380 fresh tokens for a whole video. Recording and rendering add almost none (deterministic code), so the Phase 8 budget looks very achievable.
+
+Defects found by running it (all fixed, with tests):
+1. **Resolver reloaded the site on every step** when a step's URL differed from the page's by a hash or when Auto-mode steps repeated one address; two reloads timed out on the live site (resolve 2 of 4). Fix: `sameDocument` (ignores hash and trailing slash); a step with `url: null` means "the page the previous step left you on"; `guide add` gives only the first step a URL; the scenario builder honours both.
+2. A null `frameUrl` was copied into scenario actions and failed validation; null now means the top frame and is omitted.
+3. Two contradictions in my own plan, caught by Codex and left failing rather than bent: `voice.enabled` defaulted to false so intake could not tell unanswered from answered (now `null` until asked), and a sensitive fill had to be both null and valid once filled (now a **pending secret**: valid, reported as pending, and the Phase 3 recorder refuses to start until each is supplied at run time).
+4. The personal-data scan caught a reserved-domain test email (`example.test`) that its allowlist does not cover; test data now uses `example.com`.
+
 ## Tooling notes (2026-10-18)
 
 - Gemini CLI could not be used: its free API-key quota (20 requests a day) was exhausted in minutes, and Google ended Google-account sign-in for Gemini CLI on 2026-06-18, so the owner's Jio plan cannot power it. Browser spikes were run by Claude directly.

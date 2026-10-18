@@ -1,4 +1,5 @@
 import { validateStoryboard } from './storyboard.mjs';
+import { sameDocument } from './guide/pure.mjs';
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const nonempty = (v) => typeof v === 'string' && Boolean(v.trim());
 const httpURL = (v) => { try { return nonempty(v) && !/\s/.test(v) && ['http:', 'https:'].includes(new URL(v).protocol); } catch { return false; } };
@@ -48,7 +49,9 @@ export function buildScenario({ brief, storyboard, resolvedGuide }) {
     const actions = [];
     for (const index of guideSteps) {
       const guide = resolvedGuide.steps[index];
-      if (!previous || (guide.url !== previous.url && previous.action !== 'click')) actions.push({ type: 'goto', url: guide.url });
+      if (!previous && !guide.url) throw new Error(`step ${step.id}: the first guide step needs a url to open`);
+      // A null url continues on the current page; a click that navigates needs no goto of its own.
+      if (guide.url && (!previous || (!sameDocument(guide.url, previous.url ?? guide.url) && previous.action !== 'click'))) actions.push({ type: 'goto', url: guide.url });
       if (!['click', 'fill', 'press'].includes(guide.action)) throw new Error(`resolvedGuide.steps.${index}.action must be click|fill|press`);
       const action = { type: guide.action, selector: guide.selector };
       if (guide.action === 'fill') {
@@ -56,7 +59,8 @@ export function buildScenario({ brief, storyboard, resolvedGuide }) {
         if (Object.hasOwn(guide, 'sensitive')) action.sensitive = guide.sensitive;
       }
       if (guide.action === 'press') action.key = guide.key;
-      for (const key of ['tab', 'frameUrl']) if (Object.hasOwn(guide, key)) action[key] = guide[key];
+      // A null frameUrl means the top frame (Auto mode steps carry none), so it is left out instead of copied as null.
+      for (const key of ['tab', 'frameUrl']) if (guide[key] != null) action[key] = guide[key];
       actions.push(action);
       if (guide.action === 'fill') actions.push({ type: 'wait', ms: 400 });
       if (guide.action === 'click' && /delete|remove|pay|purchase|buy now|place order|confirm|submit/i.test(guide.name)) warnings.push(`step ${step.id} clicks "${guide.name}", which may write data; writes are blocked during recording unless allowed`);

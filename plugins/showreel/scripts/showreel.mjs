@@ -8,6 +8,7 @@ import { readProjectFile, writeProjectFile } from './lib/project.mjs';
 import { DEFAULT_BRIEF, validateBrief, setPath, questions } from './lib/brief.mjs';
 import { draftFromGuide, validateStoryboard } from './lib/storyboard.mjs';
 import { buildScenario, validateScenario } from './lib/scenario.mjs';
+import { addGuideStep } from './lib/guide/commands.mjs';
 
 const help = `Usage: showreel <command>
 
@@ -17,6 +18,8 @@ Commands:
   brief <init|show|set|questions> --name <name>    Manage intake
   storyboard <draft|validate> --name <name>       Draft or validate captions
   scenario <build|validate> --name <name>         Build or validate actions
+  guide [resolve|add] --name <name>             Capture or resolve a guide
+  snapshot --url <URL> [--max <N>]               List visible controls
   --help                          Show this help
 `;
 
@@ -105,8 +108,58 @@ async function projectCommand(command, flags) {
   } else printValidation(validateScenario(await readProjectFile(name, 'scenario')));
 }
 
+async function guideCommand(flags) {
+  if (flags[0] === 'add') {
+    console.log(await addGuideStep(flags.slice(1)));
+    return;
+  }
+  const resolving = flags[0] === 'resolve';
+  if (flags[0] && !flags[0].startsWith('--') && !resolving) {
+    console.log(help);
+    process.exitCode = 2;
+    return;
+  }
+  const { options } = parseOptions(resolving ? flags.slice(1) : flags,
+    resolving ? ['--name'] : ['--name', '--url']);
+  const name = options['--name'];
+  if (resolving) {
+    const { resolveGuide } = await import('./lib/guide/resolver.mjs');
+    const guide = await readProjectFile(name, 'guide');
+    const resolved = await resolveGuide({ guide });
+    await writeProjectFile(name, 'resolved', resolved);
+    console.log(`${resolved.steps.length}/${guide.steps.length} steps resolved`);
+    for (const failure of resolved.failures) console.error(`${failure.i}: ${failure.name}: ${failure.why}`);
+    if (resolved.failures.length) process.exitCode = 1;
+    return;
+  }
+  const url = options['--url'] ?? (await readProjectFile(name, 'brief')).baseURL;
+  if (!url) throw new Error('A URL is required; set brief.baseURL or pass --url');
+  const { recordGuide } = await import('./lib/guide/recorder.mjs');
+  const steps = await recordGuide({ url, name });
+  console.log(`${steps.length} steps`);
+  console.log(path.join(projectDir(name), 'guide.json'));
+}
+
+async function snapshotCommand(flags) {
+  const options = {};
+  for (let i = 0; i < flags.length; i += 2) {
+    const flag = flags[i];
+    if (!['--url', '--max'].includes(flag) || Object.hasOwn(options, flag)) {
+      throw new Error(`Invalid option: ${flag}`);
+    }
+    if (!flags[i + 1] || flags[i + 1].startsWith('--')) throw new Error(`Missing value for ${flag}`);
+    options[flag] = flags[i + 1];
+  }
+  if (!options['--url']) throw new Error('--url is required');
+  const { snapshotPage, formatSnapshot } = await import('./lib/snapshot.mjs');
+  const snapshot = await snapshotPage({ url: options['--url'], max: Number(options['--max'] ?? 60) });
+  console.log(formatSnapshot(snapshot));
+}
+
 async function main(args) {
   const [command, ...flags] = args;
+  if (command === 'guide') return guideCommand(flags);
+  if (command === 'snapshot') return snapshotCommand(flags);
   if (command === '--help' && !flags.length) return console.log(help);
   if (['brief', 'storyboard', 'scenario'].includes(command)) return projectCommand(command, flags);
   if (command === 'doctor') {

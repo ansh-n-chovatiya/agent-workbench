@@ -90,3 +90,28 @@ test('a sensitive fill must keep a null value, even when someone writes one in',
   assert.equal(validateScenario(scenario).ok, false);
   assert.match(validateScenario(scenario).errors.join('\n'), /must be null for a sensitive field/);
 });
+
+test('a step without a url continues on the current page, and a hash-only change adds no goto', () => {
+  const g = structuredClone(guide);
+  g.steps = g.steps.slice(0, 3).map((step, i) => ({ ...step, action: 'click', value: undefined, sensitive: false, url: i === 0 ? guide.url : null }));
+  const { scenario } = build(g);
+  assert.deepEqual(scenario.steps.flatMap((x) => x.actions.map((a) => a.type)), ['goto', 'click', 'click', 'click']);
+  const h = structuredClone(g);
+  h.steps[1].url = guide.url + '#projects';   // anchor link: same document
+  assert.equal(build(h).scenario.steps.flatMap((x) => x.actions).filter((a) => a.type === 'goto').length, 1);
+});
+
+test('the first guide step must carry a url to open', () => {
+  const g = structuredClone(guide);
+  g.steps = g.steps.slice(0, 2).map((step) => ({ ...step, action: 'click', value: undefined, sensitive: false, url: null }));
+  assert.throws(() => build(g), /first guide step needs a url/);
+});
+
+test('a null frameUrl is omitted from the action instead of copied as null', () => {
+  const g = structuredClone(guide);
+  g.steps = g.steps.slice(0, 2).map((step, i) => ({ ...step, action: 'click', value: undefined, sensitive: false, url: i === 0 ? guide.url : null, frameUrl: null }));
+  const { scenario } = build(g);
+  assert.ok(scenario.steps.flatMap((x) => x.actions).filter((a) => a.type === 'click').every((a) => !Object.hasOwn(a, 'frameUrl')));
+  assert.equal(validateScenario(scenario).ok, true);
+});
+
