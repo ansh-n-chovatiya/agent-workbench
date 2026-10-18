@@ -87,6 +87,8 @@ before adding more checks.
 
 ## Phase 5: one repository, profile and bootstrap
 
+**Update 2026-10-18:** the `ai-skills` part is finished and superseded. Its content lives at `plugins/skills-demo` (MIT added, so the licence gap in Q21 is closed for it), the local folder was deleted after a file-by-file check (47 of 47 tracked files identical) and a verified backup of its git-ignored `.ctx/` ledger outside any repo, and the GitHub repo was deleted by the owner. `context-ledger` is still in place, untouched. The archive-with-pointer step below no longer applies to `ai-skills`.
+
 The move itself now happens in phase 0.9; this phase keeps the rest. Move recipe (D3): fold `context-ledger` and `ai-skills` into `agent-workbench` with history preserved
 (git subtree or filter-repo into `plugins/ctx` and the `skills-*` plugins), fix any path assumptions (the ctx
 `bin/`, tests and `pyproject.toml` expect to sit at a repo root), run ctx's own test suite from the new location,
