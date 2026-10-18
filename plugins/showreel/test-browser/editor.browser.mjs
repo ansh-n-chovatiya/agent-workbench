@@ -66,6 +66,34 @@ test('real editor: load, edit, undo, autosave, play and export', { timeout: 2400
           assert.ok(region.width > 0 && region.height > 0);
           assert.ok(region.x >= 0 && region.y >= 0 && region.right <= geometry.width && region.bottom <= geometry.height, JSON.stringify(region));
         }
+        if (viewport.width === 1280 && viewport.height === 720) {
+          const splitter = page.getByRole('separator', {name:'Resize timeline'});
+          assert.equal(Number(await splitter.getAttribute('aria-valuenow')),216,'default timeline height');
+          assert.equal(await page.locator('.hint-card').count(),1,'first-run tip is still visible');
+          const tip = await page.locator('.hint-card').boundingBox();
+          assert.ok(tip.height <= 33,`tip height: ${tip.height}`);
+          for (const name of ['Time','Video','Speed','Zoom','Captions','Cursor']) {
+            const label = await page.locator('.track-labels > div').filter({hasText:new RegExp(`^${name}$`)}).boundingBox();
+            assert.ok(label && label.x >= geometry.timeline.x && label.y >= geometry.timeline.y &&
+              label.x + label.width <= geometry.timeline.right && label.y + label.height <= geometry.timeline.bottom,
+              `${name} must fit without scrolling: ${JSON.stringify({label,timeline:geometry.timeline})}`);
+            assert.equal(label.height,name === 'Time' ? 20 : 26,`${name} row height`);
+          }
+          const tabs = await page.getByRole('tab').all();
+          const boxes = await Promise.all(tabs.map(tab => tab.boundingBox()));
+          assert.ok(boxes.every(box => box && Math.abs(box.y - boxes[0].y) < 1),'settings tabs stay in one row');
+          assert.equal(await page.locator('.timeline-toolbar .timeline-summary').count(),1);
+          assert.equal(await page.locator('.depth-control > span').first().innerText(),'Depth');
+          const depth = page.getByRole('button',{name:'Zoom depth',exact:true});
+          const initialDepth = Number((await depth.innerText()).replace('×',''));
+          await page.getByRole('button',{name:'Increase zoom depth'}).click();
+          await until(async () => Number((await depth.innerText()).replace('×','')) > initialDepth,'depth stepper');
+          await page.getByRole('button',{name:'Decrease zoom depth'}).click();
+          await until(async () => Number((await depth.innerText()).replace('×','')) === initialDepth,'depth restored');
+          assert.equal(await page.locator('.track-placeholder').filter({hasText:'Select a part of the video, then choose Speed'}).count(),1);
+          const zoomTrack = page.locator('.timeline-track').nth(2);
+          assert.equal(await zoomTrack.locator('.track-placeholder').count(),await zoomTrack.locator('.timeline-block').count() ? 0 : 1);
+        }
         const {canvas,stage} = geometry;
         const output=(await saved()).output;
         assert.ok(canvas.x >= stage.x && canvas.y >= stage.y && canvas.right <= stage.right + 1 && canvas.bottom <= stage.bottom + 1);
@@ -109,11 +137,13 @@ test('real editor: load, edit, undo, autosave, play and export', { timeout: 2400
       await page.getByRole('button', { name: 'Speed', exact: true }).click();
       await page.getByRole('button', { name: '2x', exact: true }).click();
       await until(async () => (await saved()).edits.speeds.some((s) => s.rate === 2), 'speed saved');
+      assert.equal(await page.getByText('Select a part of the video, then choose Speed',{exact:true}).count(),0);
       const before = (await saved()).zoom.regions.filter(z => z.source === 'manual').length;
       const ruler=page.locator('.timeline-ruler'), rulerBox=await ruler.boundingBox();
       await page.mouse.click(rulerBox.x + 3.9 * 80, rulerBox.y + rulerBox.height/2);
       await page.getByRole('button', { name: 'Add zoom', exact:true }).click();
       await until(async () => (await saved()).zoom.regions.filter(z => z.source === 'manual').length === before + 1, 'manual zoom saved');
+      assert.equal(await page.getByText('Add zoom to bring a detail closer',{exact:true}).count(),0);
       assert.ok((await saved()).zoom.regions.some(z => z.source === 'manual' && z.tStart >= 3.8));
       await page.getByLabel('Seek output time').focus();await page.keyboard.press('Home');
       await waitSaved();

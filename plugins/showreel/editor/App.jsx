@@ -108,7 +108,7 @@ export function App() {
     </div><div class="settings-column">{state.composition && <Settings state={state} store={store} />}</div></div>
     <div class="splitter" role="separator" tabIndex="0" aria-label="Resize timeline" aria-orientation="horizontal" aria-valuemin={190} aria-valuemax={Math.floor(innerHeight * .6)} aria-valuenow={Math.round(height)} onPointerDown={startResize} onDblClick={() => resizeTimeline(0)} onKeyDown={e => {if(['ArrowUp','ArrowDown','Home','End','Enter'].includes(e.key)) {e.preventDefault();resizeTimeline(e.key==='Home'?190:e.key==='End'?innerHeight*.6:e.key==='Enter'?0:height+(e.key==='ArrowUp'?16:-16));}}} />
     <section id="timeline-root" aria-label="Timeline">
-      {hint && <div class="hint-card"><p>Drag on the Video track to select a part.<br />Press Delete to cut it, or choose Speed to fast-forward it.<br />Choose Add zoom to bring a detail closer.</p><Tooltip text="Dismiss this hint"><Button size="icon" aria-label="Dismiss editing hint" onClick={() => {setHint(false);writePreference('hint-dismissed','yes');}}><X size={14} aria-hidden="true" /></Button></Tooltip></div>}
+      {hint && <div class="hint-card"><p>Tip: drag on the Video track to select a part, then press Delete to cut it, or use Speed to fast-forward it.</p><Tooltip text="Dismiss this hint"><Button size="icon" aria-label="Dismiss editing hint" onClick={() => {setHint(false);writePreference('hint-dismissed','yes');}}><X size={14} aria-hidden="true" /></Button></Tooltip></div>}
       <Timeline state={state} store={store} time={time} setTime={setTime} setPlaying={setPlaying} selection={selection} setSelection={setSelection} />
     </section>
     {toast && <div class="toast" role="status">{toast}</div>}

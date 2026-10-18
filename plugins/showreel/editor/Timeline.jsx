@@ -10,6 +10,7 @@ import { Popover } from './ui/popover.jsx';
 import { Tooltip } from './ui/tooltip.jsx';
 import { Separator } from './ui/separator.jsx';
 import { ToggleGroup } from './ui/toggle-group.jsx';
+import { Info } from 'lucide-preact';
 import { Badge } from './ui/badge.jsx';
 import { isTyping } from './helpers.mjs';
 
@@ -74,6 +75,10 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
   }
   function cut() { commit(() => { const r = selectedRange(); return ops.cutRange(c,r.start,r.end,context); }); }
   function speed(value) { commit(() => { const r = selectedRange(); const next = ops.setSpeed(c,r.start,r.end,value,context); setSelection({type:'range',start:r.start,end:r.end}); return next; }); }
+  function changeDepth(value) {
+    setDepth(value);
+    if (selectedZoom) commit(() => ops.updateZoomRegion(working,selectedZoom.id,{depth:value},context));
+  }
   function addZoom() {
     const start = ops.snapFrame(sourceT), next = working.zoom.regions.find(z => z.tStart >= start);
     const end = Math.min(duration,start+2,next?.tStart ?? duration);
@@ -218,14 +223,15 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
         <Label>Custom speed <Input aria-label="Custom speed" type="number" min="0.25" max="8" step="0.05" value={rate} onInput={e => setRate(+e.currentTarget.value)} /> x</Label><Button onClick={() => {speed(rate);setSpeedOpen(false);}}>Apply</Button>
       </Popover></Tooltip><Separator />
       <Tooltip text="Add zoom region (Z)"><Button onClick={addZoom}>Add zoom</Button></Tooltip>
-      <Tooltip text="Choose the magnification of a zoom region"><Popover label="Zoom depth" trigger={<Button aria-label="Zoom depth">{zoomDepth(selectedZoom?.depth ?? depth)}×</Button>}><Label>Zoom depth<Input aria-label="Zoom depth value" type="number" min="1.05" max="4" step="0.05" value={zoomDepth(selectedZoom?.depth ?? depth)} onInput={e => { const value = +e.currentTarget.value; setDepth(value); if(selectedZoom) commit(() => ops.updateZoomRegion(working,selectedZoom.id,{depth:value},context)); }} /></Label></Popover></Tooltip>
+      <div class="depth-control"><span>Depth</span><Button size="icon" aria-label="Decrease zoom depth" disabled={zoomDepth(selectedZoom?.depth ?? depth) <= 1.05} onClick={() => changeDepth(Math.max(1.05, +(zoomDepth(selectedZoom?.depth ?? depth) - .05).toFixed(2)))}>−</Button><Tooltip text="Zoom depth"><Popover label="Zoom depth" trigger={<Button aria-label="Zoom depth">{zoomDepth(selectedZoom?.depth ?? depth)}×</Button>}><Label>Zoom depth<Input aria-label="Zoom depth value" type="number" min="1.05" max="4" step="0.05" value={zoomDepth(selectedZoom?.depth ?? depth)} onInput={e => { changeDepth(+e.currentTarget.value); }} /></Label></Popover></Tooltip><Button size="icon" aria-label="Increase zoom depth" disabled={zoomDepth(selectedZoom?.depth ?? depth) >= 4} onClick={() => changeDepth(Math.min(4, +(zoomDepth(selectedZoom?.depth ?? depth) + .05).toFixed(2)))}>+</Button></div>
       <Tooltip text="Regenerate automatic zooms; preserve manual regions"><Button onClick={() => commit(() => ops.autoZoomRegenerate(working,project.events,project.record))}>Auto zoom</Button></Tooltip><Separator />
       <Tooltip text="Add caption (C)"><Button onClick={addCue}>Add caption</Button></Tooltip><Separator />
       <Tooltip text={selection?.type === 'trim' ? 'Restore the selected removed range' : 'Select a removed range to restore it'}><Button disabled={selection?.type !== 'trim'} onClick={() => restore()}>Restore</Button></Tooltip>
       <div class="time-mode"><Tooltip text="Show source or edited output time"><span><ToggleGroup aria-label="Timeline time" value={output ? 'output' : 'source'} onValueChange={next => setOutput(next === 'output')} options={[{value:'source',label:'Source'},{value:'output',label:'Output'}]} /></span></Tooltip></div>
+      <div class="timeline-summary"><strong>Result {clock(map.outputDuration)}</strong><span> · {clock(c.edits.trims.reduce((n,r) => n+r.end-r.start,0))} removed · {c.edits.trims.length} {c.edits.trims.length === 1 ? 'cut' : 'cuts'}</span></div>
+      <Tooltip text={`${output ? 'OUTPUT' : 'SOURCE'} TIME · Drag to select · Alt disables snapping`}><Button size="icon" aria-label="Timeline help"><Info size={14} aria-hidden="true" /></Button></Tooltip>
       <Tooltip text="Zoom timeline out (Ctrl/⌘ + wheel)"><Button size="icon" aria-label="Zoom timeline out" onClick={() => changeScale(scale/1.4)}>−</Button></Tooltip><Tooltip text="Zoom timeline in (Ctrl/⌘ + wheel)"><Button size="icon" aria-label="Zoom timeline in" onClick={() => changeScale(scale*1.4)}>+</Button></Tooltip>
     </div>
-    <div class="timeline-summary"><strong>Result {clock(map.outputDuration)}</strong><span>{clock(c.edits.trims.reduce((n,r) => n+r.end-r.start,0))} removed · {c.edits.trims.length} {c.edits.trims.length === 1 ? 'cut' : 'cuts'}</span><span>{output ? 'OUTPUT' : 'SOURCE'} TIME · Drag to select · Alt disables snapping</span></div>
     {error && <p role="status" class="timeline-message">{error}</p>}
     {selectedZoom && <p class="timeline-message">Click the preview to set this region’s focus at the playhead.</p>}
     <div class="timeline-grid"><div class="track-labels" aria-hidden="true">{['Time','Video','Speed','Zoom','Captions','Cursor'].map(label => <div>{label}</div>)}</div>
@@ -242,8 +248,8 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
             {c.edits.trims.map((r,index) => <Button class={`trim-block ${selection?.type === 'trim' && selection.index === index ? 'selected' : ''}`} style={style(r.start,r.end)} aria-label={`Removed ${clock(r.start)} to ${clock(r.end)}`} onPointerDown={e => e.stopPropagation()} onClick={() => setSelection({type:'trim',index})}>Removed</Button>)}
             {selection?.type === 'range' && <div class="range-selection" style={style(selection.start,selection.end)} />}
           </div>
-          <div class="timeline-track">{shown.edits.speeds.map((r,index) => block({type:'speed',index},r.start,r.end,`${r.rate}x`,'speed'))}</div>
-          <div class="timeline-track">{shown.zoom.regions.map(z => block({type:'zoom',id:z.id},z.tStart,z.tEnd,`${zoomDepth(z.depth)}x · ${z.source}`,'zoom'))}</div>
+          <div class="timeline-track">{!shown.edits.speeds.length && <span class="track-placeholder">Select a part of the video, then choose Speed</span>}{shown.edits.speeds.map((r,index) => block({type:'speed',index},r.start,r.end,`${r.rate}x`,'speed'))}</div>
+          <div class="timeline-track">{!shown.zoom.regions.length && <span class="track-placeholder">Add zoom to bring a detail closer</span>}{shown.zoom.regions.map(z => block({type:'zoom',id:z.id},z.tStart,z.tEnd,`${zoomDepth(z.depth)}x · ${z.source}`,'zoom'))}</div>
           <div class="timeline-track">{cues.map(cue => block({type:'caption',id:cue.id},cue.start,cue.end,cue.text,'caption'))}</div>
           <div class="timeline-track cursor-track">{clicks.map(click => <span class="click-marker" style={{left:px(click.t)}} title={`Click at ${clock(click.t)}`} />)}</div>
           <div class="timeline-playhead" style={{left:(output ? time : sourceT)*scale}} />

@@ -15,7 +15,7 @@ test('settings grouping/search matches label words without changing schema or hi
   const before = JSON.stringify(SETTINGS), groups = groupSettings(SETTINGS);
   assert.deepEqual(Object.keys(groups), ['output', 'look', 'cursor', 'zoom', 'captions', 'cards']);
   assert.equal(Object.values(groups).flat().length, SETTINGS.length);
-  const found = Object.values(groupSettings(SETTINGS, ' CURSOR   hotspot ')).flat();
+  const found = Object.values(groupSettings(SETTINGS, ' CURSOR   click point ')).flat();
   assert.ok(found.length); assert.ok(found.every(s => s.advanced));
   assert.equal(JSON.stringify(SETTINGS), before);
   assert.deepEqual(groupSettings(SETTINGS, 'does-not-exist'), {});

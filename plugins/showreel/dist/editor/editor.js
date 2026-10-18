@@ -1,4 +1,4 @@
-// showreel editor sources sha256: 85b22a5620c3b4af5ddf733cce3ab6e6405e0f31099651b274c287ff0053e4ca
+// showreel editor sources sha256: 6429f30006f787cc372d45daeebca83b2201c0edb4f1f02fbb902314f12e28b2
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -20019,8 +20019,21 @@
   __iconData5.node;
   var Download = createLucideIcon(__iconData5);
 
-  // node_modules/lucide-preact/dist/esm/icons/keyboard.mjs
+  // node_modules/lucide-preact/dist/esm/icons/info.mjs
   var __iconData6 = {
+    name: "info",
+    size: 24,
+    node: [
+      ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+      ["path", { d: "M12 16v-4", key: "1dtifu" }],
+      ["path", { d: "M12 8h.01", key: "e9boi3" }]
+    ]
+  };
+  __iconData6.node;
+  var Info = createLucideIcon(__iconData6);
+
+  // node_modules/lucide-preact/dist/esm/icons/keyboard.mjs
+  var __iconData7 = {
     name: "keyboard",
     size: 24,
     node: [
@@ -20035,11 +20048,11 @@
       ["rect", { width: "20", height: "16", x: "2", y: "4", rx: "2", key: "18n3k1" }]
     ]
   };
-  __iconData6.node;
-  var Keyboard = createLucideIcon(__iconData6);
+  __iconData7.node;
+  var Keyboard = createLucideIcon(__iconData7);
 
   // node_modules/lucide-preact/dist/esm/icons/moon.mjs
-  var __iconData7 = {
+  var __iconData8 = {
     name: "moon",
     size: 24,
     node: [
@@ -20052,11 +20065,11 @@
       ]
     ]
   };
-  __iconData7.node;
-  var Moon = createLucideIcon(__iconData7);
+  __iconData8.node;
+  var Moon = createLucideIcon(__iconData8);
 
   // node_modules/lucide-preact/dist/esm/icons/pause.mjs
-  var __iconData8 = {
+  var __iconData9 = {
     name: "pause",
     size: 24,
     node: [
@@ -20064,11 +20077,11 @@
       ["rect", { x: "5", y: "3", width: "5", height: "18", rx: "1", key: "1wsw3u" }]
     ]
   };
-  __iconData8.node;
-  var Pause = createLucideIcon(__iconData8);
+  __iconData9.node;
+  var Pause = createLucideIcon(__iconData9);
 
   // node_modules/lucide-preact/dist/esm/icons/play.mjs
-  var __iconData9 = {
+  var __iconData10 = {
     name: "play",
     size: 24,
     node: [
@@ -20081,11 +20094,11 @@
       ]
     ]
   };
-  __iconData9.node;
-  var Play = createLucideIcon(__iconData9);
+  __iconData10.node;
+  var Play = createLucideIcon(__iconData10);
 
   // node_modules/lucide-preact/dist/esm/icons/redo-2.mjs
-  var __iconData10 = {
+  var __iconData11 = {
     name: "redo-2",
     size: 24,
     node: [
@@ -20093,11 +20106,11 @@
       ["path", { d: "M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13", key: "6uklza" }]
     ]
   };
-  __iconData10.node;
-  var Redo2 = createLucideIcon(__iconData10);
+  __iconData11.node;
+  var Redo2 = createLucideIcon(__iconData11);
 
   // node_modules/lucide-preact/dist/esm/icons/rotate-ccw.mjs
-  var __iconData11 = {
+  var __iconData12 = {
     name: "rotate-ccw",
     size: 24,
     node: [
@@ -20105,11 +20118,11 @@
       ["path", { d: "M3 3v5h5", key: "1xhq8a" }]
     ]
   };
-  __iconData11.node;
-  var RotateCcw = createLucideIcon(__iconData11);
+  __iconData12.node;
+  var RotateCcw = createLucideIcon(__iconData12);
 
   // node_modules/lucide-preact/dist/esm/icons/settings-2.mjs
-  var __iconData12 = {
+  var __iconData13 = {
     name: "settings-2",
     size: 24,
     node: [
@@ -20119,11 +20132,11 @@
       ["circle", { cx: "7", cy: "7", r: "3", key: "dfmy0x" }]
     ]
   };
-  __iconData12.node;
-  var Settings2 = createLucideIcon(__iconData12);
+  __iconData13.node;
+  var Settings2 = createLucideIcon(__iconData13);
 
   // node_modules/lucide-preact/dist/esm/icons/skip-back.mjs
-  var __iconData13 = {
+  var __iconData14 = {
     name: "skip-back",
     size: 24,
     node: [
@@ -20137,11 +20150,11 @@
       ["path", { d: "M3 20V4", key: "1ptbpl" }]
     ]
   };
-  __iconData13.node;
-  var SkipBack = createLucideIcon(__iconData13);
+  __iconData14.node;
+  var SkipBack = createLucideIcon(__iconData14);
 
   // node_modules/lucide-preact/dist/esm/icons/skip-forward.mjs
-  var __iconData14 = {
+  var __iconData15 = {
     name: "skip-forward",
     size: 24,
     node: [
@@ -20155,11 +20168,11 @@
       ]
     ]
   };
-  __iconData14.node;
-  var SkipForward = createLucideIcon(__iconData14);
+  __iconData15.node;
+  var SkipForward = createLucideIcon(__iconData15);
 
   // node_modules/lucide-preact/dist/esm/icons/sun.mjs
-  var __iconData15 = {
+  var __iconData16 = {
     name: "sun",
     size: 24,
     node: [
@@ -20174,11 +20187,11 @@
       ["path", { d: "m19.07 4.93-1.41 1.41", key: "1shlcs" }]
     ]
   };
-  __iconData15.node;
-  var Sun = createLucideIcon(__iconData15);
+  __iconData16.node;
+  var Sun = createLucideIcon(__iconData16);
 
   // node_modules/lucide-preact/dist/esm/icons/undo-2.mjs
-  var __iconData16 = {
+  var __iconData17 = {
     name: "undo-2",
     size: 24,
     node: [
@@ -20186,11 +20199,11 @@
       ["path", { d: "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11", key: "f3b9sd" }]
     ]
   };
-  __iconData16.node;
-  var Undo2 = createLucideIcon(__iconData16);
+  __iconData17.node;
+  var Undo2 = createLucideIcon(__iconData17);
 
   // node_modules/lucide-preact/dist/esm/icons/x.mjs
-  var __iconData17 = {
+  var __iconData18 = {
     name: "x",
     size: 24,
     node: [
@@ -20198,8 +20211,8 @@
       ["path", { d: "m6 6 12 12", key: "d8bk6v" }]
     ]
   };
-  __iconData17.node;
-  var X3 = createLucideIcon(__iconData17);
+  __iconData18.node;
+  var X3 = createLucideIcon(__iconData18);
 
   // editor/ui/checkbox.jsx
   var Checkbox3 = (props) => /* @__PURE__ */ k(Checkbox, { className: "ui-checkbox", ...props }, /* @__PURE__ */ k(CheckboxIndicator, null, /* @__PURE__ */ k(Check, { size: 14, "aria-hidden": "true" })));
@@ -20341,9 +20354,9 @@
       return this;
     }
     with(index2, key, value) {
-      const copy2 = new _OrderedDict(this);
-      copy2.insert(index2, key, value);
-      return copy2;
+      const copy3 = new _OrderedDict(this);
+      copy3.insert(index2, key, value);
+      return copy3;
     }
     before(key) {
       const index2 = this.#keys.indexOf(key) - 1;
@@ -27399,76 +27412,120 @@
     ...["title", "outro"].map((k4) => ({ path: `cards.${k4}.logo`, reason: "Container; use logo image and height settings." }))
   ];
   var excluded = new Set(EXCLUDED.map((s3) => s3.path));
-  var names = {
-    theme: "Theme",
-    width: "Width",
-    height: "Height",
-    fps: "Frame rate",
-    quality: "Quality",
-    paddingXPct: "Horizontal padding",
-    paddingYPct: "Vertical padding",
-    paddingPct: "Padding on both axes",
-    radiusPx: "Corner radius",
-    enabled: "Enabled",
-    blurPx: "Blur",
-    offsetYPx: "Vertical offset",
-    opacity: "Opacity",
-    color: "Colour",
-    widthPx: "Width",
-    type: "Style",
-    colors: "Gradient colours",
-    angle: "Gradient angle",
-    image: "Image",
-    visible: "Show cursor",
-    style: "Style",
-    sizePct: "Cursor size",
-    fill: "Fill colour",
-    stroke: "Outline colour",
-    shadow: "Show cursor shadow",
-    scaleWithZoom: "Scale with zoom",
-    hideWhenIdleSec: "Hide after idle",
-    pressScale: "Size while pressed",
-    autoShape: "Match cursor to target",
-    distancePx: "Travel distance",
-    durationSec: "Duration",
-    startAfterClickSec: "Delay after click",
-    microCorrection: "Subtle cursor correction",
-    entrance: "Animate cursor entrance",
-    sizeMult: "Effect size",
-    depth: "Zoom depth",
-    autoSuggest: "Suggest zoom regions",
-    speed: "Camera movement",
-    holdAfterClickSec: "Hold after click",
-    leadInSec: "Delay before zoom",
-    onlyKinds: "Zoom trigger types",
-    mode: "Caption layout",
-    position: "Caption position",
-    bandHeightPct: "Caption band height",
-    fontSizePct: "Text size",
-    fontWeight: "Text weight",
-    background: "Background colour",
-    maxLines: "Maximum lines",
-    align: "Text alignment",
-    title: "Title text",
-    text: "Outro text",
-    subtitle: "Subtitle text",
-    titleSizePct: "Title size",
-    subtitleSizePct: "Subtitle size",
-    titleColor: "Title colour",
-    subtitleColor: "Subtitle colour",
-    shape: "Accent shape",
-    widthPct: "Accent width",
-    heightPct: "Height",
-    fade: "Transition duration",
-    transition: "Transition style",
-    x: "Horizontal hotspot",
-    y: "Vertical hotspot"
+  var copy2 = {
+    "output.width": ["Width", "How wide the finished video is, in pixels."],
+    "output.height": ["Height", "How tall the finished video is, in pixels."],
+    "output.fps": ["Frame rate", "More frames per second make movement smoother in the finished video."],
+    "output.quality": ["Quality", "Higher quality keeps more detail in the video and makes a larger file."],
+    "theme": ["Theme", "Set the overall colours and style of the video, including its frame and cards."],
+    "frame.paddingXPct": ["Horizontal padding", "Space to the left and right of the recording, as a percentage of the video width."],
+    "frame.paddingYPct": ["Vertical padding", "Space above and below the recording, as a percentage of the video height."],
+    "frame.radiusPx": ["Corner radius", "Round the corners of the recording; set to zero for square corners."],
+    "frame.shadow.enabled": ["Show frame shadow", "Add a shadow behind the recording to lift it off the background."],
+    "frame.shadow.blurPx": ["Shadow softness", "Soften the edges of the shadow behind the recording."],
+    "frame.shadow.offsetYPx": ["Shadow position", "Move the frame shadow down with positive values or up with negative values."],
+    "frame.shadow.opacity": ["Shadow strength", "Make the shadow behind the recording lighter or darker."],
+    "frame.border.enabled": ["Show frame border", "Draw a thin outline around the recording to separate it from the background."],
+    "frame.border.color": ["Frame border colour", "Set the colour of the outline around the recording."],
+    "frame.border.widthPx": ["Frame border width", "Make the outline around the recording thicker or thinner."],
+    "frame.background.type": ["Background style", "Use the theme, a colour blend, a single colour or an image behind the recording."],
+    "frame.background.colors": ["Gradient", "Set the colours behind the recording; a solid background uses the first colour."],
+    "frame.background.angle": ["Gradient direction", "Turn the colour blend behind the recording to change which way it flows."],
+    "frame.background.image": ["Background image", "Use an image from the project as the backdrop behind the recording."],
+    "cursor.visible": ["Show cursor", "Show or hide the mouse pointer in the video."],
+    "cursor.style": ["Cursor style", "Change the shape of the pointer shown over the recording."],
+    "cursor.sizePct": ["Cursor size", "How big the pointer looks, as a percentage of the video height."],
+    "cursor.fill": ["Fill colour", "Set the colour inside the pointer to help it stand out on the page."],
+    "cursor.stroke": ["Outline colour", "Set the colour around the pointer to keep its edges easy to see."],
+    "cursor.shadow": ["Show cursor shadow", "Add a soft shadow under the pointer so it stands out on light pages."],
+    "cursor.scaleWithZoom": ["Scale with zoom", "Enlarge the pointer along with the page when the video zooms in."],
+    "cursor.hideWhenIdleSec": ["Hide after idle", "Hide the pointer after this many seconds without movement."],
+    "cursor.pressScale": ["Size while pressed", "Shrink the pointer while a mouse button is held; one keeps its normal size."],
+    "cursor.autoShape": ["Match cursor to target", "Switch the pointer shape when it moves over buttons, links or text fields."],
+    "cursor.followThrough.enabled": ["Move after clicks", "Let the pointer glide away from a target after clicking it."],
+    "cursor.followThrough.distancePx": ["Distance after click", "How far the pointer glides after a click, measured in pixels."],
+    "cursor.followThrough.durationSec": ["Movement after click", "How many seconds the pointer takes to glide away after clicking."],
+    "cursor.followThrough.startAfterClickSec": ["Delay after click", "Wait this many seconds after a click before moving the pointer away."],
+    "cursor.microCorrection": ["Small cursor movements", "Add tiny pointer movements to make its path feel more natural."],
+    "cursor.entrance": ["Animate cursor entrance", "Bring the pointer into view with an entrance movement at the start."],
+    "cursor.clickEffect.style": ["Show click effect", "Highlight each click with a ripple or pulse, or hide the click effect."],
+    "cursor.clickEffect.color": ["Click effect colour", "Set the colour of click highlights, or leave it empty to follow the theme."],
+    "cursor.clickEffect.sizeMult": ["Click effect size", "Make the highlight around each click larger or smaller."],
+    "cursor.clickEffect.durationSec": ["Click effect duration", "How long the highlight stays visible after each click, in seconds."],
+    "zoom.enabled": ["Enable zoom", "Bring parts of the page closer during zooms marked on the timeline."],
+    "zoom.depth": ["Zoom depth", "How much closer the page appears during a zoom; higher values show more detail."],
+    "zoom.autoSuggest": ["Suggest zoom regions", "Automatically add zooms around clicks and typing when no zooms are saved."],
+    "zoom.speed": ["Camera movement", "Change how quickly the view moves between zoomed areas of the page."],
+    "zoom.holdAfterClickSec": ["Hold after click", "Keep the view on a clicked area for this many seconds before moving on."],
+    "zoom.leadInSec": ["Delay before zoom", "Wait this many seconds after a target appears before starting its automatic zoom."],
+    "zoom.onlyKinds": ["Zoom triggers", 'Limit automatic zooms to clicks, typing or both using a list such as ["click", "fill"].'],
+    "captions.enabled": ["Show captions", "Show or hide the text captions that explain each step in the video."],
+    "captions.mode": ["Caption layout", "Place captions in their own band or directly over the recording."],
+    "captions.position": ["Caption position", "Place the caption band or text at the top or bottom of the video."],
+    "captions.bandHeightPct": ["Caption band height", "Set the space reserved for captions as a percentage of the video height."],
+    "captions.fontSizePct": ["Text size", "How large caption letters appear, as a percentage of the video height."],
+    "captions.fontWeight": ["Text weight", "Make caption letters lighter or bolder so they are easier to read."],
+    "captions.color": ["Text colour", "Set the colour of the caption letters shown during the recording."],
+    "captions.background": ["Background colour", "Set the colour behind captions to help the words stay readable."],
+    "captions.maxLines": ["Maximum lines", "Limit how many lines of caption text can appear at once."],
+    "captions.align": ["Text alignment", "Centre captions or line them up along the left edge of their space."],
+    "cards.title.align": ["Intro text alignment", "Centre the intro text or line it up along the left side of the opening card."],
+    "cards.title.titleSizePct": ["Intro title size", "How large the opening title appears, as a percentage of the video height."],
+    "cards.title.subtitleSizePct": ["Intro subtitle size", "How large the text beneath the opening title appears in the video."],
+    "cards.title.titleColor": ["Intro title colour", "Set the colour of the main title on the opening card."],
+    "cards.title.subtitleColor": ["Intro subtitle colour", "Set the colour of the smaller text beneath the opening title."],
+    "cards.title.background.type": ["Intro background style", "Fill the opening card with the theme, a colour blend, a single colour or an image."],
+    "cards.title.background.colors": ["Intro gradient", "Set the opening card colours; a solid intro background uses the first colour."],
+    "cards.title.background.angle": ["Intro gradient direction", "Turn the colour blend on the opening card to change its direction."],
+    "cards.title.background.image": ["Intro background image", "Use a project image as the background of the opening card."],
+    "cards.title.accent.enabled": ["Show intro accent", "Add a decorative mark beside the text on the opening card."],
+    "cards.title.accent.color": ["Intro accent colour", "Set the colour of the decorative mark on the opening card."],
+    "cards.title.accent.shape": ["Intro accent shape", "Use a bar or an underline to decorate the opening title, or hide the mark."],
+    "cards.title.accent.widthPct": ["Intro accent width", "Set the width of the opening card mark as a percentage of the video width."],
+    "cards.title.enabled": ["Intro card", "Show a title card before the recording begins."],
+    "cards.title.title": ["Title text", "Write the main title viewers see before the recording starts."],
+    "cards.title.subtitle": ["Intro subtitle", "Add a short supporting line beneath the title on the opening card."],
+    "cards.title.durationSec": ["Intro duration", "How many seconds the opening card stays on screen before the recording."],
+    "cards.outro.align": ["Outro text alignment", "Centre the closing text or line it up along the left side of the final card."],
+    "cards.outro.titleSizePct": ["Outro title size", "How large the closing message appears, as a percentage of the video height."],
+    "cards.outro.subtitleSizePct": ["Outro subtitle size", "How large the supporting text appears beneath the closing message."],
+    "cards.outro.titleColor": ["Outro title colour", "Set the colour of the main message on the closing card."],
+    "cards.outro.subtitleColor": ["Outro subtitle colour", "Set the colour of the smaller line beneath the closing message."],
+    "cards.outro.background.type": ["Outro background style", "Fill the closing card with the theme, a colour blend, a single colour or an image."],
+    "cards.outro.background.colors": ["Outro gradient", "Set the closing card colours; a solid outro background uses the first colour."],
+    "cards.outro.background.angle": ["Outro gradient direction", "Turn the colour blend on the closing card to adjust its direction."],
+    "cards.outro.background.image": ["Outro background image", "Use a project image as the backdrop for the closing message."],
+    "cards.outro.accent.enabled": ["Show outro accent", "Add a decorative mark beside the text on the closing card."],
+    "cards.outro.accent.color": ["Outro accent colour", "Set the colour of the decorative mark on the closing card."],
+    "cards.outro.accent.shape": ["Outro accent shape", "Use a bar or an underline to decorate the closing message, or hide the mark."],
+    "cards.outro.accent.widthPct": ["Outro accent width", "Set the width of the closing card mark as a percentage of the video width."],
+    "cards.outro.enabled": ["Outro card", "Show a closing card after the recording finishes."],
+    "cards.outro.text": ["Outro text", "Write the final message viewers see after the recording ends."],
+    "cards.outro.subtitle": ["Outro subtitle", "Add a supporting line beneath the main message on the closing card."],
+    "cards.outro.durationSec": ["Outro duration", "How many seconds the closing card remains on screen after the recording."],
+    "cards.fade": ["Transition duration", "How many seconds cards take to fade into the recording or the next card."],
+    "cards.transition": ["Transition style", "Fade between cards and the recording, or switch between them instantly."],
+    "frame.paddingPct": ["Padding on all sides", "Set equal space around the recording as a percentage of each video dimension."],
+    "cards.title.logo.image": ["Intro logo image", "Place a logo from the project on the opening card."],
+    "cards.title.logo.heightPct": ["Intro logo height", "How tall the opening logo appears, as a percentage of the video height."],
+    "cards.outro.logo.image": ["Outro logo image", "Place a logo from the project on the closing card."],
+    "cards.outro.logo.heightPct": ["Outro logo height", "How tall the closing logo appears, as a percentage of the video height."],
+    "cursor.custom.arrow.image": ["Arrow cursor image", "Use your own image for the normal arrow pointer in the video."],
+    "cursor.custom.arrow.hotspot.x": ["Arrow cursor click point across", "Place the arrow image over clicks horizontally; zero is its left edge and one its right edge."],
+    "cursor.custom.arrow.hotspot.y": ["Arrow cursor click point down", "Place the arrow image over clicks vertically; zero is its top edge and one its bottom edge."],
+    "cursor.custom.hand.image": ["Hand cursor image", "Use your own hand pointer image when the cursor is over a clickable target."],
+    "cursor.custom.hand.hotspot.x": ["Hand cursor click point across", "Align the hand image with clicks from left to right, using a value from zero to one."],
+    "cursor.custom.hand.hotspot.y": ["Hand cursor click point down", "Align the hand image with clicks from top to bottom, using a value from zero to one."],
+    "cursor.custom.text.image": ["Text cursor image", "Use your own pointer image when the cursor is over a text field."],
+    "cursor.custom.text.hotspot.x": ["Text cursor click point across", "Position the text pointer across its image; zero aligns its left edge and one its right edge."],
+    "cursor.custom.text.hotspot.y": ["Text cursor click point down", "Position the text pointer down its image; zero aligns its top edge and one its bottom edge."],
+    "cursor.custom.heightPct": ["Custom cursor height", "Set the height of your pointer images as a percentage of the video height."]
   };
   var sections = {
     shadow: "Frame shadow",
     border: "Frame border",
     background: "Background",
-    followThrough: "Cursor follow through",
+    followThrough: "Movement after clicks",
     clickEffect: "Click effect",
     accent: "Accent",
     logo: "Logo",
@@ -27476,37 +27533,9 @@
     hand: "Hand cursor",
     text: "Text cursor"
   };
-  var labelFor = (path) => {
-    const parts = path.split("."), leaf = parts.at(-1), parent = parts.at(-2);
-    if (parent === "hotspot") return `${sections[parts.at(-3)]} ${names[leaf].toLowerCase()}`;
-    if (leaf === "enabled") return {
-      zoom: "Enable zoom",
-      captions: "Show captions",
-      title: "Intro card",
-      outro: "Outro card",
-      shadow: "Show frame shadow",
-      border: "Show frame border",
-      followThrough: "Enable follow through",
-      accent: "Show accent"
-    }[parent];
-    if (path === "cursor.clickEffect.sizeMult") return "Click effect size";
-    if (path === "cursor.custom.heightPct") return "Custom cursor height";
-    if (path === "cursor.style") return "Cursor style";
-    if (path === "cursor.clickEffect.style") return "Show click effect";
-    const prefix = sections[parent];
-    return prefix && ["style", "color", "widthPx", "type", "colors", "angle", "image", "durationSec", "sizeMult", "heightPct", "x", "y"].includes(leaf) ? `${prefix} ${names[leaf].toLowerCase()}` : names[leaf];
-  };
   var unitFor = (path) => /Pct$/.test(path) ? "%" : /Px$|output\.(width|height)$/.test(path) ? "px" : /Sec$|cards.fade$/.test(path) ? "s" : /Mult$|pressScale$|zoom.depth$/.test(path) ? "x" : void 0;
-  var helpFor = (path, label) => ({
-    "zoom.onlyKinds": "Enter a JSON list of click and fill actions that should trigger a suggested zoom.",
-    "zoom.depth": "Choose how much to magnify the recording during a zoom region.",
-    "frame.paddingXPct": "Set the space on the left and right as a percentage of the output width.",
-    "frame.paddingYPct": "Set the space above and below as a percentage of the output height.",
-    "cursor.clickEffect.style": "Choose a ripple or pulse to highlight clicks, or none to hide the effect.",
-    "cursor.hideWhenIdleSec": "Hide the cursor after this many seconds without movement.",
-    "zoom.autoSuggest": "Generate zoom regions from recorded clicks and typing when no regions are saved."
-  })[path] ?? (unitFor(path) === "%" ? `Adjust ${label.toLowerCase()} as a percentage of the containing frame.` : unitFor(path) === "s" ? `Set ${label.toLowerCase()} in seconds.` : unitFor(path) === "px" ? `Set ${label.toLowerCase()} in output pixels.` : unitFor(path) === "x" ? `Set the multiplier for ${label.toLowerCase()}.` : `Choose ${label.toLowerCase()} for the ${path.startsWith("cards.title") ? "title card" : path.startsWith("cards.outro") ? "outro card" : path.split(".")[0] === "frame" ? "video frame" : path.split(".")[0]} settings.`);
   var SETTINGS = Object.entries(compositionPaths({})).filter(([path]) => !excluded.has(path)).map(([path, value]) => {
+    const [label, help] = copy2[path];
     const group = /^(frame\.|theme$)/.test(path) ? "look" : path.split(".")[0];
     const options = SETTING_ENUMS[path];
     const range2 = SETTING_RANGES[path];
@@ -27515,8 +27544,8 @@
       path,
       group,
       section: path.startsWith("cards.") ? `${path.split(".")[1]} card \xB7 ${sections[path.split(".")[2]] ?? "Text and timing"}` : sections[path.split(".")[1]] ?? "General",
-      label: labelFor(path),
-      help: helpFor(path, labelFor(path)),
+      label,
+      help,
       unit: unitFor(path),
       control,
       ...range2 ?? {},
@@ -28614,10 +28643,10 @@
   }
   function Settings({ state, store }) {
     const [query, setQuery] = d2(""), [tab, setTab] = d2("look");
-    const groups = groupSettings(SETTINGS, query), names2 = Object.keys(groups), active = groups[tab] ? tab : names2[0];
+    const groups = groupSettings(SETTINGS, query), names = Object.keys(groups), active = groups[tab] ? tab : names[0];
     const values = compositionPaths(state.composition), defaults = compositionPaths({});
     const tabNames = { look: "Look", cursor: "Cursor", zoom: "Zoom", captions: "Captions", cards: "Intro & outro", output: "Size & quality" };
-    const ordered = ["look", "cursor", "zoom", "captions", "cards", "output"].filter((name) => names2.includes(name));
+    const ordered = ["look", "cursor", "zoom", "captions", "cards", "output"].filter((name) => names.includes(name));
     const change = (path, value) => store.change(path, value);
     function field(s3) {
       const errors = errorsForPath(state.errors, s3.path), id = `setting-${s3.path}`;
@@ -29216,6 +29245,10 @@
         return next;
       });
     }
+    function changeDepth(value) {
+      setDepth(value);
+      if (selectedZoom) commit(() => updateZoomRegion(working, selectedZoom.id, { depth: value }, context));
+    }
     function addZoom() {
       const start = snapFrame(sourceT), next = working.zoom.regions.find((z4) => z4.tStart >= start);
       const end = Math.min(duration, start + 2, next?.tStart ?? duration);
@@ -29470,11 +29503,9 @@
     } }, n2, "x"))), /* @__PURE__ */ k(Label3, null, "Custom speed ", /* @__PURE__ */ k(Input2, { "aria-label": "Custom speed", type: "number", min: "0.25", max: "8", step: "0.05", value: rate, onInput: (e3) => setRate(+e3.currentTarget.value) }), " x"), /* @__PURE__ */ k(Button, { onClick: () => {
       speed(rate);
       setSpeedOpen(false);
-    } }, "Apply"))), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: "Add zoom region (Z)" }, /* @__PURE__ */ k(Button, { onClick: addZoom }, "Add zoom")), /* @__PURE__ */ k(Tooltip2, { text: "Choose the magnification of a zoom region" }, /* @__PURE__ */ k(Popover2, { label: "Zoom depth", trigger: /* @__PURE__ */ k(Button, { "aria-label": "Zoom depth" }, zoomDepth(selectedZoom?.depth ?? depth), "\xD7") }, /* @__PURE__ */ k(Label3, null, "Zoom depth", /* @__PURE__ */ k(Input2, { "aria-label": "Zoom depth value", type: "number", min: "1.05", max: "4", step: "0.05", value: zoomDepth(selectedZoom?.depth ?? depth), onInput: (e3) => {
-      const value = +e3.currentTarget.value;
-      setDepth(value);
-      if (selectedZoom) commit(() => updateZoomRegion(working, selectedZoom.id, { depth: value }, context));
-    } })))), /* @__PURE__ */ k(Tooltip2, { text: "Regenerate automatic zooms; preserve manual regions" }, /* @__PURE__ */ k(Button, { onClick: () => commit(() => autoZoomRegenerate(working, project.events, project.record)) }, "Auto zoom")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: "Add caption (C)" }, /* @__PURE__ */ k(Button, { onClick: addCue }, "Add caption")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: selection?.type === "trim" ? "Restore the selected removed range" : "Select a removed range to restore it" }, /* @__PURE__ */ k(Button, { disabled: selection?.type !== "trim", onClick: () => restore() }, "Restore")), /* @__PURE__ */ k("div", { class: "time-mode" }, /* @__PURE__ */ k(Tooltip2, { text: "Show source or edited output time" }, /* @__PURE__ */ k("span", null, /* @__PURE__ */ k(ToggleGroup, { "aria-label": "Timeline time", value: output ? "output" : "source", onValueChange: (next) => setOutput(next === "output"), options: [{ value: "source", label: "Source" }, { value: "output", label: "Output" }] })))), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline out (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline out", onClick: () => changeScale(scale / 1.4) }, "\u2212")), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline in (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline in", onClick: () => changeScale(scale * 1.4) }, "+"))), /* @__PURE__ */ k("div", { class: "timeline-summary" }, /* @__PURE__ */ k("strong", null, "Result ", clock(map.outputDuration)), /* @__PURE__ */ k("span", null, clock(c3.edits.trims.reduce((n2, r4) => n2 + r4.end - r4.start, 0)), " removed \xB7 ", c3.edits.trims.length, " ", c3.edits.trims.length === 1 ? "cut" : "cuts"), /* @__PURE__ */ k("span", null, output ? "OUTPUT" : "SOURCE", " TIME \xB7 Drag to select \xB7 Alt disables snapping")), error && /* @__PURE__ */ k("p", { role: "status", class: "timeline-message" }, error), selectedZoom && /* @__PURE__ */ k("p", { class: "timeline-message" }, "Click the preview to set this region\u2019s focus at the playhead."), /* @__PURE__ */ k("div", { class: "timeline-grid" }, /* @__PURE__ */ k("div", { class: "track-labels", "aria-hidden": "true" }, ["Time", "Video", "Speed", "Zoom", "Captions", "Cursor"].map((label) => /* @__PURE__ */ k("div", null, label))), /* @__PURE__ */ k("div", { class: "timeline-scroll", ref: scroller, tabIndex: "0", "aria-label": "Timeline; scroll horizontally to pan" }, /* @__PURE__ */ k("div", { class: "timeline-lanes", ref: lanes, style: { width } }, /* @__PURE__ */ k(
+    } }, "Apply"))), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: "Add zoom region (Z)" }, /* @__PURE__ */ k(Button, { onClick: addZoom }, "Add zoom")), /* @__PURE__ */ k("div", { class: "depth-control" }, /* @__PURE__ */ k("span", null, "Depth"), /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Decrease zoom depth", disabled: zoomDepth(selectedZoom?.depth ?? depth) <= 1.05, onClick: () => changeDepth(Math.max(1.05, +(zoomDepth(selectedZoom?.depth ?? depth) - 0.05).toFixed(2))) }, "\u2212"), /* @__PURE__ */ k(Tooltip2, { text: "Zoom depth" }, /* @__PURE__ */ k(Popover2, { label: "Zoom depth", trigger: /* @__PURE__ */ k(Button, { "aria-label": "Zoom depth" }, zoomDepth(selectedZoom?.depth ?? depth), "\xD7") }, /* @__PURE__ */ k(Label3, null, "Zoom depth", /* @__PURE__ */ k(Input2, { "aria-label": "Zoom depth value", type: "number", min: "1.05", max: "4", step: "0.05", value: zoomDepth(selectedZoom?.depth ?? depth), onInput: (e3) => {
+      changeDepth(+e3.currentTarget.value);
+    } })))), /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Increase zoom depth", disabled: zoomDepth(selectedZoom?.depth ?? depth) >= 4, onClick: () => changeDepth(Math.min(4, +(zoomDepth(selectedZoom?.depth ?? depth) + 0.05).toFixed(2))) }, "+")), /* @__PURE__ */ k(Tooltip2, { text: "Regenerate automatic zooms; preserve manual regions" }, /* @__PURE__ */ k(Button, { onClick: () => commit(() => autoZoomRegenerate(working, project.events, project.record)) }, "Auto zoom")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: "Add caption (C)" }, /* @__PURE__ */ k(Button, { onClick: addCue }, "Add caption")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: selection?.type === "trim" ? "Restore the selected removed range" : "Select a removed range to restore it" }, /* @__PURE__ */ k(Button, { disabled: selection?.type !== "trim", onClick: () => restore() }, "Restore")), /* @__PURE__ */ k("div", { class: "time-mode" }, /* @__PURE__ */ k(Tooltip2, { text: "Show source or edited output time" }, /* @__PURE__ */ k("span", null, /* @__PURE__ */ k(ToggleGroup, { "aria-label": "Timeline time", value: output ? "output" : "source", onValueChange: (next) => setOutput(next === "output"), options: [{ value: "source", label: "Source" }, { value: "output", label: "Output" }] })))), /* @__PURE__ */ k("div", { class: "timeline-summary" }, /* @__PURE__ */ k("strong", null, "Result ", clock(map.outputDuration)), /* @__PURE__ */ k("span", null, " \xB7 ", clock(c3.edits.trims.reduce((n2, r4) => n2 + r4.end - r4.start, 0)), " removed \xB7 ", c3.edits.trims.length, " ", c3.edits.trims.length === 1 ? "cut" : "cuts")), /* @__PURE__ */ k(Tooltip2, { text: `${output ? "OUTPUT" : "SOURCE"} TIME \xB7 Drag to select \xB7 Alt disables snapping` }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Timeline help" }, /* @__PURE__ */ k(Info, { size: 14, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline out (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline out", onClick: () => changeScale(scale / 1.4) }, "\u2212")), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline in (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline in", onClick: () => changeScale(scale * 1.4) }, "+"))), error && /* @__PURE__ */ k("p", { role: "status", class: "timeline-message" }, error), selectedZoom && /* @__PURE__ */ k("p", { class: "timeline-message" }, "Click the preview to set this region\u2019s focus at the playhead."), /* @__PURE__ */ k("div", { class: "timeline-grid" }, /* @__PURE__ */ k("div", { class: "track-labels", "aria-hidden": "true" }, ["Time", "Video", "Speed", "Zoom", "Captions", "Cursor"].map((label) => /* @__PURE__ */ k("div", null, label))), /* @__PURE__ */ k("div", { class: "timeline-scroll", ref: scroller, tabIndex: "0", "aria-label": "Timeline; scroll horizontally to pan" }, /* @__PURE__ */ k("div", { class: "timeline-lanes", ref: lanes, style: { width } }, /* @__PURE__ */ k(
       "div",
       {
         class: "timeline-ruler",
@@ -29516,7 +29547,7 @@
         }
       },
       project.storyboard.steps.find((s3) => s3.id === step.id)?.name ?? project.storyboard.steps.find((s3) => s3.id === step.id)?.title ?? project.storyboard.steps.find((s3) => s3.id === step.id)?.caption ?? step.id
-    )), splits.map((t3) => /* @__PURE__ */ k("i", { class: "split-line", style: { left: px(t3) } })), c3.edits.trims.map((r4, index2) => /* @__PURE__ */ k(Button, { class: `trim-block ${selection?.type === "trim" && selection.index === index2 ? "selected" : ""}`, style: style(r4.start, r4.end), "aria-label": `Removed ${clock(r4.start)} to ${clock(r4.end)}`, onPointerDown: (e3) => e3.stopPropagation(), onClick: () => setSelection({ type: "trim", index: index2 }) }, "Removed")), selection?.type === "range" && /* @__PURE__ */ k("div", { class: "range-selection", style: style(selection.start, selection.end) })), /* @__PURE__ */ k("div", { class: "timeline-track" }, shown.edits.speeds.map((r4, index2) => block({ type: "speed", index: index2 }, r4.start, r4.end, `${r4.rate}x`, "speed"))), /* @__PURE__ */ k("div", { class: "timeline-track" }, shown.zoom.regions.map((z4) => block({ type: "zoom", id: z4.id }, z4.tStart, z4.tEnd, `${zoomDepth(z4.depth)}x \xB7 ${z4.source}`, "zoom"))), /* @__PURE__ */ k("div", { class: "timeline-track" }, cues.map((cue) => block({ type: "caption", id: cue.id }, cue.start, cue.end, cue.text, "caption"))), /* @__PURE__ */ k("div", { class: "timeline-track cursor-track" }, clicks.map((click) => /* @__PURE__ */ k("span", { class: "click-marker", style: { left: px(click.t) }, title: `Click at ${clock(click.t)}` }))), /* @__PURE__ */ k("div", { class: "timeline-playhead", style: { left: (output ? time : sourceT) * scale } })))), editing && /* @__PURE__ */ k("form", { class: "caption-inline", onSubmit: (e3) => {
+    )), splits.map((t3) => /* @__PURE__ */ k("i", { class: "split-line", style: { left: px(t3) } })), c3.edits.trims.map((r4, index2) => /* @__PURE__ */ k(Button, { class: `trim-block ${selection?.type === "trim" && selection.index === index2 ? "selected" : ""}`, style: style(r4.start, r4.end), "aria-label": `Removed ${clock(r4.start)} to ${clock(r4.end)}`, onPointerDown: (e3) => e3.stopPropagation(), onClick: () => setSelection({ type: "trim", index: index2 }) }, "Removed")), selection?.type === "range" && /* @__PURE__ */ k("div", { class: "range-selection", style: style(selection.start, selection.end) })), /* @__PURE__ */ k("div", { class: "timeline-track" }, !shown.edits.speeds.length && /* @__PURE__ */ k("span", { class: "track-placeholder" }, "Select a part of the video, then choose Speed"), shown.edits.speeds.map((r4, index2) => block({ type: "speed", index: index2 }, r4.start, r4.end, `${r4.rate}x`, "speed"))), /* @__PURE__ */ k("div", { class: "timeline-track" }, !shown.zoom.regions.length && /* @__PURE__ */ k("span", { class: "track-placeholder" }, "Add zoom to bring a detail closer"), shown.zoom.regions.map((z4) => block({ type: "zoom", id: z4.id }, z4.tStart, z4.tEnd, `${zoomDepth(z4.depth)}x \xB7 ${z4.source}`, "zoom"))), /* @__PURE__ */ k("div", { class: "timeline-track" }, cues.map((cue) => block({ type: "caption", id: cue.id }, cue.start, cue.end, cue.text, "caption"))), /* @__PURE__ */ k("div", { class: "timeline-track cursor-track" }, clicks.map((click) => /* @__PURE__ */ k("span", { class: "click-marker", style: { left: px(click.t) }, title: `Click at ${clock(click.t)}` }))), /* @__PURE__ */ k("div", { class: "timeline-playhead", style: { left: (output ? time : sourceT) * scale } })))), editing && /* @__PURE__ */ k("form", { class: "caption-inline", onSubmit: (e3) => {
       e3.preventDefault();
       if (commit(() => setCaption(c3, editing.id, { text: editing.text }, context))) setEditing(null);
     } }, /* @__PURE__ */ k(Label3, null, "Caption text ", /* @__PURE__ */ k(Input2, { autoFocus: true, maxLength: "140", value: editing.text, onInput: (e3) => setEditing({ ...editing, text: e3.currentTarget.value }), onKeyDown: (e3) => {
@@ -29687,7 +29718,7 @@
         e3.preventDefault();
         resizeTimeline(e3.key === "Home" ? 190 : e3.key === "End" ? innerHeight * 0.6 : e3.key === "Enter" ? 0 : height + (e3.key === "ArrowUp" ? 16 : -16));
       }
-    } }), /* @__PURE__ */ k("section", { id: "timeline-root", "aria-label": "Timeline" }, hint && /* @__PURE__ */ k("div", { class: "hint-card" }, /* @__PURE__ */ k("p", null, "Drag on the Video track to select a part.", /* @__PURE__ */ k("br", null), "Press Delete to cut it, or choose Speed to fast-forward it.", /* @__PURE__ */ k("br", null), "Choose Add zoom to bring a detail closer."), /* @__PURE__ */ k(Tooltip2, { text: "Dismiss this hint" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Dismiss editing hint", onClick: () => {
+    } }), /* @__PURE__ */ k("section", { id: "timeline-root", "aria-label": "Timeline" }, hint && /* @__PURE__ */ k("div", { class: "hint-card" }, /* @__PURE__ */ k("p", null, "Tip: drag on the Video track to select a part, then press Delete to cut it, or use Speed to fast-forward it."), /* @__PURE__ */ k(Tooltip2, { text: "Dismiss this hint" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Dismiss editing hint", onClick: () => {
       setHint(false);
       writePreference("hint-dismissed", "yes");
     } }, /* @__PURE__ */ k(X3, { size: 14, "aria-hidden": "true" })))), /* @__PURE__ */ k(Timeline, { state, store, time, setTime, setPlaying, selection, setSelection })), toast && /* @__PURE__ */ k("div", { class: "toast", role: "status" }, toast), shortcuts && /* @__PURE__ */ k(Shortcuts, { onClose: () => setShortcuts(false) }), sheet && state.composition && /* @__PURE__ */ k(Dialog2, { title: "Settings", description: "Adjust the look of your video.", className: "settings-sheet", onClose: () => setSheet(false) }, /* @__PURE__ */ k(Settings, { state, store }))));
@@ -29745,6 +29776,7 @@ lucide-preact/dist/esm/icons/chevron-down.mjs:
 lucide-preact/dist/esm/icons/chevron-up.mjs:
 lucide-preact/dist/esm/icons/clapperboard.mjs:
 lucide-preact/dist/esm/icons/download.mjs:
+lucide-preact/dist/esm/icons/info.mjs:
 lucide-preact/dist/esm/icons/keyboard.mjs:
 lucide-preact/dist/esm/icons/moon.mjs:
 lucide-preact/dist/esm/icons/pause.mjs:

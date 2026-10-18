@@ -9,10 +9,19 @@ const context = {duration:10,plan:{cues:[{id:'step1',text:'Original',start:1,end
 const base = () => resolveComposition({run:{id:'test'},cards:{title:{enabled:false},outro:{enabled:false}}});
 const valid = c => { const r = validateComposition(c,{duration:10}); assert.ok(r.ok,r.errors.join('\n')); return c; };
 test('friendly setting labels, help and units cover every entry', () => {
+  const helps = new Set(), labels = new Map();
   for (const s of SETTINGS) {
     assert.equal(typeof s.label,'string',s.path); assert.ok(s.label.trim(),s.path);
     assert.doesNotMatch(s.label,/›|Pct|Px|Sec|[a-z][A-Z]/,s.path);
     assert.match(s.help,/^[A-Z].*\.$/,s.path);
+    assert.doesNotMatch(s.help,/for the .* settings/i,s.path);
+    assert.ok(!s.help.toLowerCase().startsWith(`choose ${s.label.toLowerCase()}`),s.path);
+    assert.ok(s.help.length >= 25 && s.help.length <= 140,`${s.path}: ${s.help.length} characters`);
+    assert.ok(!helps.has(s.help),`Repeated help: ${s.path}`);
+    helps.add(s.help);
+    const groupLabels = labels.get(s.group) ?? new Set();
+    assert.ok(!groupLabels.has(s.label.toLowerCase()),`Repeated label in ${s.group}: ${s.label}`);
+    groupLabels.add(s.label.toLowerCase()); labels.set(s.group,groupLabels);
     if (/Pct$/.test(s.path)) assert.equal(s.unit,'%');
     if (/Px$/.test(s.path)) assert.equal(s.unit,'px');
     if (/Sec$/.test(s.path)) assert.equal(s.unit,'s');

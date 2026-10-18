@@ -15,60 +15,130 @@ export const EXCLUDED = [
   ...['title','outro'].map(k => ({ path: `cards.${k}.logo`, reason: 'Container; use logo image and height settings.' })),
 ];
 const excluded = new Set(EXCLUDED.map(s => s.path));
-const names = {
-  theme: 'Theme', width: 'Width', height: 'Height', fps: 'Frame rate', quality: 'Quality',
-  paddingXPct: 'Horizontal padding', paddingYPct: 'Vertical padding', paddingPct: 'Padding on both axes', radiusPx: 'Corner radius',
-  enabled: 'Enabled', blurPx: 'Blur', offsetYPx: 'Vertical offset', opacity: 'Opacity', color: 'Colour', widthPx: 'Width',
-  type: 'Style', colors: 'Gradient colours', angle: 'Gradient angle', image: 'Image', visible: 'Show cursor', style: 'Style',
-  sizePct: 'Cursor size', fill: 'Fill colour', stroke: 'Outline colour', shadow: 'Show cursor shadow', scaleWithZoom: 'Scale with zoom',
-  hideWhenIdleSec: 'Hide after idle', pressScale: 'Size while pressed', autoShape: 'Match cursor to target', distancePx: 'Travel distance',
-  durationSec: 'Duration', startAfterClickSec: 'Delay after click', microCorrection: 'Subtle cursor correction', entrance: 'Animate cursor entrance',
-  sizeMult: 'Effect size', depth: 'Zoom depth', autoSuggest: 'Suggest zoom regions', speed: 'Camera movement', holdAfterClickSec: 'Hold after click',
-  leadInSec: 'Delay before zoom', onlyKinds: 'Zoom trigger types', mode: 'Caption layout', position: 'Caption position', bandHeightPct: 'Caption band height',
-  fontSizePct: 'Text size', fontWeight: 'Text weight', background: 'Background colour', maxLines: 'Maximum lines', align: 'Text alignment',
-  title: 'Title text', text: 'Outro text', subtitle: 'Subtitle text', titleSizePct: 'Title size', subtitleSizePct: 'Subtitle size',
-  titleColor: 'Title colour', subtitleColor: 'Subtitle colour', shape: 'Accent shape', widthPct: 'Accent width', heightPct: 'Height', fade: 'Transition duration', transition: 'Transition style',
-  x: 'Horizontal hotspot', y: 'Vertical hotspot',
+// Each setting has deliberately written copy; missing entries must fail schema coverage tests.
+const copy = {
+  "output.width": ["Width", "How wide the finished video is, in pixels."],
+  "output.height": ["Height", "How tall the finished video is, in pixels."],
+  "output.fps": ["Frame rate", "More frames per second make movement smoother in the finished video."],
+  "output.quality": ["Quality", "Higher quality keeps more detail in the video and makes a larger file."],
+  "theme": ["Theme", "Set the overall colours and style of the video, including its frame and cards."],
+  "frame.paddingXPct": ["Horizontal padding", "Space to the left and right of the recording, as a percentage of the video width."],
+  "frame.paddingYPct": ["Vertical padding", "Space above and below the recording, as a percentage of the video height."],
+  "frame.radiusPx": ["Corner radius", "Round the corners of the recording; set to zero for square corners."],
+  "frame.shadow.enabled": ["Show frame shadow", "Add a shadow behind the recording to lift it off the background."],
+  "frame.shadow.blurPx": ["Shadow softness", "Soften the edges of the shadow behind the recording."],
+  "frame.shadow.offsetYPx": ["Shadow position", "Move the frame shadow down with positive values or up with negative values."],
+  "frame.shadow.opacity": ["Shadow strength", "Make the shadow behind the recording lighter or darker."],
+  "frame.border.enabled": ["Show frame border", "Draw a thin outline around the recording to separate it from the background."],
+  "frame.border.color": ["Frame border colour", "Set the colour of the outline around the recording."],
+  "frame.border.widthPx": ["Frame border width", "Make the outline around the recording thicker or thinner."],
+  "frame.background.type": ["Background style", "Use the theme, a colour blend, a single colour or an image behind the recording."],
+  "frame.background.colors": ["Gradient", "Set the colours behind the recording; a solid background uses the first colour."],
+  "frame.background.angle": ["Gradient direction", "Turn the colour blend behind the recording to change which way it flows."],
+  "frame.background.image": ["Background image", "Use an image from the project as the backdrop behind the recording."],
+  "cursor.visible": ["Show cursor", "Show or hide the mouse pointer in the video."],
+  "cursor.style": ["Cursor style", "Change the shape of the pointer shown over the recording."],
+  "cursor.sizePct": ["Cursor size", "How big the pointer looks, as a percentage of the video height."],
+  "cursor.fill": ["Fill colour", "Set the colour inside the pointer to help it stand out on the page."],
+  "cursor.stroke": ["Outline colour", "Set the colour around the pointer to keep its edges easy to see."],
+  "cursor.shadow": ["Show cursor shadow", "Add a soft shadow under the pointer so it stands out on light pages."],
+  "cursor.scaleWithZoom": ["Scale with zoom", "Enlarge the pointer along with the page when the video zooms in."],
+  "cursor.hideWhenIdleSec": ["Hide after idle", "Hide the pointer after this many seconds without movement."],
+  "cursor.pressScale": ["Size while pressed", "Shrink the pointer while a mouse button is held; one keeps its normal size."],
+  "cursor.autoShape": ["Match cursor to target", "Switch the pointer shape when it moves over buttons, links or text fields."],
+  "cursor.followThrough.enabled": ["Move after clicks", "Let the pointer glide away from a target after clicking it."],
+  "cursor.followThrough.distancePx": ["Distance after click", "How far the pointer glides after a click, measured in pixels."],
+  "cursor.followThrough.durationSec": ["Movement after click", "How many seconds the pointer takes to glide away after clicking."],
+  "cursor.followThrough.startAfterClickSec": ["Delay after click", "Wait this many seconds after a click before moving the pointer away."],
+  "cursor.microCorrection": ["Small cursor movements", "Add tiny pointer movements to make its path feel more natural."],
+  "cursor.entrance": ["Animate cursor entrance", "Bring the pointer into view with an entrance movement at the start."],
+  "cursor.clickEffect.style": ["Show click effect", "Highlight each click with a ripple or pulse, or hide the click effect."],
+  "cursor.clickEffect.color": ["Click effect colour", "Set the colour of click highlights, or leave it empty to follow the theme."],
+  "cursor.clickEffect.sizeMult": ["Click effect size", "Make the highlight around each click larger or smaller."],
+  "cursor.clickEffect.durationSec": ["Click effect duration", "How long the highlight stays visible after each click, in seconds."],
+  "zoom.enabled": ["Enable zoom", "Bring parts of the page closer during zooms marked on the timeline."],
+  "zoom.depth": ["Zoom depth", "How much closer the page appears during a zoom; higher values show more detail."],
+  "zoom.autoSuggest": ["Suggest zoom regions", "Automatically add zooms around clicks and typing when no zooms are saved."],
+  "zoom.speed": ["Camera movement", "Change how quickly the view moves between zoomed areas of the page."],
+  "zoom.holdAfterClickSec": ["Hold after click", "Keep the view on a clicked area for this many seconds before moving on."],
+  "zoom.leadInSec": ["Delay before zoom", "Wait this many seconds after a target appears before starting its automatic zoom."],
+  "zoom.onlyKinds": ["Zoom triggers", "Limit automatic zooms to clicks, typing or both using a list such as [\"click\", \"fill\"]."],
+  "captions.enabled": ["Show captions", "Show or hide the text captions that explain each step in the video."],
+  "captions.mode": ["Caption layout", "Place captions in their own band or directly over the recording."],
+  "captions.position": ["Caption position", "Place the caption band or text at the top or bottom of the video."],
+  "captions.bandHeightPct": ["Caption band height", "Set the space reserved for captions as a percentage of the video height."],
+  "captions.fontSizePct": ["Text size", "How large caption letters appear, as a percentage of the video height."],
+  "captions.fontWeight": ["Text weight", "Make caption letters lighter or bolder so they are easier to read."],
+  "captions.color": ["Text colour", "Set the colour of the caption letters shown during the recording."],
+  "captions.background": ["Background colour", "Set the colour behind captions to help the words stay readable."],
+  "captions.maxLines": ["Maximum lines", "Limit how many lines of caption text can appear at once."],
+  "captions.align": ["Text alignment", "Centre captions or line them up along the left edge of their space."],
+  "cards.title.align": ["Intro text alignment", "Centre the intro text or line it up along the left side of the opening card."],
+  "cards.title.titleSizePct": ["Intro title size", "How large the opening title appears, as a percentage of the video height."],
+  "cards.title.subtitleSizePct": ["Intro subtitle size", "How large the text beneath the opening title appears in the video."],
+  "cards.title.titleColor": ["Intro title colour", "Set the colour of the main title on the opening card."],
+  "cards.title.subtitleColor": ["Intro subtitle colour", "Set the colour of the smaller text beneath the opening title."],
+  "cards.title.background.type": ["Intro background style", "Fill the opening card with the theme, a colour blend, a single colour or an image."],
+  "cards.title.background.colors": ["Intro gradient", "Set the opening card colours; a solid intro background uses the first colour."],
+  "cards.title.background.angle": ["Intro gradient direction", "Turn the colour blend on the opening card to change its direction."],
+  "cards.title.background.image": ["Intro background image", "Use a project image as the background of the opening card."],
+  "cards.title.accent.enabled": ["Show intro accent", "Add a decorative mark beside the text on the opening card."],
+  "cards.title.accent.color": ["Intro accent colour", "Set the colour of the decorative mark on the opening card."],
+  "cards.title.accent.shape": ["Intro accent shape", "Use a bar or an underline to decorate the opening title, or hide the mark."],
+  "cards.title.accent.widthPct": ["Intro accent width", "Set the width of the opening card mark as a percentage of the video width."],
+  "cards.title.enabled": ["Intro card", "Show a title card before the recording begins."],
+  "cards.title.title": ["Title text", "Write the main title viewers see before the recording starts."],
+  "cards.title.subtitle": ["Intro subtitle", "Add a short supporting line beneath the title on the opening card."],
+  "cards.title.durationSec": ["Intro duration", "How many seconds the opening card stays on screen before the recording."],
+  "cards.outro.align": ["Outro text alignment", "Centre the closing text or line it up along the left side of the final card."],
+  "cards.outro.titleSizePct": ["Outro title size", "How large the closing message appears, as a percentage of the video height."],
+  "cards.outro.subtitleSizePct": ["Outro subtitle size", "How large the supporting text appears beneath the closing message."],
+  "cards.outro.titleColor": ["Outro title colour", "Set the colour of the main message on the closing card."],
+  "cards.outro.subtitleColor": ["Outro subtitle colour", "Set the colour of the smaller line beneath the closing message."],
+  "cards.outro.background.type": ["Outro background style", "Fill the closing card with the theme, a colour blend, a single colour or an image."],
+  "cards.outro.background.colors": ["Outro gradient", "Set the closing card colours; a solid outro background uses the first colour."],
+  "cards.outro.background.angle": ["Outro gradient direction", "Turn the colour blend on the closing card to adjust its direction."],
+  "cards.outro.background.image": ["Outro background image", "Use a project image as the backdrop for the closing message."],
+  "cards.outro.accent.enabled": ["Show outro accent", "Add a decorative mark beside the text on the closing card."],
+  "cards.outro.accent.color": ["Outro accent colour", "Set the colour of the decorative mark on the closing card."],
+  "cards.outro.accent.shape": ["Outro accent shape", "Use a bar or an underline to decorate the closing message, or hide the mark."],
+  "cards.outro.accent.widthPct": ["Outro accent width", "Set the width of the closing card mark as a percentage of the video width."],
+  "cards.outro.enabled": ["Outro card", "Show a closing card after the recording finishes."],
+  "cards.outro.text": ["Outro text", "Write the final message viewers see after the recording ends."],
+  "cards.outro.subtitle": ["Outro subtitle", "Add a supporting line beneath the main message on the closing card."],
+  "cards.outro.durationSec": ["Outro duration", "How many seconds the closing card remains on screen after the recording."],
+  "cards.fade": ["Transition duration", "How many seconds cards take to fade into the recording or the next card."],
+  "cards.transition": ["Transition style", "Fade between cards and the recording, or switch between them instantly."],
+  "frame.paddingPct": ["Padding on all sides", "Set equal space around the recording as a percentage of each video dimension."],
+  "cards.title.logo.image": ["Intro logo image", "Place a logo from the project on the opening card."],
+  "cards.title.logo.heightPct": ["Intro logo height", "How tall the opening logo appears, as a percentage of the video height."],
+  "cards.outro.logo.image": ["Outro logo image", "Place a logo from the project on the closing card."],
+  "cards.outro.logo.heightPct": ["Outro logo height", "How tall the closing logo appears, as a percentage of the video height."],
+  "cursor.custom.arrow.image": ["Arrow cursor image", "Use your own image for the normal arrow pointer in the video."],
+  "cursor.custom.arrow.hotspot.x": ["Arrow cursor click point across", "Place the arrow image over clicks horizontally; zero is its left edge and one its right edge."],
+  "cursor.custom.arrow.hotspot.y": ["Arrow cursor click point down", "Place the arrow image over clicks vertically; zero is its top edge and one its bottom edge."],
+  "cursor.custom.hand.image": ["Hand cursor image", "Use your own hand pointer image when the cursor is over a clickable target."],
+  "cursor.custom.hand.hotspot.x": ["Hand cursor click point across", "Align the hand image with clicks from left to right, using a value from zero to one."],
+  "cursor.custom.hand.hotspot.y": ["Hand cursor click point down", "Align the hand image with clicks from top to bottom, using a value from zero to one."],
+  "cursor.custom.text.image": ["Text cursor image", "Use your own pointer image when the cursor is over a text field."],
+  "cursor.custom.text.hotspot.x": ["Text cursor click point across", "Position the text pointer across its image; zero aligns its left edge and one its right edge."],
+  "cursor.custom.text.hotspot.y": ["Text cursor click point down", "Position the text pointer down its image; zero aligns its top edge and one its bottom edge."],
+  "cursor.custom.heightPct": ["Custom cursor height", "Set the height of your pointer images as a percentage of the video height."],
 };
-const sections = { shadow: 'Frame shadow', border: 'Frame border', background: 'Background', followThrough: 'Cursor follow through',
+const sections = { shadow: 'Frame shadow', border: 'Frame border', background: 'Background', followThrough: 'Movement after clicks',
   clickEffect: 'Click effect', accent: 'Accent', logo: 'Logo', arrow: 'Arrow cursor', hand: 'Hand cursor', text: 'Text cursor' };
-const labelFor = path => {
-  const parts = path.split('.'), leaf = parts.at(-1), parent = parts.at(-2);
-  if (parent === 'hotspot') return `${sections[parts.at(-3)]} ${names[leaf].toLowerCase()}`;
-  if (leaf === 'enabled') return ({ zoom: 'Enable zoom', captions: 'Show captions', title: 'Intro card', outro: 'Outro card',
-    shadow: 'Show frame shadow', border: 'Show frame border', followThrough: 'Enable follow through', accent: 'Show accent' })[parent];
-  if (path === 'cursor.clickEffect.sizeMult') return 'Click effect size';
-  if (path === 'cursor.custom.heightPct') return 'Custom cursor height';
-  if (path === 'cursor.style') return 'Cursor style';
-  if (path === 'cursor.clickEffect.style') return 'Show click effect';
-  const prefix = sections[parent];
-  return prefix && ['style','color','widthPx','type','colors','angle','image','durationSec','sizeMult','heightPct','x','y'].includes(leaf)
-    ? `${prefix} ${names[leaf].toLowerCase()}` : names[leaf];
-};
 const unitFor = path => /Pct$/.test(path) ? '%' : /Px$|output\.(width|height)$/.test(path) ? 'px'
   : /Sec$|cards.fade$/.test(path) ? 's' : /Mult$|pressScale$|zoom.depth$/.test(path) ? 'x' : undefined;
-const helpFor = (path,label) => ({
-  'zoom.onlyKinds': 'Enter a JSON list of click and fill actions that should trigger a suggested zoom.',
-  'zoom.depth': 'Choose how much to magnify the recording during a zoom region.',
-  'frame.paddingXPct': 'Set the space on the left and right as a percentage of the output width.',
-  'frame.paddingYPct': 'Set the space above and below as a percentage of the output height.',
-  'cursor.clickEffect.style': 'Choose a ripple or pulse to highlight clicks, or none to hide the effect.',
-  'cursor.hideWhenIdleSec': 'Hide the cursor after this many seconds without movement.',
-  'zoom.autoSuggest': 'Generate zoom regions from recorded clicks and typing when no regions are saved.',
-}[path] ?? (unitFor(path) === '%' ? `Adjust ${label.toLowerCase()} as a percentage of the containing frame.`
-  : unitFor(path) === 's' ? `Set ${label.toLowerCase()} in seconds.`
-  : unitFor(path) === 'px' ? `Set ${label.toLowerCase()} in output pixels.`
-  : unitFor(path) === 'x' ? `Set the multiplier for ${label.toLowerCase()}.`
-  : `Choose ${label.toLowerCase()} for the ${path.startsWith('cards.title') ? 'title card' : path.startsWith('cards.outro') ? 'outro card' : path.split('.')[0] === 'frame' ? 'video frame' : path.split('.')[0]} settings.`));
 export const SETTINGS = Object.entries(compositionPaths({})).filter(([path]) => !excluded.has(path)).map(([path,value]) => {
+  const [label, help] = copy[path];
   const group = /^(frame\.|theme$)/.test(path) ? 'look' : path.split('.')[0];
   const options = SETTING_ENUMS[path];
   const range = SETTING_RANGES[path];
   const control = options ? 'select' : range ? 'number' : typeof value === 'boolean' ? 'toggle'
     : path.endsWith('.colors') ? 'gradient' : path.endsWith('.image') ? 'image'
       : /(?:color|Color|fill|stroke|captions.background)$/.test(path) ? 'color' : 'text';
-  return { path, group, section: path.startsWith('cards.') ? `${path.split('.')[1]} card · ${sections[path.split('.')[2]] ?? 'Text and timing'}` : sections[path.split('.')[1]] ?? 'General', label: labelFor(path),
-    help: helpFor(path, labelFor(path)), unit: unitFor(path),
+  return { path, group, section: path.startsWith('cards.') ? `${path.split('.')[1]} card · ${sections[path.split('.')[2]] ?? 'Text and timing'}` : sections[path.split('.')[1]] ?? 'General', label,
+    help, unit: unitFor(path),
     control, ...(range ?? {}), ...(options ? { options } : {}),
     advanced: /custom|hotspot|followThrough|pressScale|microCorrection|paddingPct/.test(path),
   };

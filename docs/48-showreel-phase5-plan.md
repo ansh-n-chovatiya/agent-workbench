@@ -1,6 +1,6 @@
 # Showreel Phase 5 plan: local browser editor
 
-Status: executing from 2026-10-18. Spec: `docs/40-showreel-design.md` section 7 (editor). Builds on Phase 4 (`docs/47-...`). Operating model unchanged:
+Status: COMPLETE 2026-10-18 (outcome at the end of this file). Spec: `docs/40-showreel-design.md` section 7 (editor). Builds on Phase 4 (`docs/47-...`). Operating model unchanged:
 Claude plans and reviews; Codex writes code and pure tests (no browser, no ports); Claude runs all browser and server tests and fixes what they find.
 
 **Decision (owner approved): the editor ships inside the plugin and runs locally.** `showreel edit --name N` starts a loopback server and opens the user's browser.
@@ -37,3 +37,17 @@ All section 7 features work; preview matches export (pixel comparison within tol
 
 ## Stop rule
 Stop and ask if preview playback cannot hold 30 fps at 1080p on this Mac, or if the editor bundle exceeds 600 KB gzipped.
+
+## Outcome (2026-10-18)
+Delivered: loopback editor (`showreel edit --name N`), Preact + shadcn-style components (Radix through preact/compat, Tailwind v4 built at build time, committed bundle `dist/editor/`, about 246 KB gzipped JS+CSS),
+viewport-fitting layout (no page scroll, splitter, light and dark), settings panels generated from `settings-schema.mjs` (107 settings, hand-written plain-language help), timeline editing (cut, speed, zoom regions,
+caption cues, undo/redo, autosave), export dialog with progress, secured server (token, Host/Origin checks, traversal rejected). Design spec: `docs/49-showreel-editor-design.md` (ui-ux-pro-max).
+Tests: 221 unit, 27 browser (real editor drives load, edits, undo, playback, export; fit at 1024x640, 1280x720, 1440x900).
+
+Findings that mattered (measured, not reasoned):
+- Playing every frame through WebCodecs reached only about 23 fps on a 3206x1804 source in real Chrome and fell behind at 2x. Playback now uses the native video element (real time at 1x and 2x); the exact decoder is kept for scrubbing and paused frames, and is the fallback where H.264 is not playable in `<video>`.
+- A short window stretched the preview canvas (display only; exports are unaffected by window size).
+- Pressing Play at the end now restarts from the start.
+- Byte-exact comparison of repeated lossy encodes fails across machines; use a colour-grid tolerance.
+
+Not done (by design, later phases): audio and voice preview (Phase 6), preview-versus-export pixel parity test (same draw code; parity test still to add), editor tests on a real long recording.
