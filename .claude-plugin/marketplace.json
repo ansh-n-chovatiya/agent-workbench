@@ -14,6 +14,11 @@
       "name": "skills-demo",
       "source": "./plugins/skills-demo",
       "description": "Skills for producing client-ready demo videos from a single Playwright test."
+    },
+    {
+      "name": "showreel",
+      "source": "./plugins/showreel",
+      "description": "Turn a web flow into a production-grade demo video with cinematic cursor motion, zoom, captions and narration. Preview release."
     }
   ]
 }

@@ -1,0 +1,34 @@
+:root { font-family: system-ui, sans-serif; color: #142c3a; background: #f5f3eb; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+nav { position: sticky; top: 0; z-index: 10; display: flex; gap: 2rem; padding: 1.5rem 4%; background: #142c3a; }
+nav a { color: #fff; text-decoration: none; padding: .5rem; }
+nav a[aria-current="page"] { border-bottom: 2px solid #a8dfc3; }
+a { color: #155b52; }
+main section { min-height: 1120px; padding: 7rem 6%; display: flex; flex-direction: column; justify-content: center; gap: 2rem; }
+main section:nth-child(even) { background: #e1ece4; }
+h1 { font-size: clamp(3rem, 5vw, 6rem); max-width: 16ch; line-height: 1.05; margin: 0; }
+h2 { font-size: 3rem; margin: 0; }
+p { max-width: 65ch; font-size: 1.25rem; line-height: 1.65; }
+.eyebrow { letter-spacing: .2em; text-transform: uppercase; font-weight: 700; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; }
+.card { background: #fff; border: 1px solid #b7c8c0; border-radius: 1rem; padding: 2rem; }
+.card h3 { font-size: 1.75rem; }
+button { cursor: pointer; border: 0; border-radius: .5rem; padding: 1rem 1.5rem; background: #155b52; color: #fff; font: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #d38723; outline-offset: 4px; }
+.orbit { width: 220px; height: 220px; border: 3px dashed #155b52; border-radius: 50%; position: relative; animation: turn 12s linear infinite; }
+.orbit::after { content: ''; position: absolute; top: 0; left: 40px; width: 45px; height: 45px; border-radius: 50%; background: #d38723; }
+@keyframes turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .orbit { animation: none; } }
+details { max-width: 800px; padding: 1.5rem; border-bottom: 1px solid #829e90; }
+summary { cursor: pointer; font-size: 1.5rem; }
+[role="tablist"] { display: flex; gap: 1rem; }
+[role="tab"][aria-selected="false"] { background: #47685e; }
+[role="tabpanel"] { padding: 2rem; background: #fff; max-width: 800px; }
+form { display: grid; gap: 1rem; max-width: 700px; }
+label { display: grid; gap: .5rem; font-weight: 600; }
+input, textarea { width: 100%; padding: 1rem; border: 1px solid #829e90; border-radius: .5rem; font: inherit; }
+textarea { min-height: 180px; }
+.toast { position: fixed; bottom: 2rem; right: 2rem; max-width: 90%; padding: 1.5rem; background: #142c3a; color: #fff; border-radius: .5rem; z-index: 20; }
+footer { padding: 3rem 6%; }
+@media (max-width: 760px) { .cards { grid-template-columns: 1fr; } nav { gap: .5rem; justify-content: space-between; } main section { padding: 4rem 6%; } }

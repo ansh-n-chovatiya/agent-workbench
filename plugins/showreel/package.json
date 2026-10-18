@@ -1,0 +1,20 @@
+{
+  "name": "showreel",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "test": "node --test",
+    "smoke": "node scripts/smoke/run-all.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.63.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "mediabunny": "^1.40.1"
+  }
+}

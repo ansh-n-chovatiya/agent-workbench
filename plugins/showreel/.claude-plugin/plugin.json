@@ -1,0 +1,15 @@
+{
+  "name": "showreel",
+  "displayName": "Showreel",
+  "version": "0.1.0",
+  "description": "Turn a web flow into a production-grade demo video with cinematic cursor motion, zoom, captions and narration. Preview release.",
+  "author": {
+    "name": "Ansh Chovatiya"
+  },
+  "keywords": [
+    "video",
+    "demo",
+    "playwright"
+  ],
+  "license": "MIT"
+}

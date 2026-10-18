@@ -6,6 +6,9 @@ software. Nothing below is copied into this repository's source; each is a depen
 | Component | Used by | Licence | Source |
 |---|---|---|---|
 | `@playwright/test` 1.63.0 | `plugins/skills-demo` (the `demo-video` skill, installed with `npm install`) | Apache-2.0 | https://github.com/microsoft/playwright (licence field read from the npm registry on 2026-10-18) |
+| `playwright` 1.63.0 | `plugins/showreel` | Apache-2.0 | https://github.com/microsoft/playwright |
+| `esbuild` | `plugins/showreel` (dev only) | MIT | https://github.com/evanw/esbuild |
+| `mediabunny` | `plugins/showreel` (dev only for now) | MPL-2.0 | https://github.com/Vanilagy/mediabunny |
 
 `plugins/ctx` is standard-library Python and has no third-party runtime dependencies. CI tooling (GitHub Actions and
 ruff, coverage, build and hatchling in CI only) is not redistributed.

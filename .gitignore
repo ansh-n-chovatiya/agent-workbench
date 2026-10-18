@@ -14,3 +14,6 @@ transcripts/
 .coverage
 spikes/showreel/node_modules/
 spikes/showreel/scratch/
+
+# Showreel smoke test output (regenerated per run)
+plugins/showreel/smoke-results/
