@@ -78,8 +78,8 @@ async function helperBundle() {
   return bundle;
 }
 
-export async function inspectionPage(browser, rawFile, outFile) {
-  const server = await startRenderServer({ rawFile, outFile });
+export async function inspectionPage(browser, rawFile, outFile, assets = new Map()) {
+  const server = await startRenderServer({ rawFile, outFile, assets });
   let page;
   try {
     page = await browser.newPage(); await page.goto(server.url);

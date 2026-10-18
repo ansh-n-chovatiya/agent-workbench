@@ -8,7 +8,7 @@ export const bundleInputs = [
 
 export const renderBundleInputs = [...bundleInputs,
   'scripts/lib/compose/render-page.js',
-  ...['timemap', 'zoom', 'camera', 'cursor-track', 'cursor-director', 'captions', 'themes', 'layout', 'composition', 'plan']
+  ...['timemap', 'zoom', 'camera', 'cursor-track', 'cursor-director', 'custom-cursor', 'captions', 'themes', 'layout', 'composition', 'plan']
     .map((name) => `scripts/lib/compose/${name}.mjs`),
 ];
 export const encoderHash = (root = new URL('../../../', import.meta.url)) => hashInputs(bundleInputs, root);

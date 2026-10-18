@@ -6,6 +6,8 @@ function freeze(value) {
   if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); }
   return value;
 }
+const cursorImageModel = { image: null, hotspot: { x: 0, y: 0 } };
+const customCursorModel = { arrow: cursorImageModel, hand: cursorImageModel, text: cursorImageModel, heightPct: null };
 const background = { type: 'theme', colors: ['#eef2f7', '#dbe4f0'], angle: 135, image: null };
 const cardDefaults = { align: 'center', titleSizePct: 7, subtitleSizePct: 3.6,
   titleColor: '#111827', subtitleColor: '#4b5563', background,
@@ -15,10 +17,10 @@ export const DEFAULT_COMPOSITION = freeze({
   frame: { paddingXPct: 8, paddingYPct: 5, radiusPx: 14,
     shadow: { enabled: true, blurPx: 40, offsetYPx: 16, opacity: 0.25 },
     border: { enabled: false, color: '#ffffff', widthPx: 1 }, background },
-  cursor: { visible: true, style: 'arrow', sizePct: 3.4, fill: '#ffffff', stroke: '#111827', shadow: true,
+  cursor: { visible: true, style: 'arrow', custom: null, sizePct: 3.4, fill: '#ffffff', stroke: '#111827', shadow: true,
     scaleWithZoom: true, hideWhenIdleSec: 1.8, pressScale: 0.86,
     autoShape: true, followThrough: { enabled: true, distancePx: 140, durationSec: 0.8, startAfterClickSec: 0.35 }, microCorrection: true, entrance: true,
-    clickEffect: { style: 'ripple', color: null, sizeMult: 1, durationSec: 0.55 } },
+    clickEffect: { style: 'none', color: null, sizeMult: 1, durationSec: 0.55 } },
   zoom: { enabled: true, depth: 'medium', autoSuggest: true, speed: 'normal', holdAfterClickSec: 0.9,
     leadInSec: 0.1, onlyKinds: ['click', 'fill'], regions: [] },
   captions: { enabled: true, mode: 'band', position: 'bottom', bandHeightPct: 13, fontSizePct: 3.4,
@@ -54,6 +56,9 @@ export function resolveComposition(input) {
   }
   for (const key of ['title', 'outro']) if (patch.cards?.[key]?.duration !== undefined) { patch.cards[key].durationSec ??= patch.cards[key].duration; delete patch.cards[key].duration; }
   for (const key of ['title', 'outro']) if (object(patch.cards?.[key]?.logo)) patch.cards[key].logo = merge({ image: null, heightPct: 10 }, patch.cards[key].logo);
+  if (object(patch.cursor?.custom)) for (const shape of ['arrow', 'hand', 'text']) {
+    if (object(patch.cursor.custom[shape])) patch.cursor.custom[shape] = merge(cursorImageModel, patch.cursor.custom[shape]);
+  }
   if (typeof patch.cursor?.clickEffect === 'boolean') patch.cursor.clickEffect = { ...DEFAULT_COMPOSITION.cursor.clickEffect, style: patch.cursor.clickEffect ? 'ripple' : 'none' };
   return merge(themed, patch);
 }
@@ -75,7 +80,9 @@ export function validateComposition(c) {
       if ((p === 'frame' && k === 'paddingPct') || (/^cards\.(title|outro)$/.test(p) && k === 'duration')) { range(key, x, 0, k === 'duration' ? 30 : 25); continue; }
       if (!Object.hasOwn(model, k)) { fail(key, 'is an unknown key'); continue; }
       if (key === 'cursor.clickEffect' && typeof x === 'boolean') continue;
-      if (k === 'logo') {
+      if (key === 'cursor.custom') {
+        if (x !== null) walk(x, customCursorModel, key);
+      } else if (k === 'logo') {
         if (x !== null) walk(x, { image: null, heightPct: 10 }, key);
       } else if (object(model[k])) walk(x, model[k], key);
       else if (Array.isArray(model[k])) { if (!Array.isArray(x)) fail(key, 'must be an array'); }
@@ -103,9 +110,22 @@ export function validateComposition(c) {
     ['zoom.holdAfterClickSec',0,30],['zoom.leadInSec',0,5],['captions.bandHeightPct',6,25],['captions.fontSizePct',1,10],['cards.fade',0,1.5],
   ]) range(p,get(p),min,max,int);
   range('zoom.depth',zoomDepth(d.zoom?.depth),1.05,4);
-  for (const [p,values] of Object.entries({ 'cursor.style':['arrow','pointer','dot','ring','crosshair'], 'cursor.clickEffect.style':['ripple','pulse','none'],
+  for (const [p,values] of Object.entries({ 'cursor.style':['arrow','pointer','dot','ring','crosshair','custom'], 'cursor.clickEffect.style':['ripple','pulse','none'],
     'zoom.speed':['slow','normal','fast'], 'captions.mode':['band','overlay'], 'captions.position':['top','bottom'],
     'captions.fontWeight':[400,600,700], 'captions.maxLines':[1,2,3], 'captions.align':['center','left'], 'cards.transition':['crossfade','cut'] })) enumAt(p,values);
+  const custom = d.cursor?.custom;
+  if (d.cursor?.style === 'custom' && !safeImagePath(custom?.arrow?.image)) fail('cursor.custom.arrow.image', 'is required for custom style');
+  if (object(custom)) {
+    if (!safeImagePath(custom.arrow?.image)) fail('cursor.custom.arrow.image', 'must be a local PNG, SVG or WebP path');
+    if (custom.heightPct !== undefined) range('cursor.custom.heightPct', custom.heightPct, 1, 8);
+    for (const shape of ['arrow', 'hand', 'text']) {
+      const spec = custom[shape], p = `cursor.custom.${shape}`;
+      if (spec === undefined) continue;
+      if (!safeImagePath(spec?.image) || !/\.(png|svg|webp)$/i.test(spec.image)) fail(`${p}.image`, 'must be a local PNG, SVG or WebP path');
+      range(`${p}.hotspot.x`, spec?.hotspot?.x, 0, 1);
+      range(`${p}.hotspot.y`, spec?.hotspot?.y, 0, 1);
+    }
+  }
   if (!Array.isArray(d.zoom?.onlyKinds) || d.zoom.onlyKinds.some((k) => !['click','fill'].includes(k))) fail('zoom.onlyKinds','must contain click|fill');
   for (const p of ['frame.border.color','cursor.fill','cursor.stroke','captions.color','captions.background']) color(p,get(p));
   color('cursor.clickEffect.color',get('cursor.clickEffect.color'),true);
@@ -152,6 +172,16 @@ export function compositionPaths(c) {
     result[`cards.${k}.logo.image`] = value.cards[k].logo?.image ?? null;
     result[`cards.${k}.logo.heightPct`] = value.cards[k].logo?.heightPct ?? 10;
   }
+  result['cursor.custom'] = value.cursor.custom;
+  for (const shape of ['arrow', 'hand', 'text']) {
+    const spec = value.cursor.custom?.[shape];
+    result[`cursor.custom.${shape}.image`] = spec?.image ?? null;
+    result[`cursor.custom.${shape}.hotspot.x`] = spec?.hotspot?.x ?? 0;
+    result[`cursor.custom.${shape}.hotspot.y`] = spec?.hotspot?.y ?? 0;
+    result[`cursor.custom.${shape}.hotspot`] = spec?.hotspot ?? { x: 0, y: 0 };
+    result[`cursor.custom.${shape}`] = spec ?? null;
+  }
+  result['cursor.custom.heightPct'] = value.cursor.custom?.heightPct ?? value.cursor.sizePct;
   return result;
 }
 export function changeComposition(c, path, value, { reset = false } = {}) {

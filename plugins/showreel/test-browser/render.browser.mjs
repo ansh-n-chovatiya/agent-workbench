@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 const directory = await mkdtemp(path.join(os.tmpdir(), 'showreel-render-browser-'));
 process.env.SHOWREEL_HOME = path.join(directory, 'home');
 const { syntheticRun, inspectionPage } = await import('./helpers/synthetic-run.mjs');
-const { renderRun } = await import('../scripts/lib/compose/render.mjs');
+const { renderRun, resolveImageAssets } = await import('../scripts/lib/compose/render.mjs');
 const { buildComposition } = await import('../scripts/lib/compose/composition.mjs');
 const { planRender, stateAt } = await import('../scripts/lib/compose/plan.mjs');
 const serializable = (value) => JSON.parse(JSON.stringify(value));
@@ -30,9 +30,9 @@ test('synthetic offline compositor and exporter', { timeout: 300000 }, async (t)
     const run = await syntheticRun(browser);
     const baseline = await renderRun({ name: run.name, log() {} });
     const plan = baseline.plan;
-    const sessionFor = async (rawFile) => {
+    const sessionFor = async (rawFile, assets) => {
       const file = path.join(directory, `transport-${counter++}.mp4`);
-      const session = await inspectionPage(browser, rawFile, file);
+      const session = await inspectionPage(browser, rawFile, file, assets);
       session.file = file; sessions.add(session); return session;
     };
     const inspect = async (file, timestamps, probes = []) => {
@@ -76,6 +76,8 @@ test('synthetic offline compositor and exporter', { timeout: 300000 }, async (t)
       near(blue.y, f.y + f.h / 2, f.h * 0.08, 'zoom focus y');
     });
     await t.test('cursor tip, ripple radius and expiration', async () => {
+      const rc = structuredClone(composition); rc.cursor.clickEffect.style = 'ripple';
+      const rippled = await render(rc), plan = rippled.plan;
       const times = [1, 1.85, 2.7];
       const probes = times.map((time, index) => {
         const s = stateAt(plan, time);
@@ -87,7 +89,7 @@ test('synthetic offline compositor and exporter', { timeout: 300000 }, async (t)
         const color = [15, 118, 110].map((v, channel) => Math.round(v * alpha + [0, 0, 255][channel] * (1 - alpha)));
         return [{ x: p.x - h * (0.3 + 2.9 * (0.15 / 0.55)), y: p.y, radius: 3, color }];
       });
-      const info = await inspect(baseline.finalFile, times, probes);
+      const info = await inspect(rippled.file, times, probes);
       assert.ok(info.frames[0].samples[0].matches > 0, 'white cursor near predicted tip');
       assert.ok(info.frames[1].samples[0].matches > 0, 'ripple near predicted radius');
       assert.equal(info.frames[2].samples[0].matches, 0, 'ripple has expired');
@@ -186,6 +188,55 @@ test('synthetic offline compositor and exporter', { timeout: 300000 }, async (t)
         const text = planRender({ ...textRun, composition: c, sourceSize: { width: 1280, height: 720 } });
         // The I-beam's top cap is centred 12 vector units above the hotspot.
         assert.ok(await probe(text, 1.7, 0, -12, true) > 0, 'text beam extends above its centred hotspot');
+      } finally { sessions.delete(session); await session.close(); }
+    });
+    await t.test('custom PNG hotspot centres the image and actual arrow ignores it', async () => {
+      const c = structuredClone(composition);
+      c.zoom.enabled = false; c.captions.enabled = false;
+      c.cards.title.enabled = false; c.cards.outro.enabled = false;
+      Object.assign(c.cursor, { style: 'custom', shadow: false, entrance: false, hideWhenIdleSec: 0,
+        scaleWithZoom: false, custom: { arrow: { image: 'cursor-magenta.png', hotspot: { x: 0.5, y: 0.5 } } } });
+      c.cursor.clickEffect.style = 'none';
+      const generator = await sessionFor(run.rawFile);
+      let png;
+      try {
+        png = await generator.page.evaluate(() => {
+          const canvas = document.createElement('canvas'); canvas.width = canvas.height = 32;
+          const ctx = canvas.getContext('2d'); ctx.fillStyle = '#ff00ff'; ctx.fillRect(0, 0, 32, 32);
+          return canvas.toDataURL('image/png');
+        });
+      } finally { sessions.delete(generator); await generator.close(); }
+      await writeFile(path.join(run.dir, 'cursor-magenta.png'), Buffer.from(png.split(',')[1], 'base64'));
+      const assets = await resolveImageAssets(c, run.dir), session = await sessionFor(run.rawFile, assets);
+      const bounds = async (plan, time) => session.page.evaluate(async ({ plan, time, options }) => {
+        const img = new Image(); img.src = await window.renderStill(plan, time, options); await img.decode();
+        const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
+        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const box = { x0: canvas.width, x1: -1, y0: canvas.height, y1: -1, count: 0 };
+        for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) {
+          const i = (y * canvas.width + x) * 4;
+          if (data[i] > 245 && data[i + 1] < 10 && data[i + 2] > 245) {
+            box.x0 = Math.min(box.x0, x); box.x1 = Math.max(box.x1, x);
+            box.y0 = Math.min(box.y0, y); box.y1 = Math.max(box.y1, y); box.count++;
+          }
+        }
+        return box;
+      }, { plan: serializable(plan), time, options: session.server.options });
+      try {
+        const plan = planRender({ ...run, composition: c, sourceSize: { width: 1280, height: 720 } });
+        // Check arrow and automatically selected hand (which uses the custom arrow fallback).
+        for (const time of [1, 1.7, 1.745]) {
+          const box = await bounds(plan, time), position = point(plan, time, stateAt(plan, time).cursor);
+          assert.ok(box.count > 100, 'custom magenta cursor is visible');
+          near(center(box).x, position.x, 1, 'custom hotspot x');
+          near(center(box).y, position.y, 1, 'custom hotspot y');
+          const height = plan.cursor.sizePx * stateAt(plan, time).cursor.press * stateAt(plan, time).cursor.pop;
+          near(box.y1 - box.y0 + 1, height, 2, 'custom image height');
+        }
+        c.cursor.style = 'arrow';
+        const actual = planRender({ ...run, composition: c, sourceSize: { width: 1280, height: 720 } });
+        assert.equal((await bounds(actual, 1)).count, 0, 'actual arrow never draws the custom image');
       } finally { sessions.delete(session); await session.close(); }
     });
     await t.test('stills have canvas dimensions and repeated renders decode identically', async () => {

@@ -9,6 +9,7 @@ import { readProjectFile } from '../project.mjs';
 import { localRunId } from '../record/timing.mjs';
 import { buildComposition, validateComposition, safeImagePath, resolveComposition } from './composition.mjs';
 import { planRender } from './plan.mjs';
+import { imageAssetUrl, cursorImageWarning } from './custom-cursor.mjs';
 import { toSrt, toVtt } from './captions.mjs';
 
 const root = new URL('../../../', import.meta.url);
@@ -27,15 +28,30 @@ async function writeRenderChunk(file, data, position) {
 // Shared with browser tests so production Range and chunk transport are exercised.
 export async function resolveImageAssets(composition, dir) {
   const c = resolveComposition(composition), assets = new Map(), root = await realpath(dir);
-  for (const spec of [c.frame.background, c.cards.title.background, c.cards.outro.background, c.cards.title.logo, c.cards.outro.logo]) {
+  assets.warnings = [];
+  const custom = c.cursor.style === 'custom' ? ['arrow', 'hand', 'text'].map((shape) => c.cursor.custom?.[shape]).filter(Boolean) : [];
+  for (const spec of [c.frame.background, c.cards.title.background, c.cards.outro.background, c.cards.title.logo, c.cards.outro.logo, ...custom]) {
     if (!spec?.image) continue;
     if (!safeImagePath(spec.image)) throw new Error('Image must be inside the project');
-    const file = await realpath(path.join(root, spec.image)), relative = path.relative(root, file);
+    const isCursor = custom.includes(spec);
+    if (isCursor && !/\.(png|svg|webp)$/i.test(spec.image)) throw new Error(`Unsupported cursor image format: ${spec.image}`);
+    let file;
+    try { file = await realpath(path.join(root, spec.image)); }
+    catch (error) {
+      if (!isCursor || error.code !== 'ENOENT') throw error;
+      assets.warnings.push(cursorImageWarning(spec.image)); continue;
+    }
+    const relative = path.relative(root, file);
     if (relative.startsWith('..' + path.sep) || relative === '..' || path.isAbsolute(relative)) throw new Error('Image must be inside the project');
     if (!(await stat(file)).isFile()) throw new Error('Image must be a file');
     const type = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.gif': 'image/gif' }[path.extname(file).toLowerCase()];
+    if (isCursor && !['image/png', 'image/svg+xml', 'image/webp'].includes(type)) throw new Error(`Unsupported cursor image format: ${spec.image}`);
     if (!type) throw new Error(`Unsupported image format: ${spec.image}`);
-    assets.set(spec.image, { data: await readFile(file), type });
+    try { assets.set(spec.image, { data: await readFile(file), type }); }
+    catch (error) {
+      if (!isCursor) throw error;
+      assets.warnings.push(cursorImageWarning(spec.image));
+    }
   }
   return assets;
 }
@@ -123,6 +139,7 @@ export async function startRenderServer({ rawFile, outFile, assets = new Map(), 
       server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolve(); });
     });
     return { url: `http://127.0.0.1:${server.address().port}${prefix}`, close,
+      options: { cursorImages: Object.fromEntries([...assets.keys()].map((image) => [image, imageAssetUrl(image)])) },
       async finish() { await writes; if (failure) throw failure; await file.sync(); return bytes; } };
   } catch (error) { await close(); throw error; }
 }
@@ -185,19 +202,21 @@ export async function renderRun({ name, runId, size, fps, out, rebuild = false, 
     browser = await chromium.launch({ headless: true }); page = await browser.newPage();
     await page.goto(server.url); await page.waitForFunction(() => typeof window.renderComposition === 'function');
     const sourceSize = await page.evaluate(() => window.probeRenderSource());
-    plan = planRender({ composition, brief, storyboard, events, record, sourceSize });
+    plan = planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings: assets.warnings });
     for (const warning of plan.warnings) log(`warning: ${warning}`);
     if (stills) {
       const files = [];
       for (const t of stills) {
-        const png = await page.evaluate(({ plan, t }) => window.renderStill(plan, t), { plan: JSON.parse(JSON.stringify(plan)), t });
+        const { png, warnings } = await page.evaluate(async ({ plan, t, options }) => ({ png: await window.renderStill(plan, t, options), warnings: plan.warnings }), { plan: JSON.parse(JSON.stringify(plan)), t, options: server.options });
+        for (const warning of warnings) if (!plan.warnings.includes(warning)) { plan.warnings.push(warning); log(`warning: ${warning}`); }
         const file = path.join(renderDir, `still-${t}.png`);
         await writeFile(file, Buffer.from(png.split(',')[1], 'base64')); files.push(file);
       }
       log(`Stills: ${files.join(' ')}`);
       return { renderDir, plan, files };
     }
-    result = await page.evaluate((plan) => window.renderComposition(plan, { audio: null }), JSON.parse(JSON.stringify(plan)));
+    result = await page.evaluate(({ plan, options }) => window.renderComposition(plan, { ...options, audio: null }), { plan: JSON.parse(JSON.stringify(plan)), options: server.options });
+    for (const warning of result.warnings) if (!plan.warnings.includes(warning)) { plan.warnings.push(warning); log(`warning: ${warning}`); }
     await server.finish();
     if (result.codec === 'vp9') log('warning: H.264 unavailable; encoded VP9 inside MP4');
     const poster = await page.evaluate(({ plan, t }) => window.renderStill(plan, t), {

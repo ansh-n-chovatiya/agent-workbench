@@ -1,4 +1,4 @@
-// showreel render sources sha256: dfa68ef5b2486ad299440367d2ccf4f8cad96747cda8a2158437357f15a44b01
+// showreel render sources sha256: dc3e9238f9e3218f882eefd4c7d6ff3b6d4f92c66b8c8ed851b185fed889afe6
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -30145,6 +30145,7 @@
     cursor: {
       visible: true,
       style: "arrow",
+      custom: null,
       sizePct: 3.4,
       fill: "#ffffff",
       stroke: "#111827",
@@ -30156,7 +30157,7 @@
       followThrough: { enabled: true, distancePx: 140, durationSec: 0.8, startAfterClickSec: 0.35 },
       microCorrection: true,
       entrance: true,
-      clickEffect: { style: "ripple", color: null, sizeMult: 1, durationSec: 0.55 }
+      clickEffect: { style: "none", color: null, sizeMult: 1, durationSec: 0.55 }
     },
     zoom: {
       enabled: true,
@@ -30223,6 +30224,27 @@
     };
   }
 
+  // scripts/lib/compose/custom-cursor.mjs
+  var imageAssetUrl = (image) => `assets/${image.split("/").map(encodeURIComponent).join("/")}`;
+  var cursorImageWarning = (image) => `Cannot load custom cursor image: ${image}; using vector arrow`;
+  function customCursorSpec(cursor, shape) {
+    return cursor.custom?.[shape] ?? cursor.custom?.arrow;
+  }
+  async function loadCustomCursorImages(plan, urls, load) {
+    const loaded = /* @__PURE__ */ new Map();
+    if (plan.cursor.style !== "custom") return loaded;
+    const specs = ["arrow", "hand", "text"].map((shape) => plan.cursor.custom?.[shape]).filter(Boolean);
+    await Promise.all([...new Set(specs.map((spec) => spec.image))].map(async (image) => {
+      try {
+        loaded.set(image, await load(urls?.[image] ?? imageAssetUrl(image)));
+      } catch {
+        const warning = cursorImageWarning(image);
+        if (!plan.warnings.includes(warning)) plan.warnings.push(warning);
+      }
+    }));
+    return loaded;
+  }
+
   // scripts/lib/compose/render-page.js
   var defaults = () => ({
     source: new URL("raw.mp4", location.href).href,
@@ -30265,6 +30287,13 @@
     }
   };
   var images = /* @__PURE__ */ new Map();
+  var cursorImages = /* @__PURE__ */ new Map();
+  var loadCursorImage = (url2) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => img.naturalWidth && img.naturalHeight ? resolve(img) : reject(new Error("Empty cursor image"));
+    img.onerror = reject;
+    img.src = new URL(url2, location.href).href;
+  });
   async function loadImages(plan) {
     const specs = [
       plan.frame.background,
@@ -30499,19 +30528,27 @@
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.scale(cursorScale, cursorScale);
-        const style = state.cursor.shape === "arrow" ? plan.cursor.style : state.cursor.shape;
-        cursorShape(ctx, style);
+        let style = state.cursor.shape === "arrow" ? plan.cursor.style : state.cursor.shape;
         ctx.globalAlpha = state.cursor.alpha;
-        ctx.fillStyle = plan.cursor.fill;
-        ctx.strokeStyle = plan.cursor.stroke;
-        ctx.lineWidth = 1.5 * unit / cursorScale;
-        ctx.lineJoin = "round";
         if (plan.cursor.shadow) {
           ctx.shadowColor = "rgba(0,0,0,0.3)";
           ctx.shadowBlur = 3;
         }
-        if (!["ring", "crosshair", "text"].includes(style)) ctx.fill();
-        ctx.stroke();
+        const spec = plan.cursor.style === "custom" ? customCursorSpec(plan.cursor, state.cursor.shape) : null;
+        const img = spec && cursorImages.get(spec.image);
+        if (img) {
+          const h = 24, w = h * img.naturalWidth / img.naturalHeight;
+          ctx.drawImage(img, -(spec.hotspot?.x ?? 0) * w, -(spec.hotspot?.y ?? 0) * h, w, h);
+        } else {
+          if (plan.cursor.style === "custom") style = "arrow";
+          cursorShape(ctx, style);
+          ctx.fillStyle = plan.cursor.fill;
+          ctx.strokeStyle = plan.cursor.stroke;
+          ctx.lineWidth = 1.5 * unit / cursorScale;
+          ctx.lineJoin = "round";
+          if (!["ring", "crosshair", "text"].includes(style)) ctx.fill();
+          ctx.stroke();
+        }
         ctx.restore();
       }
       ctx.restore();
@@ -30535,10 +30572,11 @@
     canvas.height = plan.output.height;
     return canvas;
   }
-  window.renderStill = async (plan, tOut) => {
-    const options = stillOptions ?? defaults();
+  window.renderStill = async (plan, tOut, overrides = {}) => {
+    const options = { ...stillOptions ?? defaults(), ...overrides };
     await loadFonts(options.fonts);
     await loadImages(plan);
+    cursorImages = await loadCustomCursorImages(plan, options.cursorImages, loadCursorImage);
     const { input, sink } = await openVideo(options.source);
     try {
       const frame = await sink.getCanvas(stateAt(plan, tOut).sourceT);
@@ -30553,6 +30591,7 @@
     stillOptions = options;
     await loadFonts(options.fonts);
     await loadImages(plan);
+    cursorImages = await loadCustomCursorImages(plan, options.cursorImages, loadCursorImage);
     const { width, height, fps } = plan.output, canvas = canvasFor(plan);
     const bitrate = outputBitrate(plan.output);
     let codec;
@@ -30599,7 +30638,7 @@
       source.close();
       await output.finalize();
       finalized = true;
-      return { frames: frame, codec, bytes: bytes2 };
+      return { frames: frame, codec, bytes: bytes2, warnings: plan.warnings };
     } finally {
       try {
         if (output && !finalized) await output.cancel();

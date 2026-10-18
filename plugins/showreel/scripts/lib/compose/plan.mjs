@@ -8,7 +8,7 @@ import { layoutFor } from './layout.mjs';
 import { THEMES } from './themes.mjs';
 import { maxSharpZoom, validateRegions, suggestZoomRegions } from './zoom.mjs';
 
-export function planRender({ composition, brief, storyboard, events, record, sourceSize }) {
+export function planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings = [] }) {
   void brief;
   const validation = validateComposition(composition);
   if (!validation.ok) throw new Error(validation.errors.join('\n'));
@@ -33,11 +33,11 @@ export function planRender({ composition, brief, storyboard, events, record, sou
     camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
     cues: cuesFromRun({ storyboard, events, captionsEnabled: composition.captions.enabled }),
     captions: clone(composition.captions),
-    cursor: { ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }), sizePx: output.height * composition.cursor.sizePct / 100,
+    cursor: { ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }), sizePx: output.height * (composition.cursor.style === 'custom' ? composition.cursor.custom?.heightPct ?? composition.cursor.sizePct : composition.cursor.sizePct) / 100,
       color: THEMES[composition.theme].cursor.fill, ...composition.cursor },
     clicks: clone(events.clicks), ripples: clone(events.clicks), sourceSize: { ...sourceSize },
     viewport: { ...events.viewport }, scale: record.scale.used,
-    warnings: [...(record.warnings ?? []), ...regionValidation.warnings, ...(composition.captions.mode === 'overlay' ? ['overlay captions can cover the video'] : [])], cards: clone(cards) };
+    warnings: [...assetWarnings, ...(record.warnings ?? []), ...regionValidation.warnings, ...(composition.captions.mode === 'overlay' ? ['overlay captions can cover the video'] : [])], cards: clone(cards) };
 }
 export function stateAt(plan, tOut) {
   const mapped = sourceAt(plan.timemap, tOut), t = mapped.t;

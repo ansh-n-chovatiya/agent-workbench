@@ -65,7 +65,7 @@ test('all settings off preserve original samples and constant arrow/opacity', ()
 test('composition paths, ranges, camera independence, press/ripple and shape pop', () => {
   const events=run(); events.steps=[];
   const input={events,brief:{...structuredClone(DEFAULT_BRIEF),topic:'Demo'},storyboard:{steps:[]},record:{runId:'test',durationSec:12,scale:{used:1}},sourceSize:{width:1000,height:600}};
-  const c=buildComposition({...input,overrides:{cards:{title:{enabled:false},outro:{enabled:false}}}});
+  const c=buildComposition({...input,overrides:{cards:{title:{enabled:false},outro:{enabled:false}},cursor:{clickEffect:{style:'ripple'}}}});
   for(const path of ['cursor.autoShape','cursor.entrance','cursor.microCorrection','cursor.followThrough.enabled','cursor.followThrough.distancePx','cursor.followThrough.durationSec']) assert.ok(path in compositionPaths(c));
   for(const [path,value] of [['cursor.followThrough.distancePx',-1],['cursor.followThrough.durationSec',0],['cursor.followThrough.startAfterClickSec',6],['cursor.autoShape',1],['cursor.followThrough.extra',1]]) {
     if(path.endsWith('extra')) { const bad=structuredClone(c);bad.cursor.followThrough.extra=1;assert.equal(validateComposition(bad).ok,false); }

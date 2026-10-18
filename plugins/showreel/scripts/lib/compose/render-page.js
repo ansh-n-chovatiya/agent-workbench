@@ -2,6 +2,7 @@ import { Input, UrlSource, ALL_FORMATS, CanvasSink, Output, Mp4OutputFormat,
   StreamTarget, CanvasSource, canEncodeVideo } from 'mediabunny';
 import { stateAt } from './plan.mjs';
 import { wrapLines } from './captions.mjs';
+import { customCursorSpec, loadCustomCursorImages } from './custom-cursor.mjs';
 import { outputBitrate } from './composition.mjs';
 
 const defaults = () => ({ source: new URL('raw.mp4', location.href).href,
@@ -33,6 +34,12 @@ window.probeRenderSource = async (url = defaults().source) => {
   finally { input.dispose(); }
 };
 const images = new Map();
+let cursorImages = new Map();
+const loadCursorImage = (url) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => img.naturalWidth && img.naturalHeight ? resolve(img) : reject(new Error('Empty cursor image'));
+  img.onerror = reject; img.src = new URL(url, location.href).href;
+});
 async function loadImages(plan) {
   const specs = [plan.frame.background, plan.cards.title.background, plan.cards.outro.background,
     plan.cards.title.logo, plan.cards.outro.logo];
@@ -172,14 +179,23 @@ function draw(canvas, plan, tOut, decoded) {
       const p = mapped(state.cursor);
       const cursorScale = cursorH * state.cursor.press * state.cursor.pop / 24;
       ctx.save(); ctx.translate(p.x, p.y); ctx.scale(cursorScale, cursorScale);
-      const style = state.cursor.shape === 'arrow' ? plan.cursor.style : state.cursor.shape;
-      cursorShape(ctx, style);
+      let style = state.cursor.shape === 'arrow' ? plan.cursor.style : state.cursor.shape;
       ctx.globalAlpha = state.cursor.alpha;
-      ctx.fillStyle = plan.cursor.fill; ctx.strokeStyle = plan.cursor.stroke;
-      ctx.lineWidth = 1.5 * unit / cursorScale; ctx.lineJoin = 'round';
       if (plan.cursor.shadow) { ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 3; }
-      if (!['ring', 'crosshair', 'text'].includes(style)) ctx.fill();
-      ctx.stroke(); ctx.restore();
+      const spec = plan.cursor.style === 'custom' ? customCursorSpec(plan.cursor, state.cursor.shape) : null;
+      const img = spec && cursorImages.get(spec.image);
+      if (img) {
+        const h = 24, w = h * img.naturalWidth / img.naturalHeight;
+        ctx.drawImage(img, -(spec.hotspot?.x ?? 0) * w, -(spec.hotspot?.y ?? 0) * h, w, h);
+      } else {
+        if (plan.cursor.style === 'custom') style = 'arrow';
+        cursorShape(ctx, style);
+        ctx.fillStyle = plan.cursor.fill; ctx.strokeStyle = plan.cursor.stroke;
+        ctx.lineWidth = 1.5 * unit / cursorScale; ctx.lineJoin = 'round';
+        if (!['ring', 'crosshair', 'text'].includes(style)) ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
     }
     ctx.restore();
     if (plan.frame.border.enabled) {
@@ -197,10 +213,11 @@ function canvasFor(plan) {
   canvas.width = plan.output.width; canvas.height = plan.output.height;
   return canvas;
 }
-window.renderStill = async (plan, tOut) => {
-  const options = stillOptions ?? defaults();
+window.renderStill = async (plan, tOut, overrides = {}) => {
+  const options = { ...(stillOptions ?? defaults()), ...overrides };
   await loadFonts(options.fonts);
   await loadImages(plan);
+  cursorImages = await loadCustomCursorImages(plan, options.cursorImages, loadCursorImage);
   const { input, sink } = await openVideo(options.source);
   try {
     const frame = await sink.getCanvas(stateAt(plan, tOut).sourceT);
@@ -213,6 +230,7 @@ window.renderComposition = async (plan, options = {}) => {
   stillOptions = options;
   await loadFonts(options.fonts);
   await loadImages(plan);
+  cursorImages = await loadCustomCursorImages(plan, options.cursorImages, loadCursorImage);
   const { width, height, fps } = plan.output, canvas = canvasFor(plan);
   const bitrate = outputBitrate(plan.output);
   let codec;
@@ -248,7 +266,7 @@ window.renderComposition = async (plan, options = {}) => {
     }
     if (frame !== total) throw new Error('Decoder ended before the composition');
     source.close(); await output.finalize(); finalized = true;
-    return { frames: frame, codec, bytes };
+    return { frames: frame, codec, bytes, warnings: plan.warnings };
   } finally {
     try { if (output && !finalized) await output.cancel(); }
     finally { video?.input.dispose(); }

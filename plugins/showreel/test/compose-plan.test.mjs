@@ -14,7 +14,7 @@ function run(scale = 1) {
     clicks: [{ t: 1.7, stepId: 's1', x: 940, y: 540, tab: 0 }], keys: [] };
   const record = { runId: '20261018-120000', durationSec: 7, scale: { used: scale }, warnings: ['Recording warning'] };
   const sourceSize = { width: 1280 * scale, height: 720 * scale };
-  const composition = buildComposition({ brief, storyboard, events, record, edits: { speeds: [{ start: 3, end: 5, rate: 2 }] } });
+  const composition = buildComposition({ brief, storyboard, events, record, edits: { speeds: [{ start: 3, end: 5, rate: 2 }] }, overrides: { cursor: { clickEffect: { style: 'ripple' } } } });
   return { brief, storyboard, events, record, sourceSize, composition };
 }
 test('drawing plan combines cards, captions, zoom, cursor and speed changes on one clock', () => {
