@@ -369,6 +369,15 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
         content_paths=list(unit.owns) + list(unit.reads), force=True,
     )
     delta = snapshot.compare(base, head)
+    # An unchanged fix gives the next reviewer no new evidence. Keep this on
+    # the existing no-package/problem path so the caller cannot dispatch one.
+    if (round_number > 1 and (config.get("review") or {}).get("stop_rule", False)
+            and not (delta.added or delta.modified or delta.deleted)):
+        return None, {}, (
+            f"unchanged since the last review (round {round_number - 1}): "
+            "no fix was made, so there is nothing to re-review — "
+            "fix the open findings or park them with a ruling"
+        )
     # Not `unit.owns`: a wave shares one working tree, so a sibling's write to
     # its own declared path is in this delta and is not this unit's violation.
     # See `wave_scope` for why that widening is the smallest one that works.

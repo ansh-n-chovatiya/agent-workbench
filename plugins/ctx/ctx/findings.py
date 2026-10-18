@@ -118,6 +118,17 @@ def load(layout, slug, unit_name):
     return ledger
 
 
+def round_ceiling(open_findings, config):
+    """The caller's fix-round ceiling; bump_round only records the round."""
+    if not (config.get("review") or {}).get("stop_rule", False):
+        return MAX_ROUNDS
+    # Critical is the proxy for D12's serious findings: security, data scope
+    # or data loss. Those earn more attempts, but never an unbounded loop.
+    if any(f.status == "open" and f.severity == "critical" for f in open_findings):
+        return 4
+    return 2
+
+
 class Finding:
     def __init__(self, id, severity, summary, *, status="open", evidence="",
                  where="", round_number=1, ruling="", source="reviewer"):

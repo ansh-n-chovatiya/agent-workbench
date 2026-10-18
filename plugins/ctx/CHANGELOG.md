@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Hook commands in `hooks/hooks.json` quote `${CLAUDE_PLUGIN_ROOT}`, so an install path containing a space no longer
+  splits the command (`claude plugin validate` warned about all seven).
+
+### Added
+
+- `review.stop_rule` (default `false`): stop after two reviewed rounds unless a
+  critical finding remains open, with a hard ceiling of four rounds. Unchanged
+  fix rounds print a notice without writing a package or dispatching a reviewer.
+
 ## 1.2.0
 
 Shorter gate-failure output, a context-footprint check, and surgical-change

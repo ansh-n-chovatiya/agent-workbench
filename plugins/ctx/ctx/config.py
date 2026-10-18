@@ -165,7 +165,11 @@ DEFAULTS = {
     # complexity weights above: there is no dispatch history yet to weigh it
     # against, so expect it to move once telemetry gives us real package
     # sizes to check it against.
-    "review": {"small_package_bytes": 20000},
+    "review": {
+        "small_package_bytes": 20000,
+        # D18/D20: built default-off; flip only after the quality gate.
+        "stop_rule": False,
+    },
     "auto_load": [],
     "redact": [],
     # Extra commands `ctx init` should consider, for a toolchain no marker table
@@ -839,5 +843,8 @@ def render(config):
         "# read, not score points — below which a clean review package earns\n"
         "# the reviewer tier one cheaper than models.reviewer. Also a guess,\n"
         "# not a measurement, for the same reason the weights above are.\n"
+        "# review.stop_rule stops after two reviewed rounds unless a critical\n"
+        "# finding is open (hard ceiling four), and skips unchanged re-reviews.\n"
+        "# Ships false; enable only after the D18/D20 quality gate.\n"
     )
     return header + body + "\n"

@@ -107,6 +107,9 @@ complexity:
     deep: 6.0                 # at or above this, `deep`
 
 review:
+  stop_rule: false            # opt in after the D18/D20 quality gate: stop after
+                              # two rounds unless critical is open (max four);
+                              # unchanged fix rounds write no package
   small_package_bytes: 20000  # a clean review package under this earns the
                               # reviewer one tier *cheaper* than models.reviewer
 
@@ -130,6 +133,12 @@ verify:
     optional: true            # non-blocking when its *tool* looks absent — read
                               # the warning under Verification first
 ```
+
+`review.stop_rule` is a boolean, default `false`. When enabled, round 3 is
+refused unless a `critical` finding remains open; round 4 is the hard ceiling.
+Remaining findings need a ruling or an owner decision (`/ctx:decide`). Fix rounds
+with no snapshot delta print an unchanged notice and exit 1 without a package
+or reviewer dispatch. Round 1 is always eligible to build a package.
 
 Three more `review` keys are honoured but not rendered by `init`, because their
 defaults live in `ctx/snapshot.py` and almost nobody needs to move them:

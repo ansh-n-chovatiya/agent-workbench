@@ -2533,11 +2533,16 @@ def cmd_review(args):
                 journal.append(layout, config, "escalate", unit.name, escalation.line())
         else:
             round_number = ledger.round
-    if round_number > findings_mod.MAX_ROUNDS:
+    ceiling = findings_mod.round_ceiling(ledger.findings, config)
+    if round_number > ceiling:
         # Past the cap the loop does not converge; the failure is structural and
         # more rounds only spend tokens on it. Every remaining finding becomes a
         # decision taken on the user's behalf, which is what a ruling is for.
-        _echo(f"round cap reached ({findings_mod.MAX_ROUNDS}) — stop dispatching fixes")
+        if (config.get("review") or {}).get("stop_rule", False):
+            _echo(f"review.stop_rule reached ({ceiling}) — stop dispatching fixes; "
+                  "park what remains open with a ruling or ask the owner to decide")
+        else:
+            _echo(f"round cap reached ({findings_mod.MAX_ROUNDS}) — stop dispatching fixes")
         for finding in ledger.blocking():
             _echo("  " + finding.line())
         _echo("")
