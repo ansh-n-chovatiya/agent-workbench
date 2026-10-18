@@ -1,6 +1,6 @@
 # Showreel spike findings
 
-Status: **partial, 2026-10-18.** B0, S1, S2, S2b, S2c, S4, S5, S6, S7 and S8 are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
+Status: **partial, 2026-10-18.** B0, S1, S2, S2b, S2c, S3, S4, S5, S6, S7 and S8 are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
 `spikes/showreel/results/*.json`. Test machine: Apple M4, 16 GB, macOS; Playwright 1.63.0; Node 24.
 
 ## B0: baseline token cost of the old skill
@@ -221,6 +221,40 @@ Redesign (now `spikes/showreel/s4-guide/{recorder,guide,resolve}.mjs`): the in-p
 Also found: **a crash in the CSS-path fallback on shallow pages** (it walked up to `<html>`, which has no parent); fixed. The deep live site had hidden it.
 
 `guide.json` needs per step: `action`, ordered `candidates`, `name`, `role`, `tag`, `url` at click time, `box` (page coordinates), and `value` for fills; the resolver adds `selector` and `how`. Improvements to build in Phase 2: prefer scoped semantic selectors (for example by the enclosing card heading) over long structural CSS paths, which resolved correctly here but are brittle; capture hover, keyboard and scroll actions; handle new tabs and external links (the owner's first run clicked a link to another site); iframes, shadow DOM and canvas are untested.
+
+## S3: OpenScreen extractability: **go, with a narrower scope than "borrow the editor"**
+
+Snapshot `ca8104c` of `siddharthvaddem/openscreen` (MIT, copyright 2025 Siddharth Vaddem; retain the notice). Full classification with file:line
+references: `docs/43-openscreen-extraction-report.md` (written by Codex, spot-checked by Claude: the click-ring no-op, type-only imports, the
+Electron call in the exporter, the `motion` spring library, the absence of GSAP in the focus code, the Whisper dependency, the cursor-art
+source and the failing bundle all matched the source). Scanner: 52 files and 14,605 lines in the focus directories; 46 files have no direct
+Electron, GSAP or `window.electronAPI` reference. **But** the exporter does not bundle on its own: esbuild failed with 21 errors (6 shown),
+all unresolved project aliases (`@/lib/wallpaper`, `@/utils/platformUtils`) and `web-demuxer`.
+
+**Borrow as is** (pure logic, only type imports, small): easing math and cubic-Bezier solver (`mathUtils.ts`), cursor-dwell auto-zoom
+suggestions (`zoomSuggestionUtils.ts`), cursor focus following (`cursorFollowUtils.ts`), zoom region strength and selection
+(`zoomRegionUtils.ts`), the frame queues (`asyncVideoFrameQueue.ts`, `timestampedVideoFrameQueue.ts`), gradient parsing, MP4 size and bitrate
+settings, webcam frame drawing, and the zoom, trim and speed region type declarations.
+
+**Borrow with edits:** export orchestration and the frame loop (`videoExporter.ts`: replace Electron file reads, aliases, wallpaper and platform
+providers), the decoder's trim and speed segment arithmetic (`streamingDecoder.ts`), offline cursor smoothing and the live spring smoothing
+(`cursorPathSmoothing.ts`, `motionSmoothing.ts`, uses the MIT `motion` package, not GSAP), the Pixi compositor and zoom transform
+(`frameRenderer.ts`), audio processing and the MP4 muxer, the timeline UI (`TimelineEditor.tsx`, depends on React and `dnd-timeline`), and annotations.
+Trim and speed time mapping exists only as decoder loop arithmetic: **we must write an explicit bidirectional source-to-output time-map API**
+(which our `retime` unit needs anyway).
+
+**Do not borrow:** Electron IPC and system-cursor capture; native capture code; **all bundled assets** (wallpapers, cursor artwork, demo
+media, logos, WASM): their asset-specific licences are unverified, and the cursor artwork cites a third-party site; **captioning and
+transcription**, which load a local speech-recognition model (`Xenova/whisper-tiny` through `@xenova/transformers`), breaking our rule of one
+local model (TTS only); and the click ring, which is an empty function in the source (we build our own).
+
+**Dependencies seen:** `mediabunny` MPL-2.0 (already planned; file-level copyleft, attribute), `pixi.js` MIT, `motion` MIT, `dnd-timeline` MIT, `react` MIT,
+`gif.js` MIT, `lucide-react` ISC, `sonner` MIT, `uuid` MIT; `web-demuxer` printed no licence (unverified; avoid or verify before use).
+
+Consequences for the plan: (1) the editor stack is **React plus Vite**, which matches the borrowed code and fits the committed-prebuilt-bundle
+decision; (2) the borrow is roughly ten small pure modules plus adapted exporter and compositor files, **not** the editor UI (the two largest UI files
+are 83 to 93 KB and tied to the host app), so Phase 5 UI work is mostly ours; (3) write the time-map API and the click effect ourselves; (4) all
+art (cursors, backgrounds, themes) is created or sourced under a verified licence.
 
 ## Tooling notes (2026-10-18)
 
