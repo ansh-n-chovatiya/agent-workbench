@@ -1,0 +1,29 @@
+{
+  "site": "https://anshchovatiya.vercel.app/",
+  "seconds": 15,
+  "channel": "chromium",
+  "results": [
+    {
+      "variant": "B-captureScreenshot-dsf2",
+      "supported": true,
+      "fps": 26.4,
+      "framesDropped": 10,
+      "bytesPerMinute": 224066475,
+      "frames": 396,
+      "framePixelWidth": 1920,
+      "framePixelHeight": 1080,
+      "firstFramePixels": "1920x1080"
+    },
+    {
+      "variant": "D-cdp-override-dsf2",
+      "supported": true,
+      "fps": 59.3,
+      "framesDropped": 0,
+      "bytesPerMinute": 492343774,
+      "frames": 887,
+      "framePixelWidth": 1920,
+      "framePixelHeight": 1080,
+      "firstFramePixels": "1920x1080"
+    }
+  ]
+}

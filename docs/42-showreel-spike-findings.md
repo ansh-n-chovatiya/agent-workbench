@@ -1,6 +1,6 @@
 # Showreel spike findings
 
-Status: **partial, 2026-10-18.** B0, S1 and S2 are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
+Status: **partial, 2026-10-18.** B0, S1, S2 and S2b are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
 `spikes/showreel/results/*.json`. Test machine: Apple M4, 16 GB, macOS; Playwright 1.63.0; Node 24.
 
 ## B0: baseline token cost of the old skill
@@ -70,11 +70,38 @@ Findings:
    plus a short settle or a readiness signal.
 7. Measured on an M4 only; a low-end machine may drop frames.
 
+## S2b: capture at true 2x: **no real-time 60 fps route found; options below**
+
+Same workload as S2 (live site, 15 s of scrolling, M4). "Frame pixels" is read from the saved frames with ffprobe, not from the options passed.
+
+| Variant | Works | fps | Dropped | Disk per minute | Real frame pixels |
+|---|---|---|---|---|---|
+| A: 3840x2160 CSS viewport, dsf 1, screencast | yes | 44.4 | 0 | about 880 MB | **3840x2160** |
+| B: dsf 2, `Page.captureScreenshot` loop | yes | 30 (26 in new headless) | 0 (10) | about 255 MB | 1920x1080 |
+| C: dsf 2, `page.screenshot` loop | yes | 10.1 | 151 | about 222 MB | **3840x2160** |
+| D: dsf 2 via `Emulation.setDeviceMetricsOverride` + screencast | yes | 59.8 | 0 | about 493 MB | 1920x1080 |
+| E: BeginFrame-controlled capture | **no** | | | | page never rendered under BeginFrame control (60 s timeout) |
+
+Findings:
+1. In headless Chromium, both screencast and `captureScreenshot` return frames **capped at the CSS viewport size**, whatever the device scale factor (also true for Playwright's new headless mode, channel `chromium`, tested for B and D).
+2. Only two routes deliver real 4K pixels: a 4K CSS viewport (A, 44 fps) or `page.screenshot` (C, 10 fps). Neither gives 60 fps at true 2x.
+3. A changes the page layout (the app sees a 3840 px wide viewport), so a desktop layout designed for 1920 px will not look the same.
+4. Raw JPEG at 4K is about 880 MB per minute, which reinforces stream-encoding while recording.
+
+Implication for the quality bar: zoom animations magnify pixels, so capture scale limits the sharp zoom depth. **Follow-up S2c (before Phase 3):**
+(a) screencast at 2560x1440 and 3200x1800 CSS viewports to find the highest scale that holds 60 fps;
+(b) root `zoom` (CSS) on a 4K viewport to keep the desktop layout, and check for media-query differences;
+(c) hybrid capture: 60 fps screencast at 1x plus high-resolution stills (route C with `clip`) of the zoom target for the zoom hold;
+(d) accept 1x capture with a maximum zoom of about 1.5x and judge perceived softness by eye.
+
+## Tooling notes (2026-10-18)
+
+- Gemini CLI could not be used: its free API-key quota (20 requests a day) was exhausted in minutes, and Google ended Google-account sign-in for Gemini CLI on 2026-06-18, so the owner's Jio plan cannot power it. Browser spikes were run by Claude directly.
+- A test Firefox ("Nightly", Playwright's own build) was left running by a failed Codex run; it was stopped and the Firefox and WebKit test browsers were removed after S1. Spike scripts must close their browsers on failure.
+
 ## Follow-ups added
 
-- **S2b (new, before Phase 3):** how to capture at 2x. Candidates: a 3840x2160 CSS viewport at deviceScaleFactor 1 (layout
-  changes), deterministic BeginFrame-controlled capture in headless Chromium, and a `Page.captureScreenshot` loop. Measure
-  fps, sharpness at 2x zoom, and disk.
+- **S2c (before Phase 3):** see the S2b section: find a capture route that keeps 60 fps and enough pixels for zoom.
 - **B0-hard:** baseline on a harder multi-page, login-gated flow.
 - Run S1 and S2 on Windows and Linux CI before relying on them.
 - **Tooling lesson:** Codex's sandbox cannot launch browsers (every launch failed), so spike results from Codex were sandbox

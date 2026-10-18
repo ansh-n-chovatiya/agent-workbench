@@ -1,0 +1,55 @@
+{
+  "site": "https://anshchovatiya.vercel.app/",
+  "seconds": 15,
+  "results": [
+    {
+      "variant": "A-viewport-4k-dsf1",
+      "supported": true,
+      "fps": 44.4,
+      "framesDropped": 0,
+      "bytesPerMinute": 879974309,
+      "frames": 661,
+      "framePixelWidth": 3840,
+      "framePixelHeight": 2160,
+      "firstFramePixels": "3840x2160"
+    },
+    {
+      "variant": "B-captureScreenshot-dsf2",
+      "supported": true,
+      "fps": 30,
+      "framesDropped": 0,
+      "bytesPerMinute": 255460260,
+      "frames": 451,
+      "framePixelWidth": 1920,
+      "framePixelHeight": 1080,
+      "firstFramePixels": "1920x1080"
+    },
+    {
+      "variant": "C-page.screenshot-dsf2",
+      "supported": true,
+      "fps": 10.1,
+      "framesDropped": 151,
+      "bytesPerMinute": 221983188,
+      "frames": 152,
+      "framePixelWidth": 3840,
+      "framePixelHeight": 2160,
+      "firstFramePixels": "3840x2160"
+    },
+    {
+      "variant": "D-cdp-override-dsf2",
+      "supported": true,
+      "fps": 59.8,
+      "framesDropped": 0,
+      "bytesPerMinute": 492735167,
+      "frames": 896,
+      "framePixelWidth": 1920,
+      "framePixelHeight": 1080,
+      "firstFramePixels": "1920x1080"
+    },
+    {
+      "variant": "E-beginFrame-dsf2",
+      "supported": false,
+      "notes": "timed out after 60 s (page never rendered under BeginFrame control)"
+    }
+  ]
+}
