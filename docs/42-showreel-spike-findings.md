@@ -1,7 +1,49 @@
 # Showreel spike findings
 
-Status: **partial, 2026-10-18.** B0, S1, S2, S2b, S2c, S3, S4, S5, S6, S7 and S8 are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
+Status: **complete, 2026-10-18.** B0, S1 to S8 (with S2b and S2c) are done. Gate below. Numbers come from
 `spikes/showreel/results/*.json`. Test machine: Apple M4, 16 GB, macOS; Playwright 1.63.0; Node 24.
+
+## Summary and go/no-go gate
+
+| Spike | Verdict | Decision it forced |
+|---|---|---|
+| B0 baseline | measured | Old skill: about 42,380 fresh tokens, $0.21 and 60 s for a simple 5-step video; metric to beat is fresh tokens and cost, not total processed |
+| S1 browser H.264 export | **go** | WebCodecs needs a secure context (serve the editor from 127.0.0.1); all four engines encode on macOS; Windows and Linux untested |
+| S2 / S2b / S2c capture | **go, with changes** | No built-in video; stream-encode while recording; screencast is capped at the CSS viewport size, so sharp capture uses CSS zoom on a larger viewport (1.0x to 2.0x, picked per machine) plus an optional 2x hybrid zoom layer |
+| S3 OpenScreen | **go, narrower** | Borrow about ten pure modules and adapt the exporter and compositor; write our own time-map API and click effect; exclude all assets and Whisper captioning; editor is React plus Vite |
+| S4 Guide mode | **go, redesign** | Capture facts in the page at click time, resolve selectors by replaying in order |
+| S5 voices | **go** | Kokoro default (owner chose it as clearest); Kitten limited to draft and slow-PC fallback via a vendored, patched copy |
+| S6 loudness | **go, plus limiter** | JavaScript BS.1770 meter verified; add a true-peak limiter |
+| S7 A/V sync | **go** | One audio clock; calibrate the start offset; compensate for output latency |
+| S8 4K export | **go, with changes** | Stream to disk; default 1080p60; show progress and ETA |
+
+**Phase 8 token budget (proposed):** at or below **42,380 fresh tokens and $0.21** for the same 5-step flow with default settings, with all
+tweaking done in the editor at zero tokens. A harder-flow baseline (multi-page, login) is still unmeasured: measure it at the start of Phase 8 and
+set its budget then.
+
+**Revised full-build estimate** (reasoned, not measured, fresh tokens, plus or minus 50%, excluding the finished Phase 0): about **10 to 20 million**,
+essentially unchanged from the earlier remaining estimate of 10 to 20.5 million. Capture work grew (scale benchmark, layout guard, stream encoding,
+hybrid layer), the voice and export work shrank (now proven), and borrowing is narrower than hoped. Gemini is unavailable, so more of the
+mechanical work falls to Codex and Claude: expect Claude's share of roughly 7 to 16 million.
+
+| Phase | Estimate (fresh tokens) |
+|---|---|
+| 1 Scaffold side by side, plus an early three-OS CI matrix | 0.3 to 0.6M |
+| 2 Intake, storyboard, Guide mode | 0.5 to 1.0M |
+| 3 Recorder, capture scale, motion, page hygiene | 1.5 to 3.0M |
+| 4 Compositor, exporter, time-map | 1.8 to 3.5M |
+| 5 Editor (React plus Vite) | 3.5 to 6.5M |
+| 6 Voice, music, loudness, own voice | 0.9 to 1.8M |
+| 7 Themes, templates, brand kit, multi-scene | 1.0 to 2.0M |
+| 8 Token meter and benchmark | 0.3 to 0.6M |
+| 9 Parity, release, retire the old skill | 0.6 to 1.2M |
+
+**Recommendation: GO for Phase 1.** Carry these risks forward: Windows and Linux are untested for S1, S2 and S8 (add the three-OS matrix in
+Phase 1, not Phase 9); CSS zoom is verified on one site only; real audio-device latency and 4K proxy decode are untested; the harder baseline is
+unmeasured; the owner's own sites are the only acceptance subjects so far.
+
+**Spec edits made from these results** (all in `docs/40-showreel-design.md`): sections 22 and 23 (capture design, loudness, sync, export), the
+voice tier table (section 8), the borrowed-code table (section 14), and the notes below.
 
 ## B0: baseline token cost of the old skill
 

@@ -1,6 +1,6 @@
 # Showreel: design
 
-Status: **proposed, awaiting owner review (2026-10-18).** No code exists for this yet. Showreel is built side by side as `plugins/showreel` and replaces the
+Status: **approved by the owner and de-risked by Phase 0 (2026-10-18); see `docs/42-showreel-spike-findings.md`.** No code exists for this yet. Showreel is built side by side as `plugins/showreel` and replaces the
 `demo-video` skill in `plugins/skills-demo` only after it passes the quality bar. Decisions below were made by the owner in conversation on 2026-10-18; items marked
 *spike* are facts to be verified before they are relied on.
 
@@ -58,7 +58,7 @@ brief.json ─► guide.json (optional) ─► scenario.spec.ts
 |---|---|---|
 | `intake` | Asks the brief questions, writes `brief.json`, skips anything already given | none |
 | `guide` | Headed browser where the user clicks through roughly; writes `guide.json` of resolved selectors | Playwright |
-| `recorder` | Runs the scenario with human pacing, captures frames at 2x scale and `events.json` | Playwright |
+| `recorder` | Runs the scenario with human pacing, captures frames at a per-machine capture scale (1.0x to 2.0x, section 22) and `events.json` | Playwright |
 | `motion` | Cursor path generator, spring zoom, easing tokens | none (pure) |
 | `retime` | Pure function: steps plus edits give caption and narration timing | none (pure) |
 | `voice` | Kokoro text-to-speech, clip cache, pronunciation dictionary, preview | `kokoro-js` |
@@ -207,7 +207,7 @@ hard budget for showreel and track it with a per-run meter in CI-style benchmark
 
 | # | Phase | Acceptance |
 |---|---|---|
-| 0 | Baseline and spikes | Baseline token cost recorded. Spikes S1 to S8 answered in writing (below). |
+| 0 | Baseline and spikes | **Done 2026-10-18.** Baseline and spikes S1 to S8 (plus S2b, S2c) answered in `docs/42`; gate: go. |
 | 1 | Scaffold `plugins/showreel` side by side | New plugin builds, validates and tests on three OSes; safe code reused from `skills-demo` (config, doctor, recorder safety, write blocking); `skills-demo` keeps working untouched. |
 | 2 | Intake, storyboard, Guide mode | A user-guided flow produces a working scenario with no exploration loop. |
 | 3 | Recorder and motion | `events.json` captured; cursor paths pass property tests; blind side-by-side beats the old cursor. |
@@ -303,3 +303,11 @@ Measured on an Apple M4 (see `docs/42-showreel-spike-findings.md`); verify on Wi
 - **Loudness:** after normalising to -16 LUFS, apply a true-peak limiter (about -1 dBTP); validate on real narration in Phase 6. The meter is 48 kHz only, so resample first.
 - **Preview sync:** one audio clock drives playback; calibrate the start offset once after playback begins and compensate for the device's `outputLatency`. Natural drift is about 2.4 ms per minute.
 - **Export:** write output to disk in chunks (never assemble a whole file in one value); default to 1080p60, 4K opt-in; show progress and an ETA (4K encodes at about 14 to 23 fps on an M4); peak browser memory about 1.7 GB at 4K.
+
+## 24. Phase 0 outcome and decisions carried into Phase 1 (2026-10-18)
+
+- The editor is **React plus Vite**; CI builds the bundle on release (section 20). Borrow about ten pure OpenScreen modules and adapt the exporter and compositor (`docs/43`); write our own time-map API (source to output and back) and click effect; copy no assets and no captioning or transcription code.
+- Guide mode uses in-page capture plus an ordered resolver (`spikes/showreel/s4-guide`), not capture-time uniqueness checks.
+- Voice: Kokoro is the default and final voice (owner's blind listen); the vendored, patched Kitten nano is a draft and fallback tier only.
+- The Phase 8 token budget is the baseline in `docs/42` (fresh tokens and cost for the simple flow); a harder-flow baseline is set at the start of Phase 8.
+- Early risks to close in Phase 1: the three-OS CI matrix for capture, export and encode, and a second test subject beyond the owner's portfolio.
