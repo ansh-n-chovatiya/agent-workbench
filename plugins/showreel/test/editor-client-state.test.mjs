@@ -1,0 +1,109 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { reducer, initialState, createEditorStore } from '../editor/state.js';
+import { resolveComposition } from '../scripts/lib/compose/composition.mjs';
+
+const project = () => ({ name: 'Demo', runId: 'r1', composition: resolveComposition({ run: { id: 'r1' }, cards: { title: { enabled: false } } }),
+  brief: {}, storyboard: { steps: [] }, record: { durationSec: 4, scale: { used: 2 } },
+  events: { viewport: { width: 640, height: 360 }, cursor: [], clicks: [], steps: [], keys: [], targets: [] } });
+function edit(state, path, value, now) {
+  const composition = structuredClone(state.composition);
+  composition.frame.radiusPx = value;
+  return reducer(state, { type: 'change', composition, path, now });
+}
+test('snapshot history coalesces adjacent changes to the same path only within 600 ms', () => {
+  const loaded = reducer(initialState(), { type: 'load', project: project() });
+  let state = edit(loaded, 'frame.radiusPx', 15, 0);
+  state = edit(state, 'frame.radiusPx', 20, 599);
+  assert.equal(state.past.length, 1);
+  state = edit(state, 'frame.radiusPx', 25, 1199);
+  assert.equal(state.past.length, 2);
+  state = edit(state, 'other', 30, 1200);
+  assert.equal(state.past.length, 3);
+  state = reducer(state, { type: 'undo' }); assert.equal(state.composition.frame.radiusPx, 25);
+  state = reducer(state, { type: 'undo' }); assert.equal(state.composition.frame.radiusPx, 20);
+  state = reducer(state, { type: 'redo' }); assert.equal(state.composition.frame.radiusPx, 25);
+  assert.equal(loaded.composition.frame.radiusPx, 14);
+});
+test('new edits discard redo, snapshots do not alias, history is capped at 100', () => {
+  let state = reducer(initialState(), { type: 'load', project: project() });
+  for (let i = 0; i < 110; i++) state = edit(state, 'radius', i, i * 700);
+  assert.equal(state.past.length, 100);
+  state = reducer(state, { type: 'undo' });
+  state = edit(state, 'radius', 200, 77001);
+  assert.equal(state.future.length, 0);
+  const action = { type: 'change', composition: structuredClone(state.composition), path: 'radius', now: 80000 };
+  action.composition.frame.radiusPx = 201;
+  state = reducer(state, action); action.composition.frame.radiusPx = 1;
+  assert.equal(state.composition.frame.radiusPx, 201);
+  const unchanged = reducer(state, { type: 'change', composition: structuredClone(state.composition) });
+  assert.equal(unchanged, state);
+});
+test('store builds plans with actual source size, reports invalid paths, and recovers after undo', async () => {
+  const store = createEditorStore({ api: async () => project(), debounce: 100000 });
+  try {
+    store.setSourceSize({ width: 1280, height: 720 }); await store.load();
+    assert.deepEqual(store.getState().plan.sourceSize, { width: 1280, height: 720 });
+    store.change('output.fps', 12);
+    assert.equal(store.getState().plan, null);
+    assert.match(store.getState().errors.join(), /output.fps/);
+    store.undo(); assert.equal(store.getState().plan.output.fps, 60);
+  } finally { store.dispose(); }
+});
+test('autosave debounces changes, forwards validator errors and retry clears the error', async () => {
+  let saves = 0, reject = true;
+  const store = createEditorStore({ debounce: 5, api: async (url, options) => {
+    if (!options) return project();
+    saves++;
+    if (reject) throw Object.assign(new Error('Invalid radius'), { errors: ['composition.json: "frame.radiusPx" invalid'] });
+    return { ok: true };
+  } });
+  try {
+    await store.load(); store.change('frame.radiusPx', 20); store.change('frame.radiusPx', 21);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.equal(saves, 1); assert.equal(store.getState().dirty, true);
+    assert.match(store.getState().errors[0], /frame.radiusPx/);
+    reject = false; await store.save();
+    assert.equal(store.getState().dirty, false); assert.equal(store.getState().error, null);
+  } finally { store.dispose(); }
+});
+test('saves are serialized and edits during a request remain dirty until their own save completes', async () => {
+  const writes = [], gates = [];
+  const store = createEditorStore({ debounce: 100000, api: async (url, options) => {
+    if (!options) return project();
+    writes.push(JSON.parse(options.body));
+    await new Promise(resolve => gates.push(resolve));
+  } });
+  try {
+    await store.load(); store.change('frame.radiusPx', 20);
+    const saved = store.save();
+    store.change('frame.radiusPx', 22);
+    const flush = store.save();
+    assert.equal(writes.length, 1); assert.equal(store.getState().dirty, true);
+    gates.shift()();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(writes.length, 2); assert.equal(store.getState().dirty, true);
+    gates.shift()(); await Promise.all([saved, flush]);
+    assert.deepEqual(writes.map(c => c.frame.radiusPx), [20, 22]);
+    assert.equal(store.getState().dirty, false); assert.equal(store.getState().saving, false);
+  } finally { store.dispose(); }
+});
+
+test('a failed obsolete save cannot prevent a waiting newer revision from saving', async () => {
+  let rejectFirst, calls = 0;
+  const store = createEditorStore({ debounce: 100000, api: async (url, options) => {
+    if (!options) return project();
+    if (++calls === 1) await new Promise((resolve, reject) => { rejectFirst = reject; });
+    return { ok: true };
+  } });
+  try {
+    await store.load(); store.change('frame.radiusPx', 20);
+    const first = store.save();
+    store.change('frame.radiusPx', 22);
+    const second = store.save();
+    rejectFirst(new Error('Old request failed'));
+    await assert.rejects(first, /Old request failed/); await second;
+    assert.equal(calls, 2); assert.equal(store.getState().dirty, false);
+    assert.equal(store.getState().error, null);
+  } finally { store.dispose(); }
+});

@@ -1,4 +1,4 @@
-// showreel render sources sha256: 4b44dccaf0d9d77a99a4f89412852a0b9697e0cb9f401788732e4e50e8a92ec4
+// showreel render sources sha256: 385b4ecdbae1901d0551a3881d3f1730a9d9396320329114a3c54b60faf8e7ba
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -30318,7 +30318,7 @@
     img.onerror = reject;
     img.src = new URL(url2, location.href).href;
   });
-  async function loadImages(plan) {
+  async function loadImages(plan, { assetBase = "assets/" } = {}) {
     const specs = [
       plan.frame.background,
       plan.cards.title.background,
@@ -30327,7 +30327,7 @@
       plan.cards.outro.logo
     ];
     await Promise.all(specs.filter((s) => s?.image).map(async ({ image }) => {
-      const url2 = new URL(`assets/${image.split("/").map(encodeURIComponent).join("/")}`, location.href).href;
+      const url2 = new URL(`${assetBase}${image.split("/").map(encodeURIComponent).join("/")}`, location.href).href;
       if (!images.has(image)) images.set(image, new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => resolve(img);
@@ -30339,8 +30339,14 @@
     }));
   }
   async function loadAssets(plan, options = {}) {
-    await loadImages(plan);
-    cursorImages = await loadCustomCursorImages(plan, options.cursorImages, loadCursorImage);
+    await loadImages(plan, options);
+    const urls = options.cursorImages ?? (options.assetBase ? Object.fromEntries(
+      Object.values(plan.cursor.custom ?? {}).filter((s) => s?.image).map((s) => [
+        s.image,
+        `${options.assetBase}${s.image.split("/").map(encodeURIComponent).join("/")}`
+      ])
+    ) : void 0);
+    cursorImages = await loadCustomCursorImages(plan, urls, loadCursorImage);
     return { images, cursorImages };
   }
   function background2(ctx, spec, width, height, fallback) {

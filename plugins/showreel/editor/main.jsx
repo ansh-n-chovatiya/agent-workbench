@@ -1,3 +1,4 @@
-import { h, render, Fragment } from 'preact';
+import { h, render } from 'preact';
+import { App } from './App.jsx';
 
-render(<Fragment><h1>Showreel editor</h1></Fragment>, document.getElementById('app'));
+render(<App />, document.getElementById('app'));

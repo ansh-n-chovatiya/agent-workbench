@@ -30,3 +30,5 @@ await build({
   banner: { js: `// showreel editor sources sha256: ${await editorHash(root)}` },
 });
 await copyFile(new URL('editor/index.html',root),new URL('dist/editor/index.html',root));
+
+await copyFile(new URL('editor/editor.css',root),new URL('dist/editor/editor.css',root));

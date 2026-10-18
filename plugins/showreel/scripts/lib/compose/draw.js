@@ -20,11 +20,11 @@ const loadCursorImage = (url) => new Promise((resolve, reject) => {
   img.onload = () => img.naturalWidth && img.naturalHeight ? resolve(img) : reject(new Error('Empty cursor image'));
   img.onerror = reject; img.src = new URL(url, location.href).href;
 });
-export async function loadImages(plan) {
+export async function loadImages(plan, { assetBase = 'assets/' } = {}) {
   const specs = [plan.frame.background, plan.cards.title.background, plan.cards.outro.background,
     plan.cards.title.logo, plan.cards.outro.logo];
   await Promise.all(specs.filter((s) => s?.image).map(async ({ image }) => {
-    const url = new URL(`assets/${image.split('/').map(encodeURIComponent).join('/')}`, location.href).href;
+    const url = new URL(`${assetBase}${image.split('/').map(encodeURIComponent).join('/')}`, location.href).href;
     if (!images.has(image)) images.set(image, new Promise((resolve, reject) => {
       const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error(`Cannot load image: ${image}`)); img.src = url;
     }));
@@ -32,8 +32,11 @@ export async function loadImages(plan) {
   }));
 }
 export async function loadAssets(plan, options = {}) {
-  await loadImages(plan);
-  cursorImages = await loadCustomCursorImages(plan, options.cursorImages, loadCursorImage);
+  await loadImages(plan, options);
+  const urls = options.cursorImages ?? (options.assetBase ? Object.fromEntries(
+    Object.values(plan.cursor.custom ?? {}).filter(s => s?.image).map(s => [s.image,
+      `${options.assetBase}${s.image.split('/').map(encodeURIComponent).join('/')}`])) : undefined);
+  cursorImages = await loadCustomCursorImages(plan, urls, loadCursorImage);
   return { images, cursorImages };
 }
 function background(ctx, spec, width, height, fallback) {

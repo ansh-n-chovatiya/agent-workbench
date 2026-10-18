@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { readFile, readdir, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { encoderHash, bundleInputs, renderHash, renderBundleInputs, editorHash, editorBundleInputs } from '../scripts/lib/record/bundle-hash.mjs';
 
 for (const [name, hash] of [['encoder', encoderHash], ['render', renderHash], ['editor', editorHash]]) test(`committed ${name} bundle matches its sources`, async () => {
@@ -36,4 +36,16 @@ test('the source hash does not change when files are checked out with CRLF line 
 
 test('editor HTML matches its source', async () => {
   assert.equal(await readFile(new URL('../dist/editor/index.html',import.meta.url),'utf8'), await readFile(new URL('../editor/index.html',import.meta.url),'utf8'));
+});
+
+test('editor CSS matches its source', async () => {
+  assert.equal(await readFile(new URL('../dist/editor/editor.css',import.meta.url),'utf8'), await readFile(new URL('../editor/editor.css',import.meta.url),'utf8'));
+});
+
+test('editor freshness includes every editor source and asset', async () => {
+  const files = await readdir(new URL('../editor/', import.meta.url), { recursive: true, withFileTypes: true });
+  for (const file of files.filter(file => file.isFile())) {
+    const relative = path.relative(fileURLToPath(new URL('../', import.meta.url)), path.join(file.parentPath, file.name)).split(path.sep).join('/');
+    assert.ok(editorBundleInputs.includes(relative), `Add ${relative} to editorBundleInputs`);
+  }
 });
