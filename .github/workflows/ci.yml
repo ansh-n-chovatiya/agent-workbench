@@ -440,3 +440,48 @@ jobs:
       - name: Unit tests
         run: >-
           node --test --test-name-pattern '^(config|layout|deliver: one|mapFromEdits|replanCaptions|parseProject|a slow-down|findProject|timeline:|edit: a phone|captions:|cursor:)' test/paths.test.mjs test/timemap.test.mjs test/edit.test.mjs
+
+  # Showreel (preview plugin): unit tests plus capture, export and memory smoke tests on the three desktop
+  # operating systems. The smoke tests record what each OS can do (H.264 export, screencast frame rate at each
+  # capture scale, 4K export memory) as artifacts; a failed smoke is a finding, not a build failure, until
+  # the design is settled on all three.
+  showreel:
+    name: showreel · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: plugins/showreel
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Unit tests
+        run: npm test
+      - name: Smoke tests (capture, export, memory)
+        continue-on-error: true
+        run: npm run smoke
+      - name: Smoke summary
+        if: always()
+        shell: bash
+        run: |
+          for f in smoke-results/*.json; do
+            [ -e "$f" ] || continue
+            { echo "### ${{ matrix.os }}: $f"; echo '```json'; cat "$f"; echo; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: showreel-smoke-${{ matrix.os }}
+          path: plugins/showreel/smoke-results/
+          if-no-files-found: warn
