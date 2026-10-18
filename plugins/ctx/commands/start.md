@@ -1,0 +1,40 @@
+---
+description: Dispatch the next wave of a checked plan
+allowed-tools: Bash, Read, Task
+argument-hint: "[--wave N] [--worktree]"
+---
+!`"${CLAUDE_PLUGIN_ROOT}/bin/ctx" start $ARGUMENTS || true`
+
+Follow the brief above exactly.
+
+**You are the orchestrator. Do not read source files.** Read unit files and unit
+reports only. That is the whole reason this session's context stays flat across a
+large plan, and it is safe precisely because each unit file is self-contained.
+
+Send all concurrent units in a **single message with multiple Task calls** so they
+actually run in parallel — one call per unit, each pointing the `unit-runner`
+agent at its unit file path.
+
+**Pass the model named on each line.** A Task call with no model inherits this
+session's, which is the most expensive one available — so a wave of small units
+silently books a wave of the priciest seats. The brief names one per unit; use it.
+
+`ctx start` touches nothing in git. `session`-tier units run in this tree unless
+you were given worktree instructions, which only happens when the user passed
+`--worktree`. Do not create worktrees, branches or commits on your own initiative:
+if isolation looks necessary, say so and let the user decide.
+
+As each reports back, check it against the unit's **Return contract** before
+accepting: files changed, criteria passed, verify output. A report missing any of
+those is incomplete — ask for the rest rather than assuming it went fine.
+
+Stop the wave if any unit reports `interface_changed`. That invalidates what its
+siblings were coded against, and deciding what to do about it is a planning
+decision, not an implementation one.
+
+Record each outcome with `ctx unit <name> --status done`. That re-runs the unit's
+own verify checks before accepting it and refuses if they fail — a report claiming
+success is not evidence of it. If it refuses, the unit is not finished; send it
+back rather than reaching for `--force`.
+
+Then run `/ctx:start` again for the next wave.

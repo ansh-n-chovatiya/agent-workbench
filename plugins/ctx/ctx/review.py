@@ -1,0 +1,744 @@
+"""The review package: one file a reviewer reads in a single call.
+
+A reviewer needs to know what changed, against what it was supposed to change,
+and whether anything changed that nobody declared. The usual way to answer that
+is a commit range — which costs a commit, because the implementer has to commit
+before it can be reviewed. The review protocol then dictates the project's git
+history, and concurrent units interleave into a range nothing can untangle.
+
+This builds the same answer from two content snapshots instead, so review costs
+no commits at all and a project with no repository reviews identically. Three
+things follow that a commit range cannot do: a whole wave can be reviewed
+concurrently with each unit's diff staying clean; the `owns` contract is checked
+mechanically rather than being asserted in prose nothing enforced; and the diff
+survives the working tree moving on, because the bytes were captured.
+
+The package is deliberately one file. Everything the reviewer needs is in it, so
+the review costs one Read — and the diff never enters the orchestrator's own
+context, which is what keeps a twenty-unit plan affordable.
+"""
+
+import difflib
+import hashlib
+import json
+import re
+import subprocess
+
+from . import atomic, plan, redact, snapshot
+
+REVIEW_SUBDIR = "reviews"
+
+# Where a unit's own uncommitted work is fingerprinted while it is still
+# running, so that a `done` sibling's excuse can be checked against what that
+# sibling actually wrote rather than against "something under there is dirty".
+OWNS_SUBDIR = "owns"
+
+# Enough context to judge a hunk without re-reading the file. Ten lines is what
+# a reviewer needs to see the function a change sits in; three is not.
+DIFF_CONTEXT = 10
+
+# A package larger than this is not read, it is skimmed — and a skimmed review
+# is worse than an honest refusal, because it looks like one that happened.
+MAX_PACKAGE_BYTES = 300_000
+
+
+def review_dir(layout):
+    return layout.runtime / REVIEW_SUBDIR
+
+
+def package_path(layout, slug, unit_name, round_number=1):
+    return review_dir(layout) / f"{slug}-{unit_name}-r{round_number}.md"
+
+
+def before_key(slug, unit_name):
+    return f"{slug}@{unit_name}@before"
+
+
+def after_key(slug, unit_name, round_number=1):
+    return f"{slug}@{unit_name}@r{round_number}"
+
+
+def capture_before(layout, config, unit, slug, root, force=False):
+    """Snapshot the tree before a unit is dispatched.
+
+    `force=False` keeps a baseline that already exists. The pre-work capture is
+    the only snapshot that cannot be retaken later — by the time anyone notices
+    it was overwritten, the work it was supposed to predate has already landed.
+    So a second dispatch of the same unit leaves it alone and the existing
+    manifest comes back unchanged; `ctx start --rebaseline` is the one caller
+    that asks for it to be replaced, out loud.
+    """
+    return snapshot.capture(
+        layout, config, before_key(slug, unit.name), root,
+        content_paths=list(unit.owns) + list(unit.reads), force=force,
+    )
+
+
+def wave_scope(layout, slug, unit, record=True):
+    """(patterns, siblings) — the paths this unit's review may treat as declared.
+
+    `record=False` is for a caller asking this question about a unit that is
+    not the one being decided right now — `ctx verify --plan` and `ctx ci`
+    both ask it for every in-flight unit of a plan just to report a verdict,
+    not to gate one specific unit toward `done`. Recording "own work" from
+    those read-only passes would fingerprint a unit's mid-flight state as its
+    frozen baseline before its own gate ever ran, which is the wrong moment —
+    see `_concurrent_siblings`.
+
+    `snapshot.capture` fingerprints the whole project, on purpose: that is what
+    makes a write to a path nobody declared visible at all. But `subagent`-tier
+    units of one wave run in *one working tree*, several Task calls deep, so a
+    sibling's write to its own declared path lands between this unit's before
+    and after captures. Checking the delta against this unit's `owns` alone
+    then reports that sibling's legitimate edit as a scope violation — and the
+    package calls a violation mechanical and "not open to argument", which
+    makes it Critical, which blocks the done-gate. Every wave of two or more
+    units deadlocked its own gate on N−1 false Criticals.
+
+    So the check is widened by exactly the amount concurrency costs it, and no
+    more: this unit's `owns`, plus the `owns` of the other units in the *same
+    wave* that are not `done`. Those are the units that may be writing to this
+    tree right now. A path no unit in the wave declared is still a violation,
+    which keeps the one mechanical protection this project has against a unit
+    writing wherever it likes.
+
+    Two exclusions are deliberate, with one qualification on the second. A unit
+    in a *different* wave is not running now — its `owns` is not an excuse for
+    a path changing, or the check would degrade to "anything any unit in the
+    plan ever claimed". A `done` unit has been reviewed, and once its writes
+    have actually *landed* — committed — a later change to its paths is
+    somebody else's and belongs in a report, so it stays excluded.
+
+    The qualification: `ctx unit --status done` marks a unit done the moment
+    its own gate passes, which is well before anyone commits. A wave gated one
+    unit at a time can run three of those in a row with no commit between any
+    of them — the realistic case, since the work is written by a runner *after*
+    dispatch, not staged and committed ahead of it. The first unit's `owns` are
+    then still sitting uncommitted in the one shared tree while the *next*
+    unit's gate runs, and excluding them outright reproduces the exact failure
+    this function exists to prevent — a sibling's legitimate, finished write
+    reported as this unit's scope violation — just moved from "running" to
+    "done but not yet committed". So a `done` sibling is excused while its own
+    `owns` paths are still uncommitted (`_uncommitted_paths` below), and reverts
+    to fully excluded once those paths are committed — which is exactly where
+    the exclusion was already correct.
+
+    "Uncommitted under its `owns`" is not by itself enough, and used to be: the
+    excuse said *this dirt is the done unit's own leftover work*, but tested
+    only that dirt existed. A still-running sibling that overwrites a path an
+    already-`done` unit owns produces exactly the same `git status` line, so the
+    violator's write was reclassified as the done unit's leftovers and
+    disappeared from the package — "Scope violations: None", diff withheld. The
+    old reasoning was that the done-gate's contract-changed check covers a stray
+    edit under a done unit's paths; it does not. `contract.compare` hashes the
+    unit's *frontmatter* — what it declared it owns — never the content of the
+    files it owns, so nothing in it can see a byte of `src/01-a.py` change.
+
+    What closes it is `_own_work` below: while a unit is still running — which
+    includes the moment its own gate calls this function — ctx records the
+    digest of every uncommitted path under its `owns`. Once it is `done` that
+    record is frozen, and its `owns` excuse anything only while the dirt under
+    them still digests to what it wrote. The moment a path diverges, it is
+    somebody else's write and the whole sibling stops excusing, so the change is
+    reported against whichever unit is actually under review. A unit whose own
+    fresh write lands after its gate diverges too, and is reported the same way:
+    the two are indistinguishable on disk, and the choice between reporting a
+    finished unit's afterthought and silently swallowing a live sibling's stray
+    write is not a close one. A `done` sibling with no record at all — marked
+    done by `--force`, or by a ctx that predates the record — keeps the old,
+    laxer excuse, because refusing there would deadlock exactly the waves this
+    function exists to unblock.
+
+    When git itself cannot answer whether a path is committed — no repository,
+    or the command failed — nothing is excused on its account. Failing towards
+    reporting too much is the same choice `wave_scope` already makes when the
+    wave cannot be determined at all, below.
+
+    When the wave cannot be determined — no plan on disk, no `wave` field and
+    no derivable one — this returns the unit's own `owns` unchanged. That is
+    the pre-fix behaviour: noisy, but it fails towards reporting too much
+    rather than towards silently excusing a stray write.
+    """
+    siblings = _concurrent_siblings(layout, slug, unit, record=record)
+    patterns = list(unit.owns)
+    for _name, owns in siblings:
+        patterns.extend(owns)
+    return patterns, siblings
+
+
+def _concurrent_siblings(layout, slug, unit, record=True):
+    """[(name, owns)] for the wave's other units that are still writing to this
+    tree, sorted by name — "still writing" meaning not `done`, or `done` with
+    its `owns` still uncommitted *and still holding what that unit itself
+    wrote*. See `wave_scope`'s docstring for why the second half exists and why
+    the content check is part of it.
+
+    The wave is read from the unit's own `wave:` field where it has one, which
+    is what `ctx plan-check` writes back to disk and what the board and the
+    dispatcher schedule from. Where it has none, the wave is derived from the
+    dependency graph the same way `plan.waves` derives it for everything else —
+    *not* by matching one missing `wave` against another, which would put every
+    unscheduled unit in the plan into one enormous wave and hand the reviewed
+    unit a free pass over paths nothing is concurrently writing.
+    """
+    units = plan.load_units(layout, slug)
+    members = None
+    if unit.wave is not None:
+        members = [u for u in units if u.wave == unit.wave]
+    else:
+        grouped, _problems = plan.waves(units)
+        for _level, candidates in sorted(grouped.items()):
+            if any(u.name == unit.name for u in candidates):
+                members = candidates
+                break
+    if not members:
+        return []
+
+    # One subprocess call at most, and only when something actually needs the
+    # answer: a `done` sibling to judge, or this unit's own work to record.
+    state = {"dirty": None}
+
+    def dirty_paths():
+        if state["dirty"] is None:
+            state["dirty"] = _uncommitted_paths(layout) or []
+        return state["dirty"]
+
+    # Recorded here rather than at the gate because here is the last moment the
+    # unit is still running: `verify.gate_before_done` calls `wave_scope` before
+    # it decides, so the digest taken now is the one the work was gated on. A
+    # `done` unit records nothing — freezing it is what makes it evidence.
+    # `record=False` (a read-only `ctx verify --plan`/`ctx ci` pass over a unit
+    # nobody is deciding right now) skips this — see `wave_scope`'s docstring.
+    if record and unit.owns and unit.status != "done":
+        _record_own_work(layout, slug, unit, dirty_paths())
+
+    out = []
+    for u in sorted(members, key=lambda u: u.name):
+        if u.name == unit.name or not u.owns:
+            continue
+        if u.status != "done":
+            out.append((u.name, list(u.owns)))
+            continue
+        under = [path for path in dirty_paths() if snapshot.covers(path, u.owns)]
+        if under and _still_its_own_work(layout, slug, u, under):
+            out.append((u.name, list(u.owns)))
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# what a done unit left behind
+# --------------------------------------------------------------------------- #
+
+def owns_record_path(layout, slug, unit_name):
+    """Where a unit's own uncommitted work is fingerprinted."""
+    safe = re.sub(r"[^A-Za-z0-9._@-]", "-", f"{slug}@{unit_name}") or "unnamed"
+    return review_dir(layout) / OWNS_SUBDIR / f"{safe}.json"
+
+
+def _digest(root, relpath):
+    """The digest of one path's bytes now, or None when it is not a readable
+    file — a deletion and an unreadable file are both "not what was recorded"."""
+    try:
+        return hashlib.sha256((root / relpath).read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _record_own_work(layout, slug, unit, dirty):
+    """Fingerprint the uncommitted paths under this unit's own `owns`.
+
+    Only the uncommitted ones: a committed path is already excused by nothing —
+    the `done` exclusion reverts to absolute once the work lands — so its digest
+    would never be consulted. Best-effort like every other thing this package
+    writes; a record that cannot be written leaves the old, laxer excuse in
+    place rather than failing a gate on a bookkeeping error.
+    """
+    root = layout.root.parent
+    paths = {}
+    for relpath in dirty:
+        if not snapshot.covers(relpath, unit.owns):
+            continue
+        sha = _digest(root, relpath)
+        if sha is not None:
+            paths[relpath] = sha
+    path = owns_record_path(layout, slug, unit.name)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomic.write_text(path, json.dumps(
+            {"plan": slug, "unit": unit.name, "paths": paths},
+            indent=2, sort_keys=True,
+        ))
+    except OSError:
+        return None
+    return paths
+
+
+def _own_work(layout, slug, unit_name):
+    """`{relpath: sha}` as this unit last left it, or None when nothing was
+    recorded — which is not the same as "it left nothing", and callers keep the
+    old behaviour rather than inventing an answer."""
+    path = owns_record_path(layout, slug, unit_name)
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return None
+    paths = data.get("paths") if isinstance(data, dict) else None
+    return paths if isinstance(paths, dict) else None
+
+
+def _still_its_own_work(layout, slug, unit, dirty_under_owns):
+    """Is the dirt under this `done` unit's `owns` still the dirt it left?
+
+    True with no record on file: a unit forced done, or done under a ctx that
+    did not keep one, is excused exactly as it was before — see `wave_scope`.
+    A path that is dirty now but was not dirty when the unit was gated is
+    somebody else's by construction, so an absent entry is a divergence, not a
+    missing one.
+    """
+    recorded = _own_work(layout, slug, unit.name)
+    if recorded is None:
+        return True
+    root = layout.root.parent
+    for relpath in dirty_under_owns:
+        if recorded.get(relpath) != _digest(root, relpath):
+            return False
+    return True
+
+
+def _uncommitted_paths(layout):
+    """Repo-relative paths with uncommitted changes in the shared working
+    tree, or `None` when git itself cannot answer — no repository at this
+    root, or the command failed.
+
+    `None` is not the same as "nothing is uncommitted": a caller that treated
+    them alike would excuse a `done` sibling's `owns` forever rather than only
+    while it is genuinely dirty, on the strength of a question git never
+    actually answered. Every caller here does the safer thing with `None` —
+    excuses nothing — which is the same "report too much, excuse nothing
+    silently" choice `wave_scope` makes when it cannot determine the wave.
+
+    Untracked files count, same as `_check_diff`'s and `gate_check`'s own
+    `git status` reads: a unit's first write to a path it owns has nothing
+    tracked to be "modified" yet, and skipping untracked entries would treat
+    that as clean when it is exactly the uncommitted work this exists to spot.
+    """
+    root = layout.root.parent
+    try:
+        completed = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            cwd=str(root), capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    paths = []
+    for line in completed.stdout.splitlines():
+        entry = line[3:].strip().strip('"')
+        if entry:
+            paths.append(entry)
+    return paths
+
+
+def build(layout, config, unit, slug, root, round_number=1, previous=None):
+    """Write the review package. Returns (path, stats, problem).
+
+    `previous` names the snapshot to diff *from*. For the first round that is the
+    pre-dispatch capture; for a fix round it is the snapshot the last review saw,
+    so a re-review is scoped to the fix rather than re-litigating the whole unit.
+    """
+    base_key = previous or before_key(slug, unit.name)
+    base = snapshot.load(layout, base_key)
+    if base is None:
+        return None, {}, (
+            f"no snapshot to compare against — `ctx snapshot {unit.name} "
+            "--phase before` must run before the work does, which is what "
+            "`ctx start` does for you"
+        )
+
+    head_key = after_key(slug, unit.name, round_number)
+    # `force=True`: the *after* side is meant to be whatever the tree says now.
+    # Re-running `ctx review` for the same round — which is what happens when a
+    # round raised nothing and so did not advance — must see the current work,
+    # not the tree as it stood the first time. Only the `before` key is evidence
+    # that cannot be retaken.
+    head = snapshot.capture(
+        layout, config, head_key, root,
+        content_paths=list(unit.owns) + list(unit.reads), force=True,
+    )
+    delta = snapshot.compare(base, head)
+    # Not `unit.owns`: a wave shares one working tree, so a sibling's write to
+    # its own declared path is in this delta and is not this unit's violation.
+    # See `wave_scope` for why that widening is the smallest one that works.
+    scope, siblings = wave_scope(layout, slug, unit)
+    stray = snapshot.out_of_scope(delta, scope)
+    # A path nobody declared has no captured "before", so its bytes were never
+    # kept. Fill in the "after" side now that we know which paths those are —
+    # otherwise the violation is named but never shown.
+    if stray:
+        head = snapshot.store_extra(layout, config, head_key, root, stray) or head
+
+    text = _render(layout, config, unit, slug, delta, stray, base_key, head_key,
+                   round_number, siblings)
+    path = package_path(layout, slug, unit.name, round_number)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # `newline=""` writes the string's own "\n" through untranslated. On
+    # Windows the default would rewrite every one to "\r\n", so the file on
+    # disk would be larger than the text that produced it — and `bytes` below
+    # counts the text while `dispatch_stats` stats the file. Those two numbers
+    # size the reviewer's model, so letting them disagree by one byte per line
+    # would draw a dearer seat on Windows than on Linux for the same package.
+    # `Path.write_text` only learned `newline` in 3.10 and this ships 3.8+.
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(text)
+    stats = {
+        "bytes": len(text.encode("utf-8")),
+        "added": len(delta.added),
+        "modified": len(delta.modified),
+        "deleted": len(delta.deleted),
+        "out_of_scope": len(stray),
+        "truncated": delta.truncated,
+        "round": round_number,
+        "head_key": head_key,
+    }
+    return path, stats, ""
+
+
+def dispatch_stats(layout, slug, unit, round_number=1):
+    """Package bytes and out-of-scope count for a package `build()` already
+    wrote — read back, not recomputed.
+
+    `build()` works out both of these numbers while it captures the head
+    snapshot and renders the package text, and hands them back in its `stats`
+    dict — but only to the caller that ran it. Sizing the *reviewer's* model
+    needs the same two numbers for a different reason: a package too large to
+    read comfortably, or a unit with a real scope violation, wants a stronger
+    reviewer than a two-line, in-scope fix does. Calling `build()` again to get
+    them would re-walk the whole tree, re-store every blob under
+    `content_paths`, and rewrite the package file a second time — all to
+    answer a question the first `build()` already answered and left on disk.
+
+    This reads that answer back instead: the package file's own size on disk
+    for `bytes`, and the base/head manifests `build()` already stored —
+    compared again, which is pure computation over data already captured, not
+    a second capture — for `out_of_scope`. Nothing here writes anything.
+
+    The scope those paths are judged against is `wave_scope`'s, exactly as in
+    `build` — otherwise the number that sizes the reviewer would count a wave
+    sibling's declared path as a violation the package itself does not report,
+    and a routine wave would be routed to a stronger model on a fiction. That
+    call re-reads the wave's unit files, which is a read of frontmatter already
+    on disk, not a capture.
+
+    Every key involved (`package_path`, `after_key`, `before_key`) is scoped to
+    this `slug`/`unit.name`/`round_number`, which is what keeps two units
+    reviewed in the same wave from ever reading each other's numbers — there is
+    no shared or last-writer state anywhere in this function to contaminate.
+
+    Returns `None` when no package has been built yet for this
+    `(slug, unit, round_number)` — there is nothing on disk to size against.
+    """
+    path = package_path(layout, slug, unit.name, round_number)
+    if not path.is_file():
+        return None
+    head = snapshot.load(layout, after_key(slug, unit.name, round_number))
+    if head is None:
+        return None
+    base_key = (after_key(slug, unit.name, round_number - 1) if round_number > 1
+                else before_key(slug, unit.name))
+    base = snapshot.load(layout, base_key)
+    delta = snapshot.compare(base, head)
+    scope, _siblings = wave_scope(layout, slug, unit)
+    stray = snapshot.out_of_scope(delta, scope)
+    return {
+        "bytes": path.stat().st_size,
+        "out_of_scope": len(stray),
+    }
+
+
+def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
+            round_number, siblings=()):
+    patterns = config.get("redact") or []
+    out = [
+        f"# Review package — unit `{unit.name}` of plan `{slug}`, round {round_number}",
+        "",
+        "Built by diffing two content snapshots, not a commit range: nothing here",
+        "was committed, and the project may have no repository at all. This file is",
+        "your complete view of the change — do not run git to re-derive it.",
+        "",
+        "## Objective",
+        "",
+        (unit.doc.section("objective") or "(none stated)").strip(),
+        "",
+        "## Acceptance criteria",
+        "",
+    ]
+    criteria = unit.doc.list_items("acceptance criteria", "criteria")
+    out += [f"{i}. {c}" for i, c in enumerate(criteria, 1)] or ["(none stated)"]
+
+    interfaces = unit.doc.section("interfaces").strip()
+    if interfaces:
+        out += ["", "## Interfaces this unit publishes", "", interfaces]
+
+    out += [
+        "",
+        "## Declared scope",
+        "",
+        f"- **owns**: {', '.join(unit.owns) or '(nothing declared)'}",
+        f"- **reads**: {', '.join(unit.reads) or '(nothing)'}",
+        f"- **forbid**: {', '.join(unit.forbid) or '(nothing)'}",
+    ]
+    # Only when the wave actually has other units running. A solo unit's
+    # package must read exactly as it always did — there is no concurrency to
+    # explain, and a line explaining one would be noise at best and a false
+    # implication that something else touched this tree at worst.
+    if siblings:
+        out += [
+            "- **running alongside** (same wave, not yet done, sharing this "
+            "working tree): "
+            + "; ".join(f"`{name}` owns {', '.join(owns)}"
+                        for name, owns in siblings),
+        ]
+    out += [
+        "",
+        "## Files changed",
+        "",
+    ]
+    # The ledger is rewritten by every `ctx` command, so listing it here is pure
+    # noise in the section a reviewer reads first — and noise in a review is how
+    # a reader learns to skim the part that matters.
+    added = [p for p in delta.added if not snapshot.is_ledger(p)]
+    modified = [p for p in delta.modified if not snapshot.is_ledger(p)]
+    deleted = [p for p in delta.deleted if not snapshot.is_ledger(p)]
+    if not (added or modified or deleted):
+        out.append("(nothing changed outside the ledger's own bookkeeping)")
+    for path in added:
+        out.append(f"- added     {path}")
+    for path in modified:
+        out.append(f"- modified  {path}")
+    for path in deleted:
+        out.append(f"- deleted   {path}")
+    if delta.truncated:
+        out += [
+            "",
+            "**This snapshot hit the file cap**, so the listing is incomplete and",
+            "deletions are not reported at all — a truncated snapshot cannot tell a",
+            "deleted file from one past the cap. Treat absence as unknown, and raise",
+            "`review.max_files` or widen `review.ignore` before trusting this section.",
+        ]
+
+    # The wording has to describe the check that actually ran. With siblings in
+    # the wave the rule is no longer "this unit's `owns`, absolutely" — it is
+    # "declared by *someone* running in this wave" — and a reviewer told the
+    # stricter rule would either raise a finding the code did not make, or
+    # learn that the section's prose is approximate. Both are worse than a
+    # sentence more of text.
+    out += ["", "## Scope violations", ""]
+    if stray and siblings:
+        out += [
+            "These paths changed and are **not** covered by this unit's `owns`, nor",
+            "by the `owns` of any other unit still running in this wave (listed under",
+            "Declared scope). Nobody in the wave declared them. This was decided",
+            "mechanically — no model judged it, and it is not open to argument.",
+            "Report it as Critical.",
+            "",
+        ]
+        out += [f"- {path}" for path in stray]
+    elif stray:
+        out += [
+            "These paths changed and are **not** covered by the unit's `owns`. This",
+            "was decided mechanically — no model judged it, and it is not open to",
+            "argument. Report it as Critical.",
+            "",
+        ]
+        out += [f"- {path}" for path in stray]
+    elif siblings:
+        out += [
+            "None — every changed path is within this unit's declared `owns`, or",
+            "within the declared `owns` of a unit running alongside it in this wave.",
+            "A wave shares one working tree, so a sibling's write to its own declared",
+            "path appears in this diff; it is that unit's to answer for, not this",
+            "one's. A path nobody in the wave declared would still be listed here.",
+        ]
+    else:
+        out.append("None — every changed path is within the declared `owns`.")
+
+    uncapped = []
+    body = _diff_body(layout, delta, base_key, head_key, siblings, uncapped)
+    out += ["", "## Churn", ""]
+    out += render_churn(churn("\n".join(uncapped), unit.owns or None))
+    out += ["", "## Diff", ""]
+    out.append(body)
+    return redact.scrub("\n".join(out) + "\n", patterns)
+
+
+_HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
+CHURN_FILES_SHOWN = 10
+
+
+def churn(diff_text, owns=None):
+    """Mechanical churn measures over unified-diff text. Advisory only.
+
+    Returns `{files, whitespace_only_total, ratio}`; each file is
+    `{path, hunks, added, removed, whitespace_only_hunks}`. A hunk is
+    whitespace-only when its removed and added lines are equal once all
+    whitespace is stripped. Hunk line counts from the `@@` header decide where a
+    hunk ends, so a content line that happens to start with `---` is not
+    mistaken for a file header. Binary files (and any file with no stored text)
+    are not analysed: they have no diff text, so they do not appear at all.
+
+    Known limitations: whitespace-only is decided per hunk, so a re-indent
+    within DIFF_CONTEXT lines of a real edit merges into that hunk and is not
+    counted. A file lacking a trailing newline makes difflib glue its last -/+
+    lines together, so a re-indent of that line is missed (never raises).
+    """
+    files, current, hunk = [], None, None
+    left = right = 0
+
+    def close():
+        nonlocal hunk
+        if hunk is not None and current is not None:
+            if hunk["rem"] or hunk["add"]:
+                if "".join("".join(hunk["rem"]).split()) == \
+                        "".join("".join(hunk["add"]).split()):
+                    current["whitespace_only_hunks"] += 1
+        hunk = None
+
+    lines = diff_text.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if hunk is not None and (left > 0 or right > 0):
+            if line.startswith("-"):
+                hunk["rem"].append(line[1:])
+                current["removed"] += 1
+                left -= 1
+            elif line.startswith("+"):
+                hunk["add"].append(line[1:])
+                current["added"] += 1
+                right -= 1
+            elif line.startswith("\\"):
+                pass
+            else:
+                left -= 1
+                right -= 1
+            i += 1
+            continue
+        close()
+        if line.startswith("+++ ") and i > 0 and lines[i - 1].startswith("--- "):
+            target = line[4:].strip()
+            source = lines[i - 1][4:].strip()
+            name = source if target == "/dev/null" else target
+            path = name.split("/", 1)[1] if "/" in name else name
+            current = {"path": path, "hunks": 0, "added": 0, "removed": 0,
+                       "whitespace_only_hunks": 0}
+            files.append(current)
+        else:
+            match = _HUNK.match(line)
+            if match and current is not None:
+                left = int(match.group(1)) if match.group(1) is not None else 1
+                right = int(match.group(2)) if match.group(2) is not None else 1
+                hunk = {"rem": [], "add": []}
+                current["hunks"] += 1
+        i += 1
+    close()
+
+    if owns:
+        files = [f for f in files if snapshot.covers(f["path"], list(owns))]
+    added = sum(f["added"] for f in files)
+    removed = sum(f["removed"] for f in files)
+    return {
+        "files": files,
+        "whitespace_only_total": sum(f["whitespace_only_hunks"] for f in files),
+        "ratio": round(added / max(removed, 1), 2),
+    }
+
+
+def render_churn(result):
+    """Lines for the Churn section: one line when clean, a bounded list if not."""
+    files = result["files"]
+    hunks = sum(f["hunks"] for f in files)
+    if not result["whitespace_only_total"]:
+        return [f"No whitespace-only hunks ({hunks} hunks in {len(files)} files, "
+                f"added/removed ratio {result['ratio']})."]
+    out = [
+        f"Advisory, severity important: {result['whitespace_only_total']} "
+        "whitespace-only hunk(s) - change nobody asked for. Overall "
+        f"added/removed ratio {result['ratio']}.",
+        "",
+    ]
+    ordered = sorted(files, key=lambda f: (-f["whitespace_only_hunks"], f["path"]))
+    for f in ordered[:CHURN_FILES_SHOWN]:
+        out.append(
+            f"- {f['path']}: {f['hunks']} hunks, +{f['added']}/-{f['removed']} "
+            f"(ratio {round(f['added'] / max(f['removed'], 1), 2)}), "
+            f"{f['whitespace_only_hunks']} whitespace-only"
+        )
+    if len(ordered) > CHURN_FILES_SHOWN:
+        out.append(f"… {len(ordered) - CHURN_FILES_SHOWN} more")
+    return out
+
+
+def _diff_body(layout, delta, base_key, head_key, siblings=(), uncapped=None):
+    """Unified diffs for every changed path, bounded in total size.
+
+    `siblings` is the wave's other running units as `[(name, owns)]`. A path one
+    of them declared has no bytes in either snapshot — this unit's captures only
+    store what it declared, and `build` no longer treats a sibling's path as a
+    violation worth filling in. Left to the generic "not shown" line it would be
+    blamed on a size cap, which is false and sends a reviewer looking for a
+    problem that is not there. It gets its own line, naming the unit whose work
+    it is, so the reviewer knows to leave it to that unit's own package.
+
+    When `uncapped` is a list, every file's raw diff is appended to it before the
+    budget is applied, so churn can see files the package had to drop.
+    """
+    sibling_owns = [pattern for _name, owns in siblings for pattern in owns]
+    chunks, used, omitted, elsewhere = [], 0, [], []
+    for path in delta.changed:
+        if snapshot.is_ledger(path):
+            continue
+        before = snapshot.stored_text(layout, base_key, path)
+        after = snapshot.stored_text(layout, head_key, path)
+        if before is None and after is None:
+            # Neither side was stored: binary, over the size cap, or outside the
+            # declared content set on both snapshots. Say which paths those are
+            # rather than silently omitting them.
+            if snapshot.covers(path, sibling_owns):
+                elsewhere.append(path)
+            else:
+                omitted.append(path)
+            continue
+        chunk = "".join(difflib.unified_diff(
+            (before or "").splitlines(True),
+            (after or "").splitlines(True),
+            fromfile=f"before/{path}" if before is not None else "/dev/null",
+            tofile=f"after/{path}" if after is not None else "/dev/null",
+            n=DIFF_CONTEXT,
+        ))
+        if not chunk:
+            continue
+        if uncapped is not None:
+            uncapped.append(chunk)
+        if used + len(chunk) > MAX_PACKAGE_BYTES:
+            omitted.append(path)
+            continue
+        used += len(chunk)
+        chunks.append("```diff\n" + chunk.rstrip("\n") + "\n```")
+
+    if elsewhere:
+        chunks.append(
+            "**Another unit's work** (changed in this shared working tree by a unit "
+            "running alongside this one, which declared it): "
+            + ", ".join(sorted(elsewhere)) + ". Not shown and not yours to review — "
+            "it arrives in that unit's own package."
+        )
+    if omitted:
+        chunks.append(
+            "**Not shown** (binary, over the size cap, or the package budget was "
+            "spent): " + ", ".join(sorted(omitted)) + ". Read those paths directly "
+            "if a finding depends on them, and say in your report that you did."
+        )
+    return "\n\n".join(chunks) if chunks else "(no textual change to show)"

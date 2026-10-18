@@ -1,0 +1,225 @@
+# Packaging metadata for Context Ledger.
+#
+# This file exists so that "we run ctx 0.8.0" is a checkable statement. Before
+# it, the plugin *was* the default branch: `.claude-plugin/marketplace.json`
+# declares `"source": "./"`, there were no tags, and `ctx` reached PATH only by
+# a symlink each engineer maintained by hand. Nothing here changes what the
+# code does; it gives a scanner, a mirror and an auditor something to read.
+#
+# Two properties are load-bearing and are asserted by tests/test_packaging.py,
+# so that losing either has to be a deliberate act rather than a drive-by edit:
+#
+#   * zero runtime dependencies — the whole runtime is stdlib, and the empty
+#     `dependencies` list below is the machine-readable form of that claim; and
+#   * one version, not three — the version is *derived* from `ctx/__init__.py`
+#     rather than restated here, so pyproject cannot drift from the source.
+
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "context-ledger"
+# Derived, never restated: see [tool.hatch.version] below. The import package
+# and the console script both stay `ctx`; only the distribution is renamed,
+# because `ctx` is not ours to take on an index.
+dynamic = ["version"]
+description = "Durable specs, plans, decisions and memory on disk for Claude Code sessions."
+readme = "README.md"
+# The floor is an install-time constraint, not a README claim: pip refuses the
+# install on 3.7 rather than failing at the first f-string.
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Ansh Chovatiya" }]
+keywords = [
+    "memory",
+    "context",
+    "planning",
+    "orchestration",
+    "hooks",
+    "verification",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Build Tools",
+]
+
+# THE ZERO-DEPENDENCY CLAIM. Empty on purpose and asserted structurally by
+# tests/test_packaging.py: adding a runtime dependency here turns the suite
+# red, so the plugin cannot quietly start adding to a host project's
+# dependency tree.
+dependencies = []
+
+[project.scripts]
+ctx = "ctx.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ansh-n-chovatiya/context-ledger"
+Source = "https://github.com/ansh-n-chovatiya/context-ledger"
+Changelog = "https://github.com/ansh-n-chovatiya/context-ledger/blob/main/CHANGELOG.md"
+
+# One source of truth for the version. `.claude-plugin/plugin.json` is held to
+# the same string by a test here and by the `ledger` job in CI.
+[tool.hatch.version]
+path = "ctx/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+# The wheel is the CLI and nothing else: the plugin assets below are source
+# artefacts for Claude Code, not importable code.
+packages = ["ctx"]
+
+[tool.hatch.build.targets.sdist]
+# An allowlist, not an ignore list, so that a new top-level directory has to be
+# added on purpose to ship. What a rebuild of this plugin needs, and nothing
+# else: notably not `.ctx/runtime/` (3.7 MB of this repository's own ledger
+# state) and not `tests/fixtures/` (a vendored copy of an old module).
+include = [
+    "/ctx",
+    "/bin",
+    "/commands",
+    "/agents",
+    "/skills",
+    "/hooks",
+    "/.claude-plugin",
+    "/LICENSE",
+    "/README.md",
+    # The README is now a hub: it links to docs/reference.md,
+    # docs/walkthroughs.md, docs/operations.md, and to GUIDE.md, SECURITY.md
+    # and docs/history/report.md beside them. Shipping the README without those puts an
+    # artefact on an index whose front page points at files it does not
+    # contain. The rule this list now follows is simply "if the shipped README
+    # links to it, it ships", and
+    # tests/test_lint_and_coverage.py::SdistContainsWhatTheReadmeLinksTo
+    # *builds the sdist and reads the archive* to hold it to that, rather than
+    # asserting that this list mentions a string.
+    "/docs",
+    "/GUIDE.md",
+    "/SECURITY.md",
+    "/docs/history/report.md",
+    "/CHANGELOG.md",
+    "/pyproject.toml",
+]
+
+# ---------------------------------------------------------------------------
+# ruff
+# ---------------------------------------------------------------------------
+# A narrow rule set, chosen by measurement rather than by taste: every rule
+# selected here is one the tree passes *today*, so the check starts green and
+# any red is a regression someone introduced. There is no `ignore` list at all
+# any more: the four codes it used to hold as follow-up work (F401, F841, B007,
+# E741) were live only in `tests/*.py`, and their 25 sites are fixed in the
+# tests rather than suppressed here -- so every selected rule is now live over
+# both trees, with no `# noqa` standing in for the work. What is left out is
+# left *unselected*, with its reason written below; nothing is selected and
+# then waved through. A configuration that excludes every file that would fail
+# is a check that cannot fail.
+#
+# No `target-version`: ruff reads it from `requires-python` above, and the
+# supported-Python floor belongs in exactly one place.
+[tool.ruff]
+# `tests/fixtures/` holds a byte-exact vendored copy of an old `ctx/findings.py`
+# that tests/test_findings_rounds.py corroborates against `git show`. It is not
+# excluded -- it passes the rules below -- but if a future rule fails there,
+# exclude it rather than editing it: editing it breaks the corroboration.
+extend-exclude = [".ctx"]
+
+[tool.ruff.lint]
+# The pyflakes/pycodestyle core plus the small, high-signal plugins whose
+# failures are bugs rather than opinions:
+#
+#   F        pyflakes -- undefined names, redefinitions, `is` on a literal.
+#   E4, E9   import placement, and syntax/IO errors ruff itself hits.
+#   E7       `== None`, bare `except`, `type(x) == y`, lambda assignment.
+#   W        trailing whitespace and, more usefully, W605 invalid escapes in
+#            a non-raw string -- a SyntaxWarning today and an error later.
+#   B        bugbear: mutable default arguments, `assert` on a tuple, and
+#            the rest of the "this is a bug, not a style" family.
+#   PLE      pylint's error class only, never its refactor/convention noise.
+#   YTT      `sys.version` comparisons. This package claims 3.8 through 3.13,
+#            so version sniffing done wrong is a real portability failure.
+#   EXE      shebang and executable-bit agreement, for `bin/` and the hooks.
+#   T10      a forgotten `breakpoint()` must never reach a release.
+#   PGH      no blanket `# noqa` and no blanket `# type: ignore`: a suppression
+#            has to name what it suppresses, or it silently grows.
+#   TID      no relative imports beyond the top level; tests/test_no_import_cycles.py
+#            polices the import graph and this keeps it readable.
+#   G, LOG   logging call shapes.
+#   INT, ICN, FLY, SLOT, RSE, ASYNC, RUF200
+#            small, unambiguous, and currently clean -- RUF200 in particular
+#            validates this very file.
+#
+# Deliberately NOT enabled, each for a stated reason:
+#   E501  line-too-long -- 157 violations, all in files this unit does not own.
+#         It would also make `tests/test_commands_registry.py`, which is
+#         generated output, break on a regeneration that happens to emit a
+#         long line: a formatting rule that fails on a machine-written file is
+#         a rule that will be turned off in a hurry.
+#   UP    pyupgrade -- 72 of its hits are UP031 printf-formatting, which this
+#         codebase uses on purpose to stay readable on 3.8.
+#   Q, COM  quote style and trailing commas -- 1234 hits, pure formatting, and
+#         none of it is a defect. If this repository ever wants them, it wants
+#         `ruff format`, not a lint gate.
+#   PT    2.700+ hits: it wants pytest idioms from a stdlib-`unittest` suite.
+#   SLF, FBT, EM, TRY, DTZ, PERF, ISC, SIM, RET, ARG, PLR
+#         opinions, or large mechanical diffs across `ctx/*.py`, which five
+#         other units of this wave just finished moving.
+select = [
+    "F",
+    "E4",
+    "E7",
+    "E9",
+    "W",
+    "B",
+    "PLE",
+    "YTT",
+    "EXE",
+    "T10",
+    "PGH",
+    "TID",
+    "G",
+    "LOG",
+    "INT",
+    "ICN",
+    "FLY",
+    "SLOT",
+    "RSE",
+    "ASYNC",
+    "RUF200",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Two single-file exemptions, kept per-file rather than global so the rule
+# stays live everywhere else -- including on `ctx/cli.py`, whose one
+# `# noqa: E731` on the REST lambda is load-bearing precisely because E731 is
+# still selected here.
+"tests/support.py" = ["E731"]          # one lambda helper, line 121.
+"tests/test_json_output.py" = ["W291"]  # 7 trailing spaces in a table literal.
+
+# ---------------------------------------------------------------------------
+# coverage
+# ---------------------------------------------------------------------------
+# Branch coverage, over the runtime package only. The floor CI enforces is not
+# written here: it lives in the `coverage` job's gate script in
+# .github/workflows/ci.yml, pinned to REQUIRED_LINE_FLOOR / REQUIRED_BRANCH_FLOOR
+# in tests/test_lint_and_coverage.py by a test that fails if either moves alone
+# -- the same shape as SUITE_FLOOR, whose missing agreement test let it drift
+# 459 tests below the suite it guarded.
+[tool.coverage.run]
+branch = true
+source = ["ctx"]
+
+[tool.coverage.report]
+# Measured honestly: no `exclude_lines` beyond coverage's own default
+# `# pragma: no cover`, so the number cannot be improved by annotating.
+show_missing = false
+skip_covered = false
