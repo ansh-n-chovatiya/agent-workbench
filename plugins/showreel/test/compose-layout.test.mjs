@@ -5,7 +5,7 @@ const input = { output: { width: 1920, height: 1080 }, source: { width: 1280, he
 test('band reserves 13%, overlay sits inside frame, and captions can be disabled', () => {
   const band = layoutFor(input);
   assert.deepEqual(band.caption, { x: 0, y: 940, w: 1920, h: 140 });
-  assert.deepEqual(band.frame, { x: 125, y: 0, w: 1671, h: 940 });
+  assert.deepEqual(band.frame, { x: 221, y: 54, w: 1479, h: 832 });
   const overlay = layoutFor({ ...input, composition: { ...input.composition, captions: { enabled: true, mode: 'overlay' } } });
   assert.deepEqual(overlay.frame, { x: 96, y: 54, w: 1728, h: 972 });
   assert.deepEqual(overlay.caption, { x: 269, y: 902, w: 1382, h: 81 });

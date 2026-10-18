@@ -6,7 +6,7 @@ const fresh = () => ({ brief: { ...structuredClone(DEFAULT_BRIEF), topic: 'Repor
 test('build uses real brief and record fields, deep merges overrides, suggests regions and leaves inputs untouched', () => {
   const input = fresh(), before = structuredClone(input), c = buildComposition(input);
   assert.deepEqual(input, before); assert.equal(c.run.id, input.record.runId);
-  assert.equal(c.cards.title.title, input.brief.topic); assert.equal(c.cards.title.duration, 2.2);
+  assert.equal(c.cards.title.title, input.brief.topic); assert.equal(c.cards.title.durationSec, 2.2);
   assert.equal(c.cards.outro.text, 'Thank you'); assert.equal(c.zoom.regions[0].source, 'auto');
   assert.deepEqual(validateComposition(c), { ok: true, errors: [], warnings: [] });
   for (const [depth, expected] of [['subtle', 1.35], ['medium', 1.7], ['strong', 2.1], [2.5, 2.5]]) {
@@ -40,8 +40,8 @@ test('validation collects errors, rejects unknown keys at all depths and handles
 test('boundary values validate and invalid scalar ranges fail independently', () => {
   const cases = [
     ['output.width', [2, 7680], [1, 7681, 2.5]], ['output.height', [2, 4320], [1, 4321]],
-    ['frame.paddingPct', [0, 25], [-1, 26]], ['cursor.sizePct', [0.1, 10], [0, 11]],
-    ['zoom.depth', [1.05, 4], [1, 4.1]], ['cards.fade', [0, 5], [-1, 6]],
+    ['frame.paddingPct', [0, 25], [-1, 26]], ['cursor.sizePct', [1, 8], [0, 0.9, 8.1, 11]],
+    ['zoom.depth', [1.05, 4], [1, 4.1]], ['cards.fade', [0, 1.5], [-1, 1.6, 6]],
     ['cards.title.duration', [0, 30], [-1, 31]], ['cards.outro.duration', [0, 30], [-1, 31]],
   ];
   for (const [path, good, bad] of cases) for (const value of [...good, ...bad, null, Infinity, '1']) {

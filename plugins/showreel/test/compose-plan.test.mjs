@@ -20,7 +20,7 @@ function run(scale = 1) {
 test('drawing plan combines cards, captions, zoom, cursor and speed changes on one clock', () => {
   const input = run(), before = structuredClone(input), plan = planRender(input), map = plan.timemap;
   assert.deepEqual(input, before);
-  assert.equal(plan.output.fps, 60); assert.equal(plan.cursor.sizePx, 14.58);
+  assert.equal(plan.output.fps, 60); assert.equal(plan.cursor.sizePx, 36.72);
   assert.deepEqual(plan.captions, input.composition.captions);
   assert.equal(plan.theme.name, 'clean'); assert.ok(plan.warnings.some((w) => w.includes('sharp limit')));
   assert.ok(plan.warnings.includes('Recording warning'));
@@ -44,7 +44,7 @@ test('real source pixel sizes keep camera and event coordinates in CSS pixels at
   assert.deepEqual(scaled.camera, normal.camera); assert.deepEqual(scaled.layout.frame, normal.layout.frame);
   assert.equal(scaled.scale, 2); assert.equal(scaled.layout.scaleFramePx, normal.layout.scaleFramePx / 2);
   assert.deepEqual(scaled.cursor.samples, normal.cursor.samples);
-  const limit = (plan) => Number(plan.warnings.find((w) => w.includes('sharp limit')).split(' ').at(-1));
+  const limit = (plan) => Number(plan.warnings.find((w) => w.includes('sharp limit'))?.split(' ').at(-1) ?? Infinity);
   assert.ok(limit(scaled) > limit(normal));
 });
 test('disabled tracks and cards do not draw effects, and invalid composition or run bounds fail', () => {

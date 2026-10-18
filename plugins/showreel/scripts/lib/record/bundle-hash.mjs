@@ -6,9 +6,16 @@ export const bundleInputs = [
   'package.json', 'package-lock.json',
 ];
 
-export async function encoderHash(root = new URL('../../../', import.meta.url)) {
+export const renderBundleInputs = [...bundleInputs,
+  'scripts/lib/compose/render-page.js',
+  ...['timemap', 'zoom', 'camera', 'cursor-track', 'captions', 'themes', 'layout', 'composition', 'plan']
+    .map((name) => `scripts/lib/compose/${name}.mjs`),
+];
+export const encoderHash = (root = new URL('../../../', import.meta.url)) => hashInputs(bundleInputs, root);
+export const renderHash = (root = new URL('../../../', import.meta.url)) => hashInputs(renderBundleInputs, root);
+async function hashInputs(inputs, root) {
   const hash = createHash('sha256');
-  for (const name of bundleInputs) {
+  for (const name of inputs) {
     hash.update(name + '\0');
     // Line endings are normalised: Git for Windows checks files out with CRLF, which would change the hash of identical sources.
     hash.update((await readFile(new URL(name, root), 'utf8')).replace(/\r\n/g, '\n'));

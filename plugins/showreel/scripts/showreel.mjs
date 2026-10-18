@@ -9,6 +9,8 @@ import { readProjectFile, writeProjectFile } from './lib/project.mjs';
 import { DEFAULT_BRIEF, validateBrief, setPath, questions } from './lib/brief.mjs';
 import { draftFromGuide, validateStoryboard } from './lib/storyboard.mjs';
 import { buildScenario, validateScenario } from './lib/scenario.mjs';
+import { validateComposition, compositionPaths, changeComposition } from './lib/compose/composition.mjs';
+import { readFile } from 'node:fs/promises';
 import { addGuideStep } from './lib/guide/commands.mjs';
 
 const help = `Usage: showreel <command>
@@ -24,6 +26,11 @@ Commands:
   record --name <name> [--headed] [--no-rehearsal] [--scale <S>] [--fps <N>]
   login --name <name> [--url <URL>]              Save a browser login session
   runs --name <name>                            List completed recordings
+  render --name <name> [--run <ID>] [--size 1080|4k] [--fps 30|60] [--out <FILE>] [--rebuild] [--stills T1,T2]
+  composition show --name <name> [--paths]      Inspect settings or list every settable path
+  composition validate --name <name>            Validate composition.json
+  composition set --name <name> --path a.b.c --value <json-or-string>
+  composition reset --name <name> --path a.b     Restore the theme default
   cursor-demo [--headed]                        Compare planned and linear motion
   --help                          Show this help
 `;
@@ -165,6 +172,47 @@ async function main(args) {
   const [command, ...flags] = args;
   if (['record', 'login', 'runs', 'cursor-demo'].includes(command)) {
     return recordingCommand(command, flags);
+  }
+  if (command === 'render') {
+    const { options } = parseOptions(flags, ['--name', '--run', '--size', '--fps', '--out', '--rebuild', '--stills'], ['--rebuild']);
+    const { renderRun } = await import('./lib/compose/render.mjs');
+    return renderRun({ name: options['--name'], runId: options['--run'], size: options['--size'],
+      fps: options['--fps'] === undefined ? undefined : Number(options['--fps']), out: options['--out'], rebuild: Boolean(options['--rebuild']),
+      stills: options['--stills'] ? options['--stills'].split(',').map(Number) : null });
+  }
+  if (command === 'composition') {
+    const [subcommand, ...rest] = flags;
+    if (!['show', 'validate', 'set', 'reset'].includes(subcommand)) throw new Error('Usage: showreel composition <show|validate|set|reset> --name <name>');
+    const allowed = ['--name', ...(subcommand === 'show' ? ['--paths'] : []), ...(['set','reset'].includes(subcommand) ? ['--path'] : []), ...(subcommand === 'set' ? ['--value'] : [])];
+    const { options } = parseOptions(rest, allowed, ['--paths']);
+    const name = options['--name'], file = path.join(projectDir(name), 'composition.json');
+    let c;
+    try { c = JSON.parse(await readFile(file, 'utf8')); }
+    catch (error) {
+      if (error.code !== 'ENOENT' || !['set','reset'].includes(subcommand)) throw error;
+      const { loadRunComposition } = await import('./lib/compose/render.mjs');
+      c = (await loadRunComposition({ name })).composition;
+    }
+    if (subcommand === 'show') console.log(options['--paths'] ? Object.entries(compositionPaths(c)).map(([p,v]) => `${p} = ${JSON.stringify(v)}`).join('\n') : JSON.stringify(c, null, 2));
+    else {
+      if (['set','reset'].includes(subcommand)) {
+        if (!options['--path'] || (subcommand === 'set' && options['--value'] === undefined)) throw new Error('--path and (for set) --value are required');
+        let value = options['--value'];
+        try { value = JSON.parse(value); } catch { /* Plain text is a supported value. */ }
+        c = changeComposition(c, options['--path'], value, { reset: subcommand === 'reset' });
+      }
+      const result = validateComposition(c);
+      printValidation(result);
+      if (result.ok) {
+        if (subcommand !== 'validate') {
+          const { resolveImageAssets } = await import('./lib/compose/render.mjs');
+          await resolveImageAssets(c, projectDir(name));
+          await writeFile(file, JSON.stringify(c, null, 2) + '\n');
+        }
+        console.log('ok');
+      }
+    }
+    return;
   }
   if (command === 'guide') return guideCommand(flags);
   if (command === 'snapshot') return snapshotCommand(flags);

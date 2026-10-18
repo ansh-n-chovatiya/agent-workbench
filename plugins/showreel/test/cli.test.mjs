@@ -64,3 +64,32 @@ test('doctor JSON is parseable and exit status reflects failed checks', async (t
   assert.ok(['kokoro', 'kokoro-low-priority'].includes(parsed.recommendations.voiceTier));
   assert.equal(cli('doctor', '--unsupported').status, 1);
 });
+
+test('composition set creates from newest run, show paths, reset and rejected writes stay atomic', async (t) => {
+  const { home, cli } = await setup(t);
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  const { DEFAULT_BRIEF } = await import('../scripts/lib/brief.mjs');
+  const dir = path.join(home,'state','projects','settings');
+  const runDir = path.join(dir,'runs','20261018-120000'); await mkdir(runDir,{recursive:true});
+  const brief = { ...structuredClone(DEFAULT_BRIEF), topic:'Report', theme:'dark' };
+  for (const [file,data] of Object.entries({brief,storyboard:{steps:[]}})) await writeFile(path.join(dir,`${file}.json`),JSON.stringify(data));
+  const events = { viewport:{width:1280,height:720}, targets:[], clicks:[], keys:[], cursor:[], steps:[] };
+  for (const [file,data] of Object.entries({ events, record:{runId:'20261018-120000',durationSec:4,scale:{used:1}} })) await writeFile(path.join(runDir,`${file}.json`),JSON.stringify(data));
+  await writeFile(path.join(runDir,'raw.mp4'),'placeholder');
+  const set = (p,v) => cli('composition','set','--name','settings','--path',p,'--value',v);
+  let result = set('cursor.style','ring'); assert.equal(result.status,0,result.stderr);
+  const file = path.join(dir,'composition.json');
+  assert.equal(JSON.parse(await readFile(file,'utf8')).cursor.style,'ring');
+  result = cli('composition','show','--name','settings','--paths'); assert.equal(result.status,0,result.stderr);
+  for (const p of ['frame.paddingXPct = 8','cursor.style = "ring"','cards.title.logo.image = null','output.quality = "standard"']) assert.ok(result.stdout.includes(p),p);
+  result = set('cards.title.titleColor','#123456'); assert.equal(result.status,0,result.stderr);
+  result = cli('composition','reset','--name','settings','--path','cards.title.titleColor'); assert.equal(result.status,0,result.stderr);
+  assert.equal(JSON.parse(await readFile(file,'utf8')).cards.title.titleColor,'#f9fafb');
+  result = set('frame.paddingPct','12'); assert.equal(result.status,0,result.stderr);
+  assert.equal(JSON.parse(await readFile(file,'utf8')).frame.paddingXPct,12);
+  const before = await readFile(file,'utf8');
+  for (const [p,v] of [['cursor.sizePct','9'],['cursor.extra','true'],['__proto__.polluted','true'],['frame.background','{"type":"image","image":"../outside.png"}']]) {
+    result = set(p,v); assert.equal(result.status,1,`${p}: ${result.stdout}`); assert.equal(await readFile(file,'utf8'),before);
+  }
+  result = cli('composition','validate','--name','settings'); assert.equal(result.status,0,result.stderr);
+});

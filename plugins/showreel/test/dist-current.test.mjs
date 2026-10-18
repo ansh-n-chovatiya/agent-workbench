@@ -4,13 +4,13 @@ import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { encoderHash, bundleInputs } from '../scripts/lib/record/bundle-hash.mjs';
+import { encoderHash, bundleInputs, renderHash, renderBundleInputs } from '../scripts/lib/record/bundle-hash.mjs';
 
-test('committed encoder bundle matches its sources', async () => {
+for (const [name, hash] of [['encoder', encoderHash], ['render', renderHash]]) test(`committed ${name} bundle matches its sources`, async () => {
   let text = '';
-  try { text = await readFile(new URL('../dist/encoder-page.js', import.meta.url), 'utf8'); }
+  try { text = await readFile(new URL(`../dist/${name}-page.js`, import.meta.url), 'utf8'); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
-  assert.equal(text.split(/\r?\n/)[0], `// showreel encoder sources sha256: ${await encoderHash()}`,
+  assert.equal(text.split(/\r?\n/)[0], `// showreel ${name} sources sha256: ${await hash()}`,
     'run npm run build');
 });
 
@@ -20,7 +20,7 @@ test('the source hash does not change when files are checked out with CRLF line 
     const roots = {};
     for (const [label, convert] of [['lf', (x) => x], ['crlf', (x) => x.replace(/\r?\n/g, '\r\n')]]) {
       const dir = path.join(base, label);
-      for (const name of bundleInputs) {
+      for (const name of new Set([...bundleInputs, ...renderBundleInputs])) {
         const source = await readFile(new URL('../' + name, import.meta.url), 'utf8');
         await mkdir(path.dirname(path.join(dir, name)), { recursive: true });
         await writeFile(path.join(dir, name), convert(source));
@@ -28,6 +28,7 @@ test('the source hash does not change when files are checked out with CRLF line 
       roots[label] = pathToFileURL(dir + path.sep);
     }
     assert.equal(await encoderHash(roots.crlf), await encoderHash(roots.lf));
+    assert.equal(await renderHash(roots.crlf), await renderHash(roots.lf));
   } finally { await rm(base, { recursive: true, force: true }); }
 });
 
