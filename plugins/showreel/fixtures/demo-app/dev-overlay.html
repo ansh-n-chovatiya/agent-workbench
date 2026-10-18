@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Overlay hygiene fixture</title>
+<style>
+body { min-height: 3500px; font: 24px system-ui; }
+nextjs-portal { display: block; position: fixed; inset: 0; background: red; z-index: 100; }
+</style>
+<nav><a href="index.html">Home</a></nav>
+<main><h1>Overlay hygiene</h1><section class="card">Tall page with scrollbars.</section>
+<label>Private value <input id="secret" type="password"></label>
+<button id="check">Check hygiene</button><output id="result"></output></main>
+<nextjs-portal>Development overlay must be hidden</nextjs-portal>
+<script>
+document.querySelector('#check').addEventListener('click', () => {
+  document.querySelector('#result').textContent =
+    getComputedStyle(document.querySelector('nextjs-portal')).display;
+});
+</script>
+</html>

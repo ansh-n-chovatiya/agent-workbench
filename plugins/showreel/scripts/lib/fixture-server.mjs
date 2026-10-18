@@ -10,6 +10,7 @@ const types = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.mp4': 'video/mp4',
 };
 const outside = (root, file) => {
   const relative = path.relative(root, file);
@@ -23,6 +24,12 @@ export async function startFixtureServer(dir = path.join(PLUGIN_ROOT, 'fixtures'
       res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end(text);
     };
+    if (req.method === 'POST' && req.url === '/api/choose') {
+      req.resume();
+      res.writeHead(204);
+      res.end();
+      return;
+    }
     if (!['GET', 'HEAD'].includes(req.method)) return reply(405, 'Method not allowed');
     let pathname;
     try { pathname = decodeURIComponent(req.url.split(/[?#]/, 1)[0]); }

@@ -1,6 +1,11 @@
 import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from 'playwright';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { startEncoder } from './record/frame-sink.mjs';
+import { installWriteGuard } from './record/write-guard.mjs';
 
 // JPEG segments carry their own lengths; skip metadata without decoding pixels.
 export function readJpegSize(bytes) {
@@ -31,18 +36,21 @@ export function readJpegSize(bytes) {
 // (measured 0.077 on a real site), and only the excess over that floor counts against a larger scale.
 export function recommendScale(results) {
   const floor = results.find(({ scale, layoutDrift }) => scale === 1 && Number.isFinite(layoutDrift))?.layoutDrift ?? 0;
-  const eligible = results.filter(({ scale, fps, layoutDrift, error }) => !error &&
-    Number.isFinite(scale) && scale > 0 && Number.isFinite(fps) && fps >= 50 &&
+  const eligible = results.filter(({ scale, fps, pipelineFps, layoutDrift, error }) => !error &&
+    Number.isFinite(scale) && scale > 0 && Number.isFinite(pipelineFps ?? fps) && (pipelineFps ?? fps) >= 50 &&
     Number.isFinite(layoutDrift) && layoutDrift >= 0 && layoutDrift - floor <= 0.02);
   return eligible.length ? Math.max(...eligible.map(({ scale }) => scale)) : 1;
 }
 
-async function openPage(browser, url, scale) {
+async function openPage(browser, url, scale, options = {}) {
+  const viewport = options.viewport ?? { width: 1920, height: 1080 };
   const context = await browser.newContext({
-    viewport: { width: Math.round(1920 * scale), height: Math.round(1080 * scale) },
+    viewport: { width: Math.round(viewport.width * scale), height: Math.round(viewport.height * scale) },
     deviceScaleFactor: 1,
+    storageState: options.storageState,
   });
   try {
+    if (options.guard) await installWriteGuard(context, options.guard);
     const page = await context.newPage();
     await page.goto(url, { waitUntil: 'load' });
     await page.evaluate(async (zoom) => {
@@ -63,7 +71,7 @@ function boxes(page, scale) {
   }), scale);
 }
 
-function layoutDrift(base, scaled) {
+export function layoutDrift(base, scaled) {
   const differences = base.flatMap((box, i) => {
     if (!box || !scaled[i]) return [1];
     // A one-pixel floor makes coordinates at zero meaningful without division by zero.
@@ -72,14 +80,15 @@ function layoutDrift(base, scaled) {
   return differences.reduce((sum, value) => sum + value, 0) / differences.length;
 }
 
-async function capture(page, context, seconds) {
+async function capture(page, context, seconds, onFrame) {
   const cdp = await context.newCDPSession(page);
   const stamps = [];
-  let bytes = 0, first = null;
+  let bytes = 0, first = null, failure;
   cdp.on('Page.screencastFrame', (frame) => {
     // Ack immediately so Node-side measurements do not throttle Chromium.
     void cdp.send('Page.screencastFrameAck', { sessionId: frame.sessionId }).catch(() => {});
     const jpeg = Buffer.from(frame.data, 'base64');
+    try { onFrame?.(jpeg, frame.metadata.timestamp); } catch (error) { failure ??= error; }
     first ??= jpeg;
     bytes += jpeg.length;
     stamps.push(performance.now());
@@ -107,6 +116,7 @@ async function capture(page, context, seconds) {
     await sleep(seconds * 1000);
     await cdp.send('Page.stopScreencast');
     const elapsed = (performance.now() - start) / 1000;
+    if (failure) throw failure;
     const size = readJpegSize(first);
     if (!size) throw new Error('Screencast produced no readable JPEG frame');
     return {
@@ -114,7 +124,10 @@ async function capture(page, context, seconds) {
       framesDropped: stamps.slice(1).filter((stamp, i) => stamp - stamps[i] > 50).length,
       bytesPerMinute: Math.round(bytes / elapsed * 60), framePixels: `${size.width}x${size.height}`,
     };
-  } finally { await cdp.detach().catch(() => {}); }
+  } finally {
+    try { await cdp.send('Page.stopScreencast').catch(() => {}); }
+    finally { await cdp.detach().catch(() => {}); }
+  }
 }
 
 export async function benchmarkCapture({ url, scales = [1, 1.33, 1.67, 2], seconds = 4 }) {
@@ -141,4 +154,64 @@ export async function benchmarkCapture({ url, scales = [1, 1.33, 1.67, 2], secon
     }
     return results;
   } finally { await browser?.close().catch(() => {}); }
+}
+
+export async function measureLayoutGuard(browser, url, scale, options = {}) {
+  let base;
+  const measurements = [];
+  for (const current of [1, 1, scale]) {
+    const opened = await openPage(browser, url, current, options);
+    try {
+      const measured = await boxes(opened.page, current);
+      if (!base) base = measured;
+      else measurements.push(layoutDrift(base, measured));
+    } finally { await opened.context.close(); }
+  }
+  return measurements[1] - measurements[0];
+}
+
+export async function benchmarkPipeline({ url, scales = [1, 1.33, 1.67, 2], seconds = 4,
+  browser: suppliedBrowser, viewport, guard = {}, storageState } = {}) {
+  if (!Number.isFinite(seconds) || seconds <= 0
+    || scales.some((scale) => !Number.isFinite(scale) || scale <= 0)) {
+    throw new Error('Capture scales and seconds must be positive finite numbers');
+  }
+  let browser, directory;
+  const options = { viewport, guard, storageState };
+  try {
+    directory = await mkdtemp(path.join(os.tmpdir(), 'showreel-pipeline-'));
+    browser = suppliedBrowser ?? await chromium.launch();
+    const baseline = await openPage(browser, url, 1, options);
+    let base;
+    try { base = await boxes(baseline.page, 1); }
+    finally { await baseline.context.close(); }
+    const results = [];
+    for (const scale of scales) {
+      let context, encoder;
+      try {
+        const opened = await openPage(browser, url, scale, options);
+        context = opened.context;
+        const drift = layoutDrift(base, await boxes(opened.page, scale));
+        const { width, height } = opened.page.viewportSize();
+        encoder = await startEncoder({ browser, width, height,
+          outFile: path.join(directory, `${scale}.mp4`) });
+        const start = performance.now();
+        const captured = await capture(opened.page, context, seconds,
+          (jpeg, ts) => encoder.push(jpeg, ts));
+        const stats = await encoder.finish(Date.now() / 1000);
+        encoder = null;
+        results.push({ scale, ...captured, layoutDrift: drift,
+          pipelineFps: Number((stats.frames / ((performance.now() - start) / 1000)).toFixed(1)),
+          dropped: stats.dropped, maxBacklog: stats.maxBacklog });
+      } catch (error) { results.push({ scale, error: error.message }); }
+      finally {
+        try { await encoder?.finish().catch(() => {}); }
+        finally { await context?.close(); }
+      }
+    }
+    return results;
+  } finally {
+    try { if (!suppliedBrowser) await browser?.close(); }
+    finally { if (directory) await rm(directory, { recursive: true, force: true }); }
+  }
 }

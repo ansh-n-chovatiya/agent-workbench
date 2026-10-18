@@ -2,7 +2,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { configTemplate, mergeConfig, readConfigFile } from './lib/config.mjs';
-import { projectDir } from './lib/paths.mjs';
+import { projectDir, HOME_DIR } from './lib/paths.mjs';
+import { recordingCommand } from './lib/record/commands.mjs';
 import { doctor, printDoctor } from './lib/doctor.mjs';
 import { readProjectFile, writeProjectFile } from './lib/project.mjs';
 import { DEFAULT_BRIEF, validateBrief, setPath, questions } from './lib/brief.mjs';
@@ -20,6 +21,10 @@ Commands:
   scenario <build|validate> --name <name>         Build or validate actions
   guide [resolve|add] --name <name>             Capture or resolve a guide
   snapshot --url <URL> [--max <N>]               List visible controls
+  record --name <name> [--headed] [--no-rehearsal] [--scale <S>] [--fps <N>]
+  login --name <name> [--url <URL>]              Save a browser login session
+  runs --name <name>                            List completed recordings
+  cursor-demo [--headed]                        Compare planned and linear motion
   --help                          Show this help
 `;
 
@@ -158,6 +163,9 @@ async function snapshotCommand(flags) {
 
 async function main(args) {
   const [command, ...flags] = args;
+  if (['record', 'login', 'runs', 'cursor-demo'].includes(command)) {
+    return recordingCommand(command, flags);
+  }
   if (command === 'guide') return guideCommand(flags);
   if (command === 'snapshot') return snapshotCommand(flags);
   if (command === '--help' && !flags.length) return console.log(help);
@@ -169,12 +177,16 @@ async function main(args) {
     const result = await doctor();
     if (flags.includes('--benchmark')) {
       const { startFixtureServer } = await import('./lib/fixture-server.mjs');
-      const { benchmarkCapture, recommendScale } = await import('./lib/capture-benchmark.mjs');
+      const { benchmarkPipeline, recommendScale } = await import('./lib/capture-benchmark.mjs');
       let server;
       try {
         server = await startFixtureServer();
-        result.benchmark = await benchmarkCapture({ url: `${server.url}/index.html`, seconds: 3 });
+        result.benchmark = await benchmarkPipeline({ url: `${server.url}/index.html`, seconds: 3 });
         result.recommendations.captureScale = recommendScale(result.benchmark);
+        await mkdir(HOME_DIR, { recursive: true });
+        await writeFile(path.join(HOME_DIR, 'benchmark.json'), JSON.stringify({
+          scale: result.recommendations.captureScale, at: new Date().toISOString(),
+        }) + '\n');
       } finally { await server?.close(); }
     }
     if (flags.includes('--json')) console.log(JSON.stringify(result, null, 2));

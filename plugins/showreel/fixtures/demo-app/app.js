@@ -21,6 +21,8 @@ for (const [index, tab] of tabs.entries()) {
 let toastTimer;
 for (const button of document.querySelectorAll('[data-plan]')) {
   button.addEventListener('click', () => {
+    // Selection feedback remains local even when the recorder blocks the write.
+    void fetch('/api/choose', { method: 'POST' }).catch(() => {});
     const toast = document.getElementById('plan-toast');
     toast.textContent = `${button.dataset.plan} selected. Your plan is ready to explore.`;
     toast.hidden = false;
