@@ -1,6 +1,8 @@
 # Brief S3: OpenScreen extractability
 You are a delegate. Claude reviews your work and re-runs your numbers, so report only what commands printed; never invent a figure. Work only under `spikes/showreel/`. No git commands. Do not touch `docs/` or `plugins/`. Run measurements alone (no other heavy processes). If a command is blocked or fails, report the exact error and stop that part; a failed attempt is a valid result.
 
+**Environment notes:** your sandbox cannot write to `~/.npm`; run every npm command as `npm_config_cache="$PWD/spikes/showreel/scratch/npm-cache" npm ...` (from the repo root) and use `git clone --depth 1`. `esbuild` and `playwright` are already installed in `spikes/showreel/node_modules`; do not install anything else. You have no browser; none is needed.
+
 Question: which parts of OpenScreen (MIT) can the showreel editor borrow without Electron, GSAP or its assets?
 1. `git clone https://github.com/siddharthvaddem/openscreen spikes/showreel/scratch/openscreen` and record the commit hash (`git rev-parse HEAD`).
 2. Do **Task 4 steps 2 and 3 of docs/41-showreel-phase0-plan.md** (read it): create `s3-extract/scan.mjs` exactly as shown, run it, and read LICENSE, package.json and each external package's licence (`npm view <pkg> license`). List every file under `public/` with its size and any licence statement you can find for it (README, a LICENSE or CREDITS file, filenames); if none is stated, write "unverified".

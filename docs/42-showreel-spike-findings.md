@@ -1,6 +1,6 @@
 # Showreel spike findings
 
-Status: **partial, 2026-10-18.** B0, S1, S2, S2b, S2c, S5 (speed and feasibility; blind listening pending), S6, S7 and S8 are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
+Status: **partial, 2026-10-18.** B0, S1, S2, S2b, S2c, S5, S6, S7 and S8 are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
 `spikes/showreel/results/*.json`. Test machine: Apple M4, 16 GB, macOS; Playwright 1.63.0; Node 24.
 
 ## B0: baseline token cost of the old skill
@@ -202,7 +202,7 @@ Findings:
 5. **Process exit:** calling `process.exit()` while ONNX Runtime threads are alive aborts with "mutex lock failed" after the work completes; the real skill must dispose sessions or use a worker process. Also `audio.save()` is asynchronous: await it before exiting.
 
 Proposed role: **Kokoro as the default voice; Kitten nano as an instant draft voice** in the editor (hear the script immediately, then render the final with Kokoro) and as the fallback tier for slow PCs. Because the Kitten port is unofficial and needs a patch, vendor the 62 KB package (Apache-2.0, keep its NOTICE) and fix the one line, rather than depending on npm.
-**Quality verdict: pending the owner's blind listening** (`~/Desktop/showreel-voice-blind-test`, files A to D; the key is stored outside the repo).
+**Quality verdict (owner's blind listen, 2026-10-18): Kokoro was clearly the best and clearest.** Of four anonymised samples (A Kokoro, B Kitten micro, C Kitten mini, D Kitten nano) the owner picked A. Consequences: Kokoro stays the default and the voice for every final render; the Kitten models are less clear, so they are limited to an optional instant *draft* preview and the slow-PC fallback, and the fallback must warn that clarity is lower. If draft clarity proves too poor in the editor, drop Kitten and use Kokoro alone (its 1-thread RTF of 0.47 is already fast enough for drafts on this machine).
 
 ## Tooling notes (2026-10-18)
 

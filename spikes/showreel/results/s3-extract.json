@@ -1,0 +1,511 @@
+{
+  "commit": "ca8104c279da0d4b4481ec992ff103949e22c772",
+  "files": [
+    {
+      "path": "src/lib/exporter/annotationRenderer.ts",
+      "loc": 492,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/exporter/asyncVideoFrameQueue.ts",
+      "loc": 78,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/exporter/audioEncoder.ts",
+      "loc": 826,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "web-demuxer"
+      ]
+    },
+    {
+      "path": "src/lib/exporter/frameRenderer.ts",
+      "loc": 1141,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "pixi.js",
+        "pixi-filters/motion-blur"
+      ]
+    },
+    {
+      "path": "src/lib/exporter/gifExporter.ts",
+      "loc": 408,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "gif.js"
+      ]
+    },
+    {
+      "path": "src/lib/exporter/gradientParser.ts",
+      "loc": 237,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/exporter/index.ts",
+      "loc": 30,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/exporter/mp4ExportSettings.ts",
+      "loc": 144,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/exporter/muxer.ts",
+      "loc": 87,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "mediabunny"
+      ]
+    },
+    {
+      "path": "src/lib/exporter/streamingDecoder.ts",
+      "loc": 780,
+      "electron": 7,
+      "gsap": 0,
+      "window_api": 3,
+      "externalImports": [
+        "web-demuxer"
+      ]
+    },
+    {
+      "path": "src/lib/exporter/threeDPass.ts",
+      "loc": 342,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/exporter/timestampedVideoFrameQueue.ts",
+      "loc": 111,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/exporter/types.ts",
+      "loc": 75,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/exporter/videoDecoder.ts",
+      "loc": 56,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/exporter/videoExporter.ts",
+      "loc": 746,
+      "electron": 2,
+      "gsap": 0,
+      "window_api": 2,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/exporter/webcamFrameDrawing.ts",
+      "loc": 44,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/cursor/cursorPathSmoothing.ts",
+      "loc": 238,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/cursor/cursorThemes.ts",
+      "loc": 422,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/cursor/nativeCursor.ts",
+      "loc": 628,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "pixi.js"
+      ]
+    },
+    {
+      "path": "src/lib/captioning/annotationsFromCaptions.ts",
+      "loc": 605,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/captioning/captionConstants.ts",
+      "loc": 3,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/captioning/extractMono16k.ts",
+      "loc": 160,
+      "electron": 3,
+      "gsap": 0,
+      "window_api": 2,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/captioning/extractMono16kWebDemuxer.ts",
+      "loc": 188,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "web-demuxer"
+      ]
+    },
+    {
+      "path": "src/lib/captioning/index.ts",
+      "loc": 18,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/captioning/leadingSilence.ts",
+      "loc": 79,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/captioning/transcribe.ts",
+      "loc": 107,
+      "electron": 2,
+      "gsap": 0,
+      "window_api": 2,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/captioning/transcribe.worker.ts",
+      "loc": 94,
+      "electron": 1,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/lib/captioning/transcribeCore.ts",
+      "loc": 269,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/timeline/BackgroundWaveform.tsx",
+      "loc": 139,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "dnd-timeline",
+        "react"
+      ]
+    },
+    {
+      "path": "src/components/video-editor/timeline/Item.tsx",
+      "loc": 185,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "dnd-timeline",
+        "lucide-react",
+        "react"
+      ]
+    },
+    {
+      "path": "src/components/video-editor/timeline/KeyframeMarkers.tsx",
+      "loc": 115,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "dnd-timeline",
+        "react"
+      ]
+    },
+    {
+      "path": "src/components/video-editor/timeline/Row.tsx",
+      "loc": 35,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "dnd-timeline"
+      ]
+    },
+    {
+      "path": "src/components/video-editor/timeline/Subrow.tsx",
+      "loc": 18,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/timeline/TimelineEditor.tsx",
+      "loc": 1669,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "dnd-timeline",
+        "lucide-react",
+        "react",
+        "sonner",
+        "uuid"
+      ]
+    },
+    {
+      "path": "src/components/video-editor/timeline/TimelineWrapper.tsx",
+      "loc": 546,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "dnd-timeline",
+        "react"
+      ]
+    },
+    {
+      "path": "src/components/video-editor/timeline/zoomSuggestionUtils.ts",
+      "loc": 157,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/constants.ts",
+      "loc": 25,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/cursorFollowUtils.ts",
+      "loc": 115,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/cursorRenderer.ts",
+      "loc": 766,
+      "electron": 1,
+      "gsap": 0,
+      "window_api": 1,
+      "externalImports": [
+        "pixi.js",
+        "pixi-filters/motion-blur"
+      ]
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/focusUtils.ts",
+      "loc": 141,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/index.ts",
+      "loc": 9,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/layoutUtils.ts",
+      "loc": 156,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "pixi.js"
+      ]
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/mathUtils.ts",
+      "loc": 85,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/motionSmoothing.ts",
+      "loc": 150,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "motion"
+      ]
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/overlayUtils.ts",
+      "loc": 65,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/uploadedCursorAssets.ts",
+      "loc": 71,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/videoEventHandlers.ts",
+      "loc": 184,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "react"
+      ]
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/zoomRegionUtils.ts",
+      "loc": 354,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/zoomSpring.ts",
+      "loc": 86,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/videoPlayback/zoomTransform.ts",
+      "loc": 250,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": [
+        "pixi.js",
+        "pixi-filters/motion-blur"
+      ]
+    },
+    {
+      "path": "src/lib/compositeLayout.ts",
+      "loc": 442,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    },
+    {
+      "path": "src/components/video-editor/types.ts",
+      "loc": 434,
+      "electron": 0,
+      "gsap": 0,
+      "window_api": 0,
+      "externalImports": []
+    }
+  ],
+  "assets": [
+    {
+      "path": "public/cursors",
+      "bytes": 608
+    },
+    {
+      "path": "public/demo.png",
+      "bytes": 2876033
+    },
+    {
+      "path": "public/openscreen.png",
+      "bytes": 873590
+    },
+    {
+      "path": "public/preview3.png",
+      "bytes": 1420008
+    },
+    {
+      "path": "public/preview4.png",
+      "bytes": 1668680
+    },
+    {
+      "path": "public/rec-button.png",
+      "bytes": 726
+    },
+    {
+      "path": "public/sample.png",
+      "bytes": 2607414
+    },
+    {
+      "path": "public/vite.svg",
+      "bytes": 1497
+    },
+    {
+      "path": "public/wallpapers",
+      "bytes": 640
+    },
+    {
+      "path": "public/wasm",
+      "bytes": 96
+    }
+  ]
+}
