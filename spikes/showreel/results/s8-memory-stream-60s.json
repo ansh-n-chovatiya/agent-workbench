@@ -1,0 +1,14 @@
+{
+  "width": 3840,
+  "height": 2160,
+  "fps": 60,
+  "seconds": 60,
+  "target": "stream",
+  "completed": true,
+  "encodedBytes": 579760480,
+  "frames": 3600,
+  "wallSeconds": 258.30409999996425,
+  "encodeFps": 13.9,
+  "peakJsHeapMb": 5,
+  "peakBrowserRssMb": 1492
+}

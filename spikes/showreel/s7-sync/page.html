@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8"><video id="v" src="/s7.mp4" muted playsinline style="width:640px"></video>
+<script>
+// mode: { correct: bool, load: bool, seconds: number }
+window.start = async (mode) => {
+  const v = document.getElementById('v');
+  const ac = new AudioContext(); await ac.resume();
+  if (mode.load) setInterval(() => { const t = performance.now(); while (performance.now() - t < 10) {} }, 33); // about 30 percent main-thread duty
+  const t0 = ac.currentTime + 0.5;
+  for (let t = 1; t < mode.seconds; t += 1) { const o = ac.createOscillator(); o.connect(ac.destination); o.start(t0 + t); o.stop(t0 + t + 0.05); }
+  const drift = []; let nudges = 0, seeks = 0; let first = true;
+  const audioAt = (perfMs) => { const ts = ac.getOutputTimestamp(); const ctxT = ts.contextTime || ac.currentTime; const perfT = ts.performanceTime || performance.now(); return ctxT + (perfMs - perfT) / 1000; };
+  return new Promise((resolve) => {
+    const onFrame = (now, meta) => {
+      const master = audioAt(meta.expectedDisplayTime || now) - t0;       // where the video should be, on the audio clock
+      if (master >= 0) {
+        const d = (meta.mediaTime - master) * 1000;                       // positive = video ahead of audio
+        if (!first) drift.push(d); first = false;
+        if (mode.correct) {
+          if (Math.abs(d) > 200) { v.currentTime = Math.max(0, master); seeks++; v.playbackRate = 1; }
+          else if (Math.abs(d) > 20) { v.playbackRate = d > 0 ? 0.97 : 1.03; nudges++; }
+          else v.playbackRate = 1;
+        }
+      }
+      if (master < mode.seconds - 1) v.requestVideoFrameCallback(onFrame); else resolve({ drift, nudges, seeks });
+    };
+    v.requestVideoFrameCallback(onFrame);
+    setTimeout(() => { v.currentTime = 0; v.play(); }, Math.max(0, (t0 - ac.currentTime) * 1000)); // start video when the audio timeline starts
+  });
+};
+</script>

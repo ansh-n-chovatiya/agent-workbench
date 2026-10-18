@@ -1,0 +1,15 @@
+{
+  "width": 3840,
+  "height": 2160,
+  "fps": 60,
+  "seconds": 10,
+  "target": "buffer",
+  "completed": true,
+  "encodedBytes": 96148531,
+  "frames": 600,
+  "wallSeconds": 26.230599999964237,
+  "encodeFps": 22.9,
+  "peakJsHeapMb": 5,
+  "peakBrowserRssMb": 1422,
+  "ffprobe": "h264,3840,2160,600"
+}

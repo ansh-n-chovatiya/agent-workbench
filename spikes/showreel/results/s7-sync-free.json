@@ -1,0 +1,12 @@
+{
+  "mode": "s7-sync-free",
+  "seconds": 180,
+  "frames": 5370,
+  "offsetMedianMs": 38.7,
+  "driftP95AroundMedianMs": 3.4,
+  "driftMaxAroundMedianMs": 3.7,
+  "slopeMsPerMinute": 2.39,
+  "absP95VsAudioMs": 41.9,
+  "nudges": 0,
+  "seeks": 0
+}

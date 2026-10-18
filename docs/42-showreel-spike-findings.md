@@ -1,6 +1,6 @@
 # Showreel spike findings
 
-Status: **partial, 2026-10-18.** B0, S1, S2, S2b and S2c are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
+Status: **partial, 2026-10-18.** B0, S1, S2, S2b, S2c, S6, S7 and S8 are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
 `spikes/showreel/results/*.json`. Test machine: Apple M4, 16 GB, macOS; Playwright 1.63.0; Node 24.
 
 ## B0: baseline token cost of the old skill
@@ -131,6 +131,52 @@ clearly softer, especially small text. Large headings survive upscaling.
 4. `doctor` runs a 10-second benchmark and picks the highest scale that holds 50 fps or better.
 5. The sharp zoom depth equals the capture scale; beyond it, the editor shows a "softness" warning on that zoom region.
 6. Still to verify: sites with fixed-position elements, canvas, iframes and `vh` units under CSS zoom, and behaviour on Windows and Linux.
+
+## S6: loudness and offline mixing: **go, with one addition (a limiter)**
+
+- A plain-JavaScript ITU-R BS.1770-4 meter (K-weighting plus gating, `spikes/showreel/s6-loudness/lufs.mjs`, written by Codex, verified
+  by me) reads the EBU reference (stereo 1 kHz sine at -23 dBFS) at **-22.993 LUFS**, a 6 dB louder signal exactly 6 LU louder, and
+  a one-channel-silent signal 3.010 LU lower (theory 3.01). Six tests pass; no tolerance was changed.
+- Offline mix in the browser (`OfflineAudioContext`: two narration clips plus a music bed, ducked to 25% with 150 ms attack and 400 ms
+  release): measured **-22.13 LUFS**; a gain of +6.13 dB gives **-16.00 LUFS** (target met within 0.01); ducking depth **12.04 dB**
+  (theory for 0.25 gain: 12.04 dB).
+- Caveats: the meter supports 48 kHz only (resample first); the test used synthetic tones, not speech. Speech has a high crest factor,
+  so raising a mix to -16 LUFS can push peaks past 0 dBFS: **add a true-peak limiter (about -1 dBTP) after the gain stage** and test it
+  on real narration in Phase 6.
+
+## S7: editor preview A/V sync: **go (calibrate the start offset)**
+
+3-minute run, 30 fps test video, audio-clock mapping per presented frame (`requestVideoFrameCallback` against `getOutputTimestamp`):
+
+| Mode | Start offset (median) | Drift p95 around the median | Max around median | Slope | Corrections |
+|---|---|---|---|---|---|
+| Free-running, idle | 38.7 ms | 3.4 ms | 3.7 ms | 2.4 ms per minute | none |
+| Free-running, 30% main-thread load | 24.5 ms | 3.4 ms | 3.7 ms | 2.4 ms per minute | none |
+| Corrected (rate nudges), same load | 16.5 ms | 3.4 ms | 29.8 ms | 0.75 ms per minute | 26 nudges, 0 seeks |
+
+Reading: a single audio clock keeps video and audio together: natural drift is about 2.4 ms per minute (about 7 ms over 3 minutes),
+unaffected by main-thread load. The remaining error is a **constant start offset** that varies from run to run (16 to 39 ms), so the
+editor should **calibrate once after playback starts** (measure the offset over the first second, then nudge or seek once) and
+compensate for the device's `outputLatency` (Bluetooth headphones add 100 ms or more). Corrected playback kept absolute error p95 at
+19.7 ms against the 40 ms target. Caveat: headless Chromium has no real audio device, so real output latency and decode load of a 4K
+proxy still need a check in Phase 5.
+
+## S8: 4K export memory: **go, with changes**
+
+3840x2160, 60 fps, H.264 at a 40 Mbps target, WebCodecs through mediabunny, headless Chromium:
+
+| Run | Completed | Output | Peak browser memory | Encode speed |
+|---|---|---|---|---|
+| 10 s, buffered | yes (ffprobe: h264 3840x2160, 600 frames) | 96 MB | 1,422 MB | 22.9 fps |
+| 60 s, buffered | yes | 580 MB | 1,646 MB | 16.4 fps |
+| 60 s, streamed | yes | 580 MB | 1,492 MB | 13.9 fps |
+
+Findings: (1) memory stays below 1.7 GB, mostly in the encoder and canvas pipeline (JS heap about 5 MB); streaming output saves only
+about 150 MB. (2) Returning the 580 MB file to Node as one string failed (`RangeError: Invalid string length`), so **the editor must write
+exports to disk in chunks** (File System Access API or a streamed download), never assemble them in one value. (3) 4K export runs at
+14 to 23 fps, about 0.25 to 0.4 times real time on this machine, so a 3-minute 4K export would take roughly 10 to 13 minutes: **default to
+1080p60, offer 4K as opt-in, and show progress with an ETA**. The synthetic frame drawing is CPU-bound, so this is a pessimistic upper
+bound for the real compositor. Windows and Linux are untested.
 
 ## Tooling notes (2026-10-18)
 

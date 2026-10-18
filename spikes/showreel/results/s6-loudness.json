@@ -1,0 +1,9 @@
+{
+  "measuredLufs": -22.13,
+  "gainDb": 6.13,
+  "afterGainLufs": -16,
+  "withinOneLU": true,
+  "musicDuringNarrationDb": -38.06,
+  "musicBetweenClipsDb": -26.02,
+  "duckingDepthDb": 12.04
+}

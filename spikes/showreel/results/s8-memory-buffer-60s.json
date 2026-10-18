@@ -1,0 +1,15 @@
+{
+  "width": 3840,
+  "height": 2160,
+  "fps": 60,
+  "seconds": 60,
+  "target": "buffer",
+  "completed": true,
+  "encodedBytes": 579760464,
+  "frames": 3600,
+  "wallSeconds": 219.35180000001193,
+  "encodeFps": 16.4,
+  "peakJsHeapMb": 5,
+  "peakBrowserRssMb": 1646,
+  "error": "page.evaluate: RangeError: Invalid string length"
+}

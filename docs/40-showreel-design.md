@@ -297,3 +297,9 @@ Measured on an Apple M4 (see `docs/42-showreel-spike-findings.md`); verify on Wi
   fills to the output rate.
 - **Readiness:** wait for `domcontentloaded` plus a settle time (or an explicit readiness signal), never `networkidle`.
 - **Open checks:** fixed-position elements, canvas, iframes and `vh` units under CSS zoom; Windows and Linux behaviour.
+
+## 23. Findings applied from S6, S7 and S8 (2026-10-18)
+
+- **Loudness:** after normalising to -16 LUFS, apply a true-peak limiter (about -1 dBTP); validate on real narration in Phase 6. The meter is 48 kHz only, so resample first.
+- **Preview sync:** one audio clock drives playback; calibrate the start offset once after playback begins and compensate for the device's `outputLatency`. Natural drift is about 2.4 ms per minute.
+- **Export:** write output to disk in chunks (never assemble a whole file in one value); default to 1080p60, 4K opt-in; show progress and an ETA (4K encodes at about 14 to 23 fps on an M4); peak browser memory about 1.7 GB at 4K.
