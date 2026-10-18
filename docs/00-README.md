@@ -25,6 +25,7 @@ settled before any code is written.
 | 23 | [design-scope-discipline](23-design-scope-discipline.md) | Design | proposed |
 | 30 | [build-plan](30-build-plan.md) | Plan | proposed |
 | 31 | [risks-and-open-questions](31-risks-and-open-questions.md) | Plan | living list |
+| 40 | [showreel-design](40-showreel-design.md) | Design | proposed, awaiting owner review (replaces the `demo-video` skill) |
 
 `_seed-claude-token-router.md` is the owner's original spec. It is kept for reference; where it disagrees with the
 research (see 10 and 20), the research wins.
