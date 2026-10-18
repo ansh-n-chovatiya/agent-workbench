@@ -35,7 +35,7 @@ const sections = { shadow: 'Frame shadow', border: 'Frame border', background: '
 const labelFor = path => {
   const parts = path.split('.'), leaf = parts.at(-1), parent = parts.at(-2);
   if (parent === 'hotspot') return `${sections[parts.at(-3)]} ${names[leaf].toLowerCase()}`;
-  if (leaf === 'enabled') return ({ zoom: 'Enable zoom', captions: 'Show captions', title: 'Show title card', outro: 'Show outro card',
+  if (leaf === 'enabled') return ({ zoom: 'Enable zoom', captions: 'Show captions', title: 'Intro card', outro: 'Outro card',
     shadow: 'Show frame shadow', border: 'Show frame border', followThrough: 'Enable follow through', accent: 'Show accent' })[parent];
   if (path === 'cursor.clickEffect.sizeMult') return 'Click effect size';
   if (path === 'cursor.custom.heightPct') return 'Custom cursor height';

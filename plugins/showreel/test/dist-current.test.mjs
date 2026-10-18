@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
@@ -38,8 +40,15 @@ test('editor HTML matches its source', async () => {
   assert.equal(await readFile(new URL('../dist/editor/index.html',import.meta.url),'utf8'), await readFile(new URL('../editor/index.html',import.meta.url),'utf8'));
 });
 
-test('editor CSS matches its source', async () => {
-  assert.equal(await readFile(new URL('../dist/editor/editor.css',import.meta.url),'utf8'), await readFile(new URL('../editor/editor.css',import.meta.url),'utf8'));
+test('editor CSS matches the minified Tailwind build of its sources', async () => {
+  const output = await mkdtemp(path.join(os.tmpdir(), 'showreel-css-'));
+  try {
+    const require = createRequire(import.meta.url);
+    const cli = path.join(path.dirname(require.resolve('@tailwindcss/cli/package.json')), 'dist/index.mjs');
+    const css = path.join(output, 'editor.css');
+    execFileSync(process.execPath, [cli, '-i', 'editor/styles.css', '-o', css, '--minify'], {cwd:fileURLToPath(new URL('../',import.meta.url)),stdio:'pipe'});
+    assert.equal(await readFile(new URL('../dist/editor/editor.css',import.meta.url),'utf8'), await readFile(css,'utf8'));
+  } finally { await rm(output,{recursive:true,force:true}); }
 });
 
 test('editor freshness includes every editor source and asset', async () => {

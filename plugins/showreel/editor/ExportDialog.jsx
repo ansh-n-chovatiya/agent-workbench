@@ -1,5 +1,9 @@
 import { h, Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { Dialog } from './ui/dialog.jsx';
+import { Select } from './ui/select.jsx';
+import { Label } from './ui/label.jsx';
+import { Button } from './ui/button.jsx';
 import { changeComposition } from '../scripts/lib/compose/composition.mjs';
 import { request } from './state.js';
 import { createSSEParser } from './helpers.mjs';
@@ -8,10 +12,9 @@ export function ExportDialog({ store, onClose }) {
   const initial = store.getState().composition.output;
   const [size, setSize] = useState(initial.height > 1080 ? '4k' : '1080'), [fps, setFps] = useState(initial.fps);
   const [job, setJob] = useState({ event: 'idle', data: {} }), [error, setError] = useState(''), [busy, setBusy] = useState(false);
-  const [eta, setEta] = useState(null), dialog = useRef(), started = useRef(0), stream = useRef(null);
+  const [eta, setEta] = useState(null), started = useRef(0), stream = useRef(null);
   const running = busy || ['started', 'progress', 'log'].includes(job.event);
   useEffect(() => {
-    dialog.current.showModal();
     watch();
     return () => stream.current?.abort();
   }, []);
@@ -48,16 +51,15 @@ export function ExportDialog({ store, onClose }) {
     try { await request('/api/export/cancel', { method: 'POST' }); }
     catch (e) { setError(e.message); }
   }
-  return <dialog ref={dialog} onCancel={e => { if (running) e.preventDefault(); else onClose(); }} aria-labelledby="export-title">
-    <div class="dialog-heading"><h2 id="export-title">Export composition</h2><button disabled={running} aria-label="Close export" onClick={onClose}>×</button></div>
-    <div class="export-options"><label>Size <select disabled={running} value={size} onChange={e => setSize(e.currentTarget.value)}><option value="1080">1080p</option><option value="4k">4K</option></select></label>
-      <label>Frame rate <select disabled={running} value={fps} onChange={e => setFps(+e.currentTarget.value)}><option value="30">30 fps</option><option value="60">60 fps</option></select></label></div>
+  return <Dialog title="Export composition" description="Save your edited video as an MP4 file." onClose={onClose} locked={running}>
+    <div class="export-options"><Label>Size <Select aria-label="Size" disabled={running} value={size} onValueChange={setSize} options={[{value:'1080',label:'1080p'},{value:'4k',label:'4K'}]} /></Label>
+      <Label>Frame rate <Select aria-label="Frame rate" disabled={running} value={fps} onValueChange={next => setFps(+next)} options={[{value:30,label:'30 fps'},{value:60,label:'60 fps'}]} /></Label></div>
     <div aria-live="polite"><p>{job.event === 'idle' ? 'Ready to export' : job.event}</p>
       {running && <><progress aria-label="Export progress" max={job.data.total ?? 1} value={job.data.frame ?? 0} /><p>{job.data.frame ?? 0} / {job.data.total ?? '…'} frames{eta !== null ? ` · ETA ${eta}s` : ''}</p></>}
-      {job.event === 'complete' && <><p class="output-path">{job.data.finalFile}</p><button onClick={() => request('/api/reveal', { method: 'POST' }).catch(e => setError(e.message))}>Reveal</button></>}
+      {job.event === 'complete' && <><p class="output-path">{job.data.finalFile}</p><Button onClick={() => request('/api/reveal', { method: 'POST' }).catch(e => setError(e.message))}>Reveal</Button></>}
       {job.event === 'error' && <p class="error">{job.data.message}</p>}
     </div>
     {error && <p role="alert" class="error">{error}</p>}
-    <div class="dialog-actions">{running ? <><button onClick={cancel}>Cancel export</button>{error && <button onClick={() => { setError(''); watch(); }}>Reconnect progress</button>}</> : <button class="primary" onClick={start}>Start export</button>}</div>
-  </dialog>;
+    <div class="dialog-actions">{running ? <><Button onClick={cancel}>Cancel export</Button>{error && <Button onClick={() => { setError(''); watch(); }}>Reconnect progress</Button>}</> : <Button variant="default" onClick={start}>Start export</Button>}</div>
+  </Dialog>;
 }

@@ -42,4 +42,4 @@ export function createSSEParser(onEvent) {
     }
   };
 }
-export const isTyping = target => !!target?.closest?.('input, textarea, select, [contenteditable="true"]');
+export const isTyping = target => !!target?.closest?.('input, textarea, select, [contenteditable="true"], [role="slider"], [role="combobox"], [role="tab"], [role="switch"], [role="checkbox"]');

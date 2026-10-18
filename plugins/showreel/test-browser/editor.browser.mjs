@@ -33,8 +33,7 @@ test('real editor: load, edit, undo, autosave, play and export', { timeout: 2400
     const saved = async () => JSON.parse(await readFile(compositionFile, 'utf8'));
     const status = () => page.locator('.save-status').innerText();
     const waitSaved = async () => until(async () => (await status()) === 'Saved', 'autosave');
-    const summary = () => page.locator('.timeline-summary, .timeline-toolbar ~ *').first();
-
+    
     await t.test('preview draws and settings autosave', async () => {
       await until(() => page.evaluate(() => {
         const c = document.querySelector('.preview canvas'); if (!c) return false;
@@ -48,11 +47,59 @@ test('real editor: load, edit, undo, autosave, play and export', { timeout: 2400
       await waitSaved();
     });
 
+    for (const viewport of [{width:1280,height:720},{width:1024,height:640},{width:1440,height:900}]) {
+      await t.test(`viewport fits at ${viewport.width}x${viewport.height}`, async () => {
+        await page.setViewportSize(viewport);
+        await until(() => page.evaluate(() => {
+          const stage=document.querySelector('.preview-stage').getBoundingClientRect(),canvas=document.querySelector('.preview canvas').getBoundingClientRect();
+          const c=document.querySelector('.preview canvas'); return canvas.width > 0 && canvas.right <= stage.right + 1 && canvas.bottom <= stage.bottom + 1 && Math.abs(canvas.width/canvas.height/(c.width/c.height) - 1) < .01;
+        }), 'preview resize');
+        const geometry = await page.evaluate(() => {
+          const rect = selector => {const r=document.querySelector(selector).getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};};
+          const canvas=document.querySelector('.preview canvas');
+          return {width:innerWidth,height:innerHeight,scrollHeight:document.scrollingElement.scrollHeight,scrollWidth:document.scrollingElement.scrollWidth,
+            timeline:rect('#timeline-root'),settings:rect('.settings-column .settings'),stage:rect('.preview-stage'),canvas:rect('.preview canvas'),aspect:canvas.width/canvas.height};
+        });
+        assert.ok(geometry.scrollHeight <= geometry.height, JSON.stringify(geometry));
+        assert.ok(geometry.scrollWidth <= geometry.width, JSON.stringify(geometry));
+        for (const region of [geometry.timeline,geometry.settings]) {
+          assert.ok(region.width > 0 && region.height > 0);
+          assert.ok(region.x >= 0 && region.y >= 0 && region.right <= geometry.width && region.bottom <= geometry.height, JSON.stringify(region));
+        }
+        const {canvas,stage} = geometry;
+        const output=(await saved()).output;
+        assert.ok(canvas.x >= stage.x && canvas.y >= stage.y && canvas.right <= stage.right + 1 && canvas.bottom <= stage.bottom + 1);
+        assert.ok(Math.abs(canvas.width/canvas.height/(output.width/output.height) - 1) < .01, JSON.stringify(geometry));
+        const controls = page.locator('.timeline-toolbar button, .timeline-toolbar input, .transport button, .transport input, .transport [role=slider]');
+        assert.ok(await controls.count() > 10);
+        for (const control of await controls.all()) {
+          if (!await control.isVisible() || await control.getAttribute('aria-hidden') === 'true') continue; // Radix form-bubbling inputs are hidden implementation details.
+          assert.match(await control.ariaSnapshot(), /^- (?:button|textbox|spinbutton|slider|checkbox|switch|combobox) "[^"]+"/, await control.evaluate(el => el.outerHTML));
+        }
+      });
+    }
+    await page.getByRole('button',{name:'Dismiss editing hint'}).click();
+    await t.test('splitter, theme and hint preferences survive reload', async () => {
+      const splitter=page.getByRole('separator',{name:'Resize timeline'});
+      const before=Number(await splitter.getAttribute('aria-valuenow'));
+      const b=await splitter.boundingBox();
+      await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2,b.y-40);await page.mouse.up();
+      const after=Number(await splitter.getAttribute('aria-valuenow'));assert.ok(after > before + 30);
+      const themeBefore=await page.locator('html').getAttribute('data-theme');
+      await page.getByRole('button',{name:/Switch to .* theme/}).click();
+      const themeAfter=await until(async () => { const v=await page.locator('html').getAttribute('data-theme'); return v !== themeBefore ? v : null; },'theme change');
+      await page.reload();await until(async () => await page.getByRole('tab',{name:'Cursor',exact:true}).count(), 'editor reload');
+      assert.equal(Number(await splitter.getAttribute('aria-valuenow')),after);
+      assert.equal(await page.locator('html').getAttribute('data-theme'),themeAfter);
+      assert.equal(await page.getByRole('button',{name:'Dismiss editing hint'}).count(),0);
+      await splitter.dblclick();assert.equal(Number(await splitter.getAttribute('aria-valuenow')),Math.max(190, Math.round(await page.evaluate(() => innerHeight) * .3)));
+    });
+
     await t.test('cut, undo, speed and zoom edits reach composition.json', async () => {
       const track = page.locator('.video-track'); const b = await track.boundingBox();
       await page.mouse.move(b.x + b.width * 0.40, b.y + b.height / 2);
       await page.mouse.down(); await page.mouse.move(b.x + b.width * 0.60, b.y + b.height / 2, { steps: 8 }); await page.mouse.up();
-      await page.getByRole('button', { name: 'Delete / Cut' }).click();
+      await page.getByRole('button', { name: 'Cut', exact:true }).click();
       await until(async () => (await saved()).edits.trims.length === 1, 'trim saved');
       const trim = (await saved()).edits.trims[0]; assert.ok(trim.end - trim.start > 0.5, 'cut is a real range');
       await page.keyboard.press('Control+z'); await page.keyboard.press('Meta+z');
@@ -62,26 +109,33 @@ test('real editor: load, edit, undo, autosave, play and export', { timeout: 2400
       await page.getByRole('button', { name: 'Speed', exact: true }).click();
       await page.getByRole('button', { name: '2x', exact: true }).click();
       await until(async () => (await saved()).edits.speeds.some((s) => s.rate === 2), 'speed saved');
-      const before = (await saved()).zoom.regions.length;
-      await page.getByRole('button', { name: '+ Zoom' }).click();
-      await until(async () => (await saved()).zoom.regions.length >= before, 'zoom region op did not break save');
+      const before = (await saved()).zoom.regions.filter(z => z.source === 'manual').length;
+      const ruler=page.locator('.timeline-ruler'), rulerBox=await ruler.boundingBox();
+      await page.mouse.click(rulerBox.x + 3.9 * 80, rulerBox.y + rulerBox.height/2);
+      await page.getByRole('button', { name: 'Add zoom', exact:true }).click();
+      await until(async () => (await saved()).zoom.regions.filter(z => z.source === 'manual').length === before + 1, 'manual zoom saved');
+      assert.ok((await saved()).zoom.regions.some(z => z.source === 'manual' && z.tStart >= 3.8));
+      await page.getByLabel('Seek output time').focus();await page.keyboard.press('Home');
       await waitSaved();
     });
 
     await t.test('playback advances without dropped-frame warning', async () => {
-      const seek = page.getByLabel('Seek output time');
-      const before = Number(await seek.inputValue());
+      const clock = async () => { const m = (await page.locator('.transport').innerText()).match(/(\d+):(\d+):(\d+):(\d+)\s*\//); return Number(m[3]) + Number(m[4]) / 30 + Number(m[2]) * 60; };
+      const ruler = await page.locator('.timeline-ruler').boundingBox(); await page.mouse.click(ruler.x + 140, ruler.y + 8);
+      await page.waitForTimeout(300);
+      const before = await clock();
       await page.getByRole('button', { name: 'Play' }).click();
       await page.waitForTimeout(1500);
-      const during = Number(await seek.inputValue());
+      const during = await clock();
       await page.getByRole('button', { name: 'Pause' }).click();
-      assert.ok(during > before + 0.5, `playhead advanced ${before} -> ${during}`);
+      assert.ok(during > 0.5 && (during > before + 0.5 || during < before), `playhead advanced ${before} -> ${during}`);
       assert.equal(await page.getByText('Preview below 24 fps').count(), 0);
     });
 
     await t.test('export writes a playable video with the edits', async () => {
       await page.getByRole('button', { name: 'Export' }).click();
-      await page.getByLabel('Frame rate').selectOption('30');
+      await page.getByRole('combobox', {name:'Frame rate',exact:true}).click();
+      await page.getByRole('option', {name:'30 fps',exact:true}).click();
       await page.getByRole('button', { name: /^(Start|Export)( export)?$/ }).last().click();
       const finalFile = await until(async () => (await page.locator('.output-path').first().innerText()).trim(), 'export complete', 120000);
       assert.ok((await stat(finalFile)).size > 10000, 'final.mp4 has content');

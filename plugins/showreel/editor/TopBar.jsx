@@ -1,17 +1,20 @@
 import { h } from 'preact';
 import { useState } from 'preact/hooks';
+import { Moon, Sun, Undo2, Redo2, Download, Clapperboard } from 'lucide-preact';
 import { ExportDialog } from './ExportDialog.jsx';
-
-export function TopBar({ state, store }) {
+import { Button } from './ui/button.jsx';
+import { Tooltip } from './ui/tooltip.jsx';
+export function TopBar({ state, store, theme, toggleTheme, notify }) {
   const [exportOpen, setExportOpen] = useState(false);
   const status = state.error ? 'Error' : state.saving || state.dirty ? 'Saving' : 'Saved';
   return <header class="topbar">
-    <div class="brand">SHOWREEL<span>EDITOR</span></div>
-    <div class="project-name"><strong>{state.project?.name ?? 'Loading project…'}</strong><small>{state.project?.runId}</small></div>
+    <div class="brand"><Clapperboard size={20} aria-hidden="true" /><span>Showreel</span></div>
+    <div class="project-name"><strong>{state.project?.name ?? 'Loading project…'}</strong></div>
     <span class={`save-status ${state.error ? 'error' : ''}`} role="status" title={state.error ?? ''}>{status}</span>
-    {state.error && state.dirty && <button onClick={() => store.save().catch(() => {})}>Retry save</button>}
-    <div class="history"><button disabled={!state.past.length} onClick={store.undo} title="Undo (⌘/Ctrl Z)">Undo</button><button disabled={!state.future.length} onClick={store.redo} title="Redo (⌘/Ctrl Shift Z)">Redo</button></div>
-    <button class="primary" disabled={!state.composition} onClick={() => setExportOpen(true)}>Export</button>
+    {state.error && state.dirty && <Button onClick={() => store.save().catch(() => {})}>Retry save</Button>}
+    <div class="history"><Tooltip text={state.past.length ? 'Undo (⌘/Ctrl Z)' : 'Nothing to undo (⌘/Ctrl Z)'}><Button size="icon" disabled={!state.past.length} aria-label="Undo" onClick={() => {store.undo(); notify('Undone');}}><Undo2 size={16} aria-hidden="true" /></Button></Tooltip><Tooltip text={state.future.length ? 'Redo (⌘/Ctrl Shift Z)' : 'Nothing to redo (⌘/Ctrl Shift Z)'}><Button size="icon" disabled={!state.future.length} aria-label="Redo" onClick={() => {store.redo(); notify('Redone');}}><Redo2 size={16} aria-hidden="true" /></Button></Tooltip></div>
+    <Tooltip text={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}><Button size="icon" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} onClick={toggleTheme}>{theme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}</Button></Tooltip>
+    <Tooltip text={state.composition ? 'Export your video' : 'Load a recording before exporting'}><Button variant="default" disabled={!state.composition} onClick={() => setExportOpen(true)}><Download size={16} aria-hidden="true" />Export</Button></Tooltip>
     {exportOpen && <ExportDialog store={store} onClose={() => setExportOpen(false)} />}
   </header>;
 }

@@ -1,8 +1,16 @@
-import { h } from 'preact';
+import { h, Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { outputAt, sourceAt } from '../scripts/lib/compose/timemap.mjs';
 import { zoomDepth } from '../scripts/lib/compose/composition.mjs';
 import * as ops from './edit-ops.mjs';
+import { Button } from './ui/button.jsx';
+import { Input } from './ui/input.jsx';
+import { Label } from './ui/label.jsx';
+import { Popover } from './ui/popover.jsx';
+import { Tooltip } from './ui/tooltip.jsx';
+import { Separator } from './ui/separator.jsx';
+import { ToggleGroup } from './ui/toggle-group.jsx';
+import { Badge } from './ui/badge.jsx';
 import { isTyping } from './helpers.mjs';
 
 const clock = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5,'0')}`;
@@ -110,7 +118,7 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
   useEffect(() => {
     if (!plan) return;
     const keydown = e => {
-      if (isTyping(e.target) || document.querySelector('dialog[open]') || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isTyping(e.target) || document.querySelector('[role="dialog"], [role="listbox"]') || e.ctrlKey || e.metaKey || e.altKey) return;
       const key = e.key.toLowerCase();
       if (['s','x','z','c','delete','backspace'].includes(key)) {
         if (e.target.closest('button') && ['delete','backspace'].includes(key)) return;
@@ -192,8 +200,8 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
       class={`timeline-block ${kind} ${active ? 'selected' : ''}`} style={style(start,end)} onPointerDown={e => drag(e,sel)}
       onFocus={() => setSelection(sel)} onClick={() => setSelection(sel)} onDblClick={() => { if(sel.type === 'caption') setEditing({id:sel.id,text:label}); }}
       onKeyDown={e => { if (e.key === 'Enter') { setSelection(sel); if(sel.type === 'caption') setEditing({id:sel.id,text:label}); } }}>
-      <button class="edge start" aria-label={`Resize ${kind} start`} onPointerDown={e => drag(e,sel,'start')} onKeyDown={e => resizeKey(e,sel,'start')} />
-      <span>{label}</span><button class="edge end" aria-label={`Resize ${kind} end`} onPointerDown={e => drag(e,sel,'end')} onKeyDown={e => resizeKey(e,sel,'end')} />
+      <Button class="edge start" aria-label={`Resize ${kind} start`} onPointerDown={e => drag(e,sel,'start')} onKeyDown={e => resizeKey(e,sel,'start')} />
+      <span>{kind === 'zoom' ? <>{label.split(' · ')[0]} <Badge>{label.split(' · ')[1]}</Badge></> : label}</span><Button class="edge end" aria-label={`Resize ${kind} end`} onPointerDown={e => drag(e,sel,'end')} onKeyDown={e => resizeKey(e,sel,'end')} />
     </div>;
   }
   function resizeKey(e,sel,edge) {
@@ -203,21 +211,21 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
   }
   return <div class="timeline-editor">
     <div class="timeline-toolbar" role="toolbar" aria-label="Timeline edits">
-      <strong>TIMELINE</strong><button onClick={split} title="Split at playhead (S)">Split</button>
-      <button onClick={remove} title="Cut range or delete selection (Delete / X)">Delete / Cut</button>
-      <div class="speed-menu"><button aria-expanded={speedOpen} onClick={() => setSpeedOpen(!speedOpen)}>Speed</button>{speedOpen && <div class="speed-popover">
-        <div>{[0.5,1,1.5,2,4,8].map(n => <button onClick={() => speed(n)}>{n}x</button>)}</div>
-        <label>Custom speed <input type="number" min="0.25" max="8" step="0.05" value={rate} onInput={e => setRate(+e.currentTarget.value)} /> x</label><button onClick={() => speed(rate)}>Apply</button>
-      </div>}</div>
-      <button onClick={addZoom} title="Add zoom region (Z)">+ Zoom</button>
-      <label>Depth <input aria-label="Zoom depth" type="number" min="1.05" max="4" step="0.05" value={selectedZoom?.depth ?? depth} onInput={e => { const value = +e.currentTarget.value; setDepth(value); if(selectedZoom) commit(() => ops.updateZoomRegion(working,selectedZoom.id,{depth:value},context)); }} /> x</label>
-      <button onClick={addCue} title="Add caption (C)">+ Caption</button>
-      <button disabled={selection?.type !== 'trim'} onClick={() => restore()}>Restore</button>
-      <button title="Regenerate automatic zooms; preserve manual regions" onClick={() => commit(() => ops.autoZoomRegenerate(working,project.events,project.record))}>Auto zoom</button>
-      <label class="time-mode"><input type="checkbox" checked={output} onChange={e => setOutput(e.currentTarget.checked)} /> Output time</label>
-      <button aria-label="Zoom timeline out" onClick={() => changeScale(scale/1.4)}>−</button><button aria-label="Zoom timeline in" onClick={() => changeScale(scale*1.4)}>+</button>
+      <Tooltip text="Split at playhead (S)"><Button onClick={split}>Split</Button></Tooltip>
+      <Tooltip text="Cut range or delete selection (Delete / X)"><Button onClick={remove}>Cut</Button></Tooltip><Separator />
+      <Tooltip text="Change the speed of the selected Video range"><Popover open={speedOpen} onOpenChange={setSpeedOpen} label="Change speed" trigger={<Button>Speed</Button>}>
+        <div class="speed-options">{[0.5,1,1.5,2,4,8].map(n => <Button onClick={() => {speed(n);setSpeedOpen(false);}}>{n}x</Button>)}</div>
+        <Label>Custom speed <Input aria-label="Custom speed" type="number" min="0.25" max="8" step="0.05" value={rate} onInput={e => setRate(+e.currentTarget.value)} /> x</Label><Button onClick={() => {speed(rate);setSpeedOpen(false);}}>Apply</Button>
+      </Popover></Tooltip><Separator />
+      <Tooltip text="Add zoom region (Z)"><Button onClick={addZoom}>Add zoom</Button></Tooltip>
+      <Tooltip text="Choose the magnification of a zoom region"><Popover label="Zoom depth" trigger={<Button aria-label="Zoom depth">{zoomDepth(selectedZoom?.depth ?? depth)}×</Button>}><Label>Zoom depth<Input aria-label="Zoom depth value" type="number" min="1.05" max="4" step="0.05" value={zoomDepth(selectedZoom?.depth ?? depth)} onInput={e => { const value = +e.currentTarget.value; setDepth(value); if(selectedZoom) commit(() => ops.updateZoomRegion(working,selectedZoom.id,{depth:value},context)); }} /></Label></Popover></Tooltip>
+      <Tooltip text="Regenerate automatic zooms; preserve manual regions"><Button onClick={() => commit(() => ops.autoZoomRegenerate(working,project.events,project.record))}>Auto zoom</Button></Tooltip><Separator />
+      <Tooltip text="Add caption (C)"><Button onClick={addCue}>Add caption</Button></Tooltip><Separator />
+      <Tooltip text={selection?.type === 'trim' ? 'Restore the selected removed range' : 'Select a removed range to restore it'}><Button disabled={selection?.type !== 'trim'} onClick={() => restore()}>Restore</Button></Tooltip>
+      <div class="time-mode"><Tooltip text="Show source or edited output time"><span><ToggleGroup aria-label="Timeline time" value={output ? 'output' : 'source'} onValueChange={next => setOutput(next === 'output')} options={[{value:'source',label:'Source'},{value:'output',label:'Output'}]} /></span></Tooltip></div>
+      <Tooltip text="Zoom timeline out (Ctrl/⌘ + wheel)"><Button size="icon" aria-label="Zoom timeline out" onClick={() => changeScale(scale/1.4)}>−</Button></Tooltip><Tooltip text="Zoom timeline in (Ctrl/⌘ + wheel)"><Button size="icon" aria-label="Zoom timeline in" onClick={() => changeScale(scale*1.4)}>+</Button></Tooltip>
     </div>
-    <div class="timeline-summary"><strong>{clock(map.outputDuration)} output</strong><span>{clock(c.edits.trims.reduce((n,r) => n+r.end-r.start,0))} removed · {c.edits.trims.length} cuts</span><span>{output ? 'OUTPUT' : 'SOURCE'} TIME · Drag to select · Alt disables snapping</span></div>
+    <div class="timeline-summary"><strong>Result {clock(map.outputDuration)}</strong><span>{clock(c.edits.trims.reduce((n,r) => n+r.end-r.start,0))} removed · {c.edits.trims.length} {c.edits.trims.length === 1 ? 'cut' : 'cuts'}</span><span>{output ? 'OUTPUT' : 'SOURCE'} TIME · Drag to select · Alt disables snapping</span></div>
     {error && <p role="status" class="timeline-message">{error}</p>}
     {selectedZoom && <p class="timeline-message">Click the preview to set this region’s focus at the playhead.</p>}
     <div class="timeline-grid"><div class="track-labels" aria-hidden="true">{['Time','Video','Speed','Zoom','Captions','Cursor'].map(label => <div>{label}</div>)}</div>
@@ -231,7 +239,7 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
             {steps.map(step => <div class="step-block" role="button" tabIndex="0" aria-label={`Select video step ${step.id}`} style={style(step.tStart,step.tEnd)}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setSelection({type:'range',start:step.tStart,end:step.tEnd}); seek(step.tStart); } }}>{project.storyboard.steps.find(s => s.id === step.id)?.name ?? project.storyboard.steps.find(s => s.id === step.id)?.title ?? project.storyboard.steps.find(s => s.id === step.id)?.caption ?? step.id}</div>)}
             {splits.map(t => <i class="split-line" style={{left:px(t)}} />)}
-            {c.edits.trims.map((r,index) => <button class={`trim-block ${selection?.type === 'trim' && selection.index === index ? 'selected' : ''}`} style={style(r.start,r.end)} aria-label={`Removed ${clock(r.start)} to ${clock(r.end)}`} onPointerDown={e => e.stopPropagation()} onClick={() => setSelection({type:'trim',index})}>Removed</button>)}
+            {c.edits.trims.map((r,index) => <Button class={`trim-block ${selection?.type === 'trim' && selection.index === index ? 'selected' : ''}`} style={style(r.start,r.end)} aria-label={`Removed ${clock(r.start)} to ${clock(r.end)}`} onPointerDown={e => e.stopPropagation()} onClick={() => setSelection({type:'trim',index})}>Removed</Button>)}
             {selection?.type === 'range' && <div class="range-selection" style={style(selection.start,selection.end)} />}
           </div>
           <div class="timeline-track">{shown.edits.speeds.map((r,index) => block({type:'speed',index},r.start,r.end,`${r.rate}x`,'speed'))}</div>
@@ -243,8 +251,8 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
       </div>
     </div>
     {editing && <form class="caption-inline" onSubmit={e => { e.preventDefault(); if(commit(() => ops.setCaption(c,editing.id,{text:editing.text},context))) setEditing(null); }}>
-      <label>Caption text <input autoFocus maxLength="140" value={editing.text} onInput={e => setEditing({...editing,text:e.currentTarget.value})} onKeyDown={e => {if(e.key === 'Escape') setEditing(null);}} /></label><button type="submit">Save caption</button><button type="button" onClick={() => setEditing(null)}>Cancel</button>
+      <Label>Caption text <Input autoFocus maxLength="140" value={editing.text} onInput={e => setEditing({...editing,text:e.currentTarget.value})} onKeyDown={e => {if(e.key === 'Escape') setEditing(null);}} /></Label><Button type="submit">Save caption</Button><Button type="button" onClick={() => setEditing(null)}>Cancel</Button>
     </form>}
-    {!!c.edits.trims.length && <details class="removed-list"><summary>Removed ({c.edits.trims.length})</summary>{c.edits.trims.map((r,index) => <div><span>{clock(r.start)} – {clock(r.end)} · {clock(r.end-r.start)}</span><button onClick={() => restore(index)}>Restore</button></div>)}</details>}
+    {!!c.edits.trims.length && <details class="removed-list"><summary>Removed ({c.edits.trims.length})</summary>{c.edits.trims.map((r,index) => <div><span>{clock(r.start)} – {clock(r.end)} · {clock(r.end-r.start)}</span><Button onClick={() => restore(index)}>Restore</Button></div>)}</details>}
   </div>;
 }

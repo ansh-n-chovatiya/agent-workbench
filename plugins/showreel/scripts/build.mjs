@@ -1,3 +1,6 @@
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import { copyFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
@@ -27,8 +30,12 @@ await build({
   entryPoints: ['editor/main.jsx'], outfile: 'dist/editor/editor.js',
   bundle: true, format: 'iife', platform: 'browser', minify: false,
   jsxFactory: 'h', jsxFragment: 'Fragment',
+  alias: { 'react': 'preact/compat', 'react-dom': 'preact/compat', 'react/jsx-runtime': 'preact/jsx-runtime', 'react-dom/test-utils': 'preact/test-utils' },
   banner: { js: `// showreel editor sources sha256: ${await editorHash(root)}` },
 });
 await copyFile(new URL('editor/index.html',root),new URL('dist/editor/index.html',root));
 
-await copyFile(new URL('editor/editor.css',root),new URL('dist/editor/editor.css',root));
+const require = createRequire(import.meta.url);
+const cliPackage = require.resolve('@tailwindcss/cli/package.json');
+const cli = path.join(path.dirname(cliPackage), 'dist/index.mjs');
+execFileSync(process.execPath, [cli, '-i', 'editor/styles.css', '-o', 'dist/editor/editor.css', '--minify'], { cwd:fileURLToPath(root), stdio:'inherit' });
