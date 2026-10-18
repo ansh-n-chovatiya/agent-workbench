@@ -1,0 +1,14 @@
+.ctx/
+.scan-private-patterns
+scan-report.txt
+__pycache__/
+*.py[cod]
+.DS_Store
+node_modules/
+.env
+.env.local
+*.jsonl
+usage-snapshots/
+transcripts/
+.ruff_cache/
+.coverage

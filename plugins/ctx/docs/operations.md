@@ -98,7 +98,7 @@ jobs:
   ledger:
     runs-on: ubuntu-latest
     env:
-      CTX_REF: v1.0.0          # a tag or a full commit SHA — never a branch
+      CTX_REF: ctx-v1.0.0          # a tag or a full commit SHA — never a branch
     steps:
       - uses: actions/checkout@v4
       - name: Get Context Ledger, pinned

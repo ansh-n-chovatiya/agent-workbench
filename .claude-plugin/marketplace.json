@@ -1,0 +1,14 @@
+{
+  "name": "agent-workbench",
+  "description": "Claude Code plugins for durable project state, token measurement and review discipline.",
+  "owner": {
+    "name": "Ansh Chovatiya"
+  },
+  "plugins": [
+    {
+      "name": "ctx",
+      "source": "./plugins/ctx",
+      "description": "Keeps specs, plans, decisions and memory on disk instead of in the context window, so sessions are disposable and compaction stops losing state."
+    }
+  ]
+}
