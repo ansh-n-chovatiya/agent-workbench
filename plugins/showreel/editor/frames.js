@@ -9,14 +9,15 @@ export async function openFrames(url = '/media/raw.mp4') {
     if (!track || !await track.canDecode()) throw new Error('Recording has no decodable video track');
     const sourceSize = { width: await track.getDisplayWidth(), height: await track.getDisplayHeight() };
     const duration = await track.computeDuration();
+    const { averagePacketRate } = await track.computePacketStats();
     // No ring pool: cached canvases must never be overwritten by later decoder output.
-    const sink = new CanvasSink(track, { poolSize: 0 });
+    const sink = new CanvasSink(track, { poolSize: 0, width: Math.min(sourceSize.width, 1600) });
     const cache = new Map();
     let closed = false, generation = 0, ahead = null, aheadStart = -Infinity, aheadEnd = -Infinity;
     const remember = frame => {
       if (!frame || closed) return;
       cache.delete(frame.timestamp); cache.set(frame.timestamp, frame);
-      while (cache.size > 90) cache.delete(cache.keys().next().value);
+      while (cache.size > 40) cache.delete(cache.keys().next().value);
     };
     const lookup = t => {
       const frame = [...cache.values()].find(f => f.timestamp <= t && t < f.timestamp + f.duration);
@@ -28,7 +29,7 @@ export async function openFrames(url = '/media/raw.mp4') {
       aheadStart = aheadEnd = -Infinity;
     }
     return {
-      sourceSize, duration,
+      sourceSize, duration, averageFrameRate: averagePacketRate,
       async getFrame(sourceT) {
         if (closed) throw new Error('Frame provider is closed');
         const t = Math.max(0, Math.min(sourceT, duration));
@@ -39,7 +40,8 @@ export async function openFrames(url = '/media/raw.mp4') {
         remember(frame);
         return frame?.canvas ?? null;
       },
-      prefetch(sourceT, horizon = 0.75) {
+      prefetch(sourceT, playbackRate = 1) {
+        const horizon = 0.75 * Math.max(0.25, Math.abs(playbackRate));
         if (closed || ahead) return;
         const continuing = sourceT >= aheadStart && sourceT <= aheadEnd;
         if (continuing && sourceT < aheadEnd - 0.2) return;

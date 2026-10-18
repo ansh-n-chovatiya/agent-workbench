@@ -1,0 +1,46 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { playbackSync, previewBelowRate } from '../editor/playback.mjs';
+import { sourceSize, sourceCrop } from '../scripts/lib/compose/draw.js';
+
+test('native sync combines rates, clamps the product, and seeks only beyond drift tolerance', () => {
+  assert.deepEqual(playbackSync(10, 10.1, 2, 2), { action: 'none', playbackRate: 4 });
+  assert.deepEqual(playbackSync(10, 9.8, 8, 2), { action: 'seek', playbackRate: 8 });
+  assert.deepEqual(playbackSync(1, 20, 0.25, 0.5), { action: 'seek', playbackRate: 0.25 });
+  assert.deepEqual(playbackSync(0, 0.12, 1, 1), { action: 'none', playbackRate: 1 });
+  assert.equal(playbackSync(0, 0.121, 1, 1).action, 'seek');
+  assert.equal(playbackSync(25, 5, 1, 1).action, 'seek'); // trim jump
+  assert.equal(playbackSync(0, 25, 1, 1).action, 'seek'); // loop restart
+  assert.deepEqual(playbackSync(5, 5, 4, 2), { action: 'none', playbackRate: 8 }); // speed boundary
+});
+
+test('source dimensions use intrinsic video/image sizes, including unloaded video', () => {
+  assert.deepEqual(sourceSize({ width: 0, height: 0, videoWidth: 3206, videoHeight: 1804 }), { width: 3206, height: 1804 });
+  assert.deepEqual(sourceSize({ width: 3206, height: 1804, videoWidth: 0, videoHeight: 0 }), { width: 0, height: 0 });
+  assert.deepEqual(sourceSize({ width: 100, height: 50 }), { width: 100, height: 50 });
+  assert.deepEqual(sourceSize({ naturalWidth: 80, naturalHeight: 40, width: 10, height: 5 }), { width: 80, height: 40 });
+});
+
+test('downscaled preview crop preserves real capture coordinates and export crop pixels', () => {
+  const plan = { sourceSize: { width: 3206, height: 1804 }, scale: 2 };
+  const before = structuredClone(plan), camera = { cx: 900, cy: 500, z: 2 };
+  const full = sourceCrop(plan, camera, plan.sourceSize);
+  assert.deepEqual(full, { x: 998.5, y: 549, width: 1603, height: 902 });
+  assert.deepEqual(sourceCrop(plan, camera, { videoWidth: 3206, videoHeight: 1804 }), full);
+  const small = { width: 1600, height: 900 }, preview = sourceCrop(plan, camera, small);
+  assert.equal(preview.x / small.width, full.x / plan.sourceSize.width);
+  assert.equal(preview.y / small.height, full.y / plan.sourceSize.height);
+  assert.equal(preview.width, 800); assert.equal(preview.height, 450);
+  assert.deepEqual(plan, before);
+});
+
+test('warning uses a two second window, available VFR frames, and 70 percent threshold', () => {
+  const window = (expected, presented) => [{ now: 0 }, { now: 2000, expected, presented }];
+  assert.equal(previewBelowRate(window(60, 40), 30), true);
+  assert.equal(previewBelowRate(window(60, 42), 30), false);
+  assert.equal(previewBelowRate(window(6, 6), 30), false); // sparse VFR
+  assert.equal(previewBelowRate(window(0, 0), 30), false); // held source frame
+  assert.equal(previewBelowRate(window(60, 0), 0), false); // unavailable track statistics
+  assert.equal(previewBelowRate([{ now: 0 }, { now: 500, expected: 30, presented: 1 }], 30), false);
+  assert.equal(previewBelowRate(window(120, 50), 60), false); // above 24 fps
+});

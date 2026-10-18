@@ -1,4 +1,4 @@
-// showreel editor sources sha256: 00816a513515e7d412649b4eb10dec2b4e07d16964f6e090a4b61d212b0ebbbf
+// showreel editor sources sha256: c6295ae3c7977abe7ce08f4c187b427b4d47b7db28b7a8d00b6557b9c1ab4794
 (() => {
   // node_modules/preact/dist/preact.module.js
   var n;
@@ -1234,14 +1234,14 @@
   }
 
   // scripts/lib/compose/plan.mjs
-  function planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings = [] }) {
+  function planRender({ composition, brief, storyboard, events, record, sourceSize: sourceSize2, assetWarnings = [] }) {
     void brief;
     const validation = validateComposition(composition, { duration: record.durationSec });
     if (!validation.ok) throw new Error(validation.errors.join("\n"));
-    if (![sourceSize.width, sourceSize.height, record.scale.used].every((v3) => Number.isFinite(v3) && v3 > 0)) throw new Error("Invalid source size or capture scale");
+    if (![sourceSize2.width, sourceSize2.height, record.scale.used].every((v3) => Number.isFinite(v3) && v3 > 0)) throw new Error("Invalid source size or capture scale");
     composition = resolveComposition(composition);
     const { output, cards } = composition;
-    const layout = layoutFor({ output, source: sourceSize, composition });
+    const layout = layoutFor({ output, source: sourceSize2, composition });
     const timemap = buildTimeMap({
       duration: record.durationSec,
       ...composition.edits,
@@ -1255,10 +1255,10 @@
     const regions = !composition.zoom.enabled ? [] : auto ? suggestZoomRegions({ events, record, options: zoomOptions(composition.zoom) }) : composition.zoom.regions;
     const regionValidation = validateRegions(regions, {
       duration: record.durationSec,
-      maxSharp: maxSharpZoom({ sourceWidthPx: sourceSize.width, frameWidthPx: layout.frame.w })
+      maxSharp: maxSharpZoom({ sourceWidthPx: sourceSize2.width, frameWidthPx: layout.frame.w })
     });
     if (!regionValidation.ok) throw new Error(regionValidation.errors.join("\n"));
-    const cssSource = { width: sourceSize.width / record.scale.used, height: sourceSize.height / record.scale.used };
+    const cssSource = { width: sourceSize2.width / record.scale.used, height: sourceSize2.height / record.scale.used };
     const clone3 = (v3) => JSON.parse(JSON.stringify(v3));
     return {
       output: clone3(output),
@@ -1278,7 +1278,7 @@
       },
       clicks: clone3(events.clicks),
       ripples: clone3(events.clicks),
-      sourceSize: { ...sourceSize },
+      sourceSize: { ...sourceSize2 },
       viewport: { ...events.viewport },
       scale: record.scale.used,
       warnings: [...assetWarnings, ...record.warnings ?? [], ...regionValidation.warnings, ...composition.captions.mode === "overlay" ? ["overlay captions can cover the video"] : []],
@@ -1310,6 +1310,7 @@
       alphaTitle: mapped.alphaTitle,
       alphaOutro: mapped.alphaOutro,
       sourceT: t3,
+      rate: mapped.rate,
       camera: cameraAt(plan.camera, t3),
       cursor: { ...cursorAt(events, t3), press, alpha, shape: shapeKey?.shape ?? "arrow", pop },
       ripple,
@@ -1379,7 +1380,7 @@
     return data;
   }
   function createEditorStore({ api = request, debounce = 800 } = {}) {
-    let state = initialState(), sourceSize, timer, pending, disposed = false;
+    let state = initialState(), sourceSize2, timer, pending, disposed = false;
     const listeners = /* @__PURE__ */ new Set();
     const publish = (patch) => {
       if (!disposed) {
@@ -1388,9 +1389,9 @@
       }
     };
     function rebuild() {
-      if (!state.project || !sourceSize) return;
+      if (!state.project || !sourceSize2) return;
       try {
-        publish({ plan: planRender({ ...state.project, composition: state.composition, sourceSize }), error: null, errors: [] });
+        publish({ plan: planRender({ ...state.project, composition: state.composition, sourceSize: sourceSize2 }), error: null, errors: [] });
       } catch (error) {
         publish({ plan: null, error: error.message, errors: error.message.split("\n") });
       }
@@ -1448,7 +1449,7 @@
         }
       },
       setSourceSize(size) {
-        sourceSize = size;
+        sourceSize2 = size;
         rebuild();
       },
       setComposition(composition, path = null) {
@@ -12507,9 +12508,9 @@
       const chromaW = Math.ceil(width / 2);
       const chromaH = Math.ceil(height / 2);
       const uvSize = chromaW * chromaH;
-      const sourceSize = color.allocationSize();
-      if (!cpuColorBuffer || cpuColorBuffer.byteLength !== sourceSize) {
-        cpuColorBuffer = new Uint8Array(sourceSize);
+      const sourceSize2 = color.allocationSize();
+      if (!cpuColorBuffer || cpuColorBuffer.byteLength !== sourceSize2) {
+        cpuColorBuffer = new Uint8Array(sourceSize2);
       }
       await color.copyTo(cpuColorBuffer);
       const output = new Uint8Array(ySize + 2 * uvSize + ySize);
@@ -14451,16 +14452,17 @@
       };
       const track = await input.getPrimaryVideoTrack();
       if (!track || !await track.canDecode()) throw new Error("Recording has no decodable video track");
-      const sourceSize = { width: await track.getDisplayWidth(), height: await track.getDisplayHeight() };
+      const sourceSize2 = { width: await track.getDisplayWidth(), height: await track.getDisplayHeight() };
       const duration = await track.computeDuration();
-      const sink = new CanvasSink(track, { poolSize: 0 });
+      const { averagePacketRate } = await track.computePacketStats();
+      const sink = new CanvasSink(track, { poolSize: 0, width: Math.min(sourceSize2.width, 1600) });
       const cache = /* @__PURE__ */ new Map();
       let closed = false, generation = 0, ahead = null, aheadStart = -Infinity, aheadEnd = -Infinity;
       const remember = (frame) => {
         if (!frame || closed) return;
         cache.delete(frame.timestamp);
         cache.set(frame.timestamp, frame);
-        while (cache.size > 90) cache.delete(cache.keys().next().value);
+        while (cache.size > 40) cache.delete(cache.keys().next().value);
       };
       const lookup = (t3) => {
         const frame = [...cache.values()].find((f3) => f3.timestamp <= t3 && t3 < f3.timestamp + f3.duration);
@@ -14471,8 +14473,9 @@
         return frame;
       };
       return {
-        sourceSize,
+        sourceSize: sourceSize2,
         duration,
+        averageFrameRate: averagePacketRate,
         async getFrame(sourceT) {
           if (closed) throw new Error("Frame provider is closed");
           const t3 = Math.max(0, Math.min(sourceT, duration));
@@ -14483,7 +14486,8 @@
           remember(frame);
           return frame?.canvas ?? null;
         },
-        prefetch(sourceT, horizon = 0.75) {
+        prefetch(sourceT, playbackRate = 1) {
+          const horizon = 0.75 * Math.max(0.25, Math.abs(playbackRate));
           if (closed || ahead) return;
           const continuing = sourceT >= aheadStart && sourceT <= aheadEnd;
           if (continuing && sourceT < aheadEnd - 0.2) return;
@@ -14744,6 +14748,23 @@
       ctx.closePath();
     }
   }
+  function sourceSize(source) {
+    return {
+      width: source.videoWidth ?? source.naturalWidth ?? source.displayWidth ?? source.width,
+      height: source.videoHeight ?? source.naturalHeight ?? source.displayHeight ?? source.height
+    };
+  }
+  function sourceCrop(plan, camera, decoded) {
+    const size = sourceSize(decoded);
+    const sx = size.width / plan.sourceSize.width, sy = size.height / plan.sourceSize.height;
+    const w3 = plan.sourceSize.width / camera.z, h3 = plan.sourceSize.height / camera.z;
+    return {
+      x: (camera.cx * plan.scale - w3 / 2) * sx,
+      y: (camera.cy * plan.scale - h3 / 2) * sy,
+      width: w3 * sx,
+      height: h3 * sy
+    };
+  }
   function drawFrame(canvas, plan, tOut, decoded, assets) {
     if (assets) {
       images = assets.images;
@@ -14773,17 +14794,8 @@
       const cropW = plan.sourceSize.width / cam.z, cropH = plan.sourceSize.height / cam.z;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(
-        decoded,
-        cam.cx * plan.scale - cropW / 2,
-        cam.cy * plan.scale - cropH / 2,
-        cropW,
-        cropH,
-        f3.x,
-        f3.y,
-        f3.w,
-        f3.h
-      );
+      const crop = sourceCrop(plan, cam, decoded);
+      ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, f3.x, f3.y, f3.w, f3.h);
       const mapped = ({ x: x2, y: y3 }) => ({
         x: f3.x + (x2 * plan.scale - (cam.cx * plan.scale - cropW / 2)) * f3.w / cropW,
         y: f3.y + (y3 * plan.scale - (cam.cy * plan.scale - cropH / 2)) * f3.h / cropH
@@ -14901,9 +14913,24 @@
   }
   var isTyping = (target) => !!target?.closest?.('input, textarea, select, [contenteditable="true"]');
 
+  // editor/playback.mjs
+  function playbackSync(sourceT, videoTime, planRate, uiRate) {
+    return {
+      action: Math.abs(videoTime - sourceT) > 0.12 ? "seek" : "none",
+      playbackRate: Math.max(0.25, Math.min(8, planRate * uiRate))
+    };
+  }
+  function previewBelowRate(samples, averageFrameRate) {
+    if (samples.length < 2 || !(averageFrameRate > 0)) return false;
+    const seconds = (samples.at(-1).now - samples[0].now) / 1e3;
+    const expected = samples.slice(1).reduce((sum, s3) => sum + s3.expected, 0);
+    const presented = samples.slice(1).reduce((sum, s3) => sum + s3.presented, 0);
+    return seconds >= 1.8 && expected > 0 && presented / seconds < 24 && presented < expected * 0.7;
+  }
+
   // editor/Preview.jsx
   function Preview({ plan, provider, time, setTime, playing, setPlaying, onPick, focus }) {
-    const canvas = A2(), current = A2(time), drawn = A2(null);
+    const video = A2(), canvas = A2(), current = A2(time), drawn = A2(null);
     const [loop, setLoop] = d2(false), [rate, setRate] = d2(1);
     const [assets, setAssets] = d2(null), [error, setError] = d2(""), [dropped, setDropped] = d2(false);
     current.current = time;
@@ -14925,79 +14952,145 @@
       };
     }, [plan]);
     h2(() => {
-      if (!playing) provider?.pause();
-      if (!playing || !duration) return;
-      let raf, last2 = performance.now();
-      const tick = (now) => {
-        const elapsed = (now - last2) / 1e3;
-        last2 = now;
-        let next = current.current + elapsed * rate;
-        if (next >= duration) {
-          next = loop ? next % duration : duration;
-          if (!loop) setPlaying(false);
-        }
-        current.current = next;
-        setTime(next);
-        raf = requestAnimationFrame(tick);
-      };
-      raf = requestAnimationFrame(tick);
-      return () => {
-        cancelAnimationFrame(raf);
-        provider?.pause();
-      };
-    }, [playing, duration, rate, loop, provider]);
-    h2(() => {
       if (time > duration) setTime(duration);
     }, [duration]);
     h2(() => {
-      if (!plan || !provider || !assets) return;
-      let active = true, raf, busy = false, lastTime = -1, count = 0, windowStart = performance.now();
+      const media = video.current;
+      provider?.pause();
+      if (!plan || !provider || !assets || !media) return;
+      let active = true, raf, busy = false, lastTime = -1, last2 = performance.now();
+      let main = false, starting = false, seeking = false, frameCallback;
+      let serial = 0, drawnSerial = 0, expected = 0, previousFrame = null;
+      const samples = [], perf = window.__editorPerf ??= { presentedFrames: 0, lastFrameMs: 0 };
       setDropped(false);
-      const tick = async () => {
+      const fail = (e3) => {
+        if (active) {
+          setError(e3.message);
+          setPlaying(false);
+        }
+      };
+      const resetFrames = () => {
+        previousFrame = null;
+        expected = 0;
+        samples.length = 0;
+        setDropped(false);
+      };
+      const seeked = () => {
+        seeking = false;
+        resetFrames();
+      };
+      media.addEventListener("seeked", seeked);
+      const presented = (now, metadata) => {
+        if (!active) return;
+        if (main && !seeking && !media.seeking) {
+          if (previousFrame && metadata.mediaTime !== previousFrame.mediaTime) {
+            serial++;
+            const elapsed = Math.max(0, metadata.mediaTime - previousFrame.mediaTime);
+            expected += Math.min(
+              elapsed * provider.averageFrameRate,
+              Math.max(0, metadata.presentedFrames - previousFrame.presentedFrames)
+            );
+          } else if (!previousFrame) serial++;
+          previousFrame = metadata;
+        }
+        frameCallback = media.requestVideoFrameCallback(presented);
+      };
+      if (playing && media.requestVideoFrameCallback) frameCallback = media.requestVideoFrameCallback(presented);
+      function paint(t3, state, frame) {
+        const start = performance.now(), target = canvas.current, scale = Math.min(960 / plan.output.width, 1);
+        const width = Math.round(plan.output.width * scale), height = Math.round(plan.output.height * scale);
+        if (target.width !== width || target.height !== height) {
+          target.width = width;
+          target.height = height;
+        }
+        target.getContext("2d").setTransform(width / plan.output.width, 0, 0, height / plan.output.height, 0, 0);
+        drawFrame(target, plan, t3, frame, assets);
+        drawn.current = { plan, state };
+        lastTime = t3;
+        if (playing) perf.lastFrameMs = performance.now() - start;
+      }
+      const tick = async (now) => {
         if (!active) return;
         raf = requestAnimationFrame(tick);
-        const t3 = current.current;
-        if (busy || t3 === lastTime) return;
-        busy = true;
+        if (playing) {
+          let next = current.current + (now - last2) / 1e3 * rate;
+          if (next >= duration) {
+            next = loop ? next % duration : duration;
+            if (!loop) {
+              media.pause();
+              setPlaying(false);
+            }
+          }
+          current.current = next;
+          setTime(next);
+        }
+        last2 = now;
+        const t3 = current.current, state = stateAt(plan, t3);
         try {
-          const state = stateAt(plan, t3);
-          const frame = state.section === "main" ? await provider.getFrame(state.sourceT) : null;
-          if (!active) return;
-          const target = canvas.current, scale = Math.min(960 / plan.output.width, 1);
-          const width = Math.round(plan.output.width * scale), height = Math.round(plan.output.height * scale);
-          if (target.width !== width || target.height !== height) {
-            target.width = width;
-            target.height = height;
-          }
-          target.getContext("2d").setTransform(width / plan.output.width, 0, 0, height / plan.output.height, 0, 0);
-          drawFrame(target, plan, t3, frame, assets);
-          drawn.current = { plan, state };
-          lastTime = t3;
           if (playing) {
-            provider.prefetch(state.sourceT);
-            count++;
-          }
-          const now = performance.now();
-          if (now - windowStart >= 1500) {
-            setDropped(playing && count * 1e3 / (now - windowStart) < 24);
-            count = 0;
-            windowStart = now;
+            const inMain = state.section === "main";
+            if (inMain !== main) {
+              main = inMain;
+              resetFrames();
+            }
+            if (!main) {
+              media.pause();
+              paint(t3, state, null);
+              return;
+            }
+            const sync = playbackSync(state.sourceT, media.currentTime, state.rate, rate);
+            if (media.playbackRate !== sync.playbackRate) media.playbackRate = sync.playbackRate;
+            if (!seeking && !media.seeking && media.readyState >= 1 && sync.action === "seek") {
+              seeking = true;
+              resetFrames();
+              media.currentTime = state.sourceT;
+            }
+            if (media.paused && !starting) {
+              starting = true;
+              media.play().catch((e3) => {
+                if (e3.name !== "AbortError") fail(e3);
+              }).finally(() => {
+                starting = false;
+              });
+            }
+            let count = 0;
+            if (!seeking && !media.seeking && media.readyState >= 2) {
+              paint(t3, state, media);
+              if (serial !== drawnSerial) {
+                count = 1;
+                perf.presentedFrames++;
+                drawnSerial = serial;
+              }
+            }
+            samples.push({ now, expected, presented: count });
+            expected = 0;
+            while (samples.length > 1 && samples[0].now < now - 2e3) samples.shift();
+            setDropped(previewBelowRate(samples, provider.averageFrameRate));
+          } else {
+            media.pause();
+            if (busy || t3 === lastTime) return;
+            busy = true;
+            try {
+              const frame = state.section === "main" ? await provider.getFrame(state.sourceT) : null;
+              if (active && current.current === t3) paint(t3, state, frame);
+            } finally {
+              busy = false;
+            }
           }
         } catch (e3) {
-          if (active) {
-            setError(e3.message);
-            setPlaying(false);
-          }
-        } finally {
-          busy = false;
+          fail(e3);
         }
       };
       raf = requestAnimationFrame(tick);
       return () => {
         active = false;
         cancelAnimationFrame(raf);
+        media.pause();
+        provider.pause();
+        media.removeEventListener("seeked", seeked);
+        if (frameCallback !== void 0) media.cancelVideoFrameCallback(frameCallback);
       };
-    }, [plan, provider, assets, playing]);
+    }, [plan, provider, assets, playing, duration, rate, loop]);
     function pick2(event) {
       if (!onPick || !drawn.current) return;
       const { plan: p3, state } = drawn.current;
@@ -15026,7 +15119,7 @@
       setPlaying(false);
       setTime(Math.max(0, Math.min(duration, time + direction / fps)));
     };
-    return /* @__PURE__ */ k("section", { class: "preview", "aria-label": "Video preview" }, /* @__PURE__ */ k("div", { class: "preview-stage" }, /* @__PURE__ */ k("div", { class: "preview-canvas-wrap", style: { "--preview-aspect": plan ? plan.output.width / plan.output.height : 16 / 9 } }, /* @__PURE__ */ k("canvas", { ref: canvas, onClick: pick2, "aria-label": "Composition preview; click to pick zoom focus", style: { aspectRatio: plan ? `${plan.output.width}/${plan.output.height}` : "16/9" } }), crosshair && /* @__PURE__ */ k("span", { class: "focus-crosshair", style: crosshair, "aria-label": "Selected zoom focus" }, "+"))), error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, error), dropped && /* @__PURE__ */ k("p", { class: "warning", role: "status" }, "Preview below 24 fps \u2014 frames are being dropped."), /* @__PURE__ */ k("div", { class: "transport" }, /* @__PURE__ */ k("button", { onClick: () => step(-1), title: "Previous frame (,)", disabled: !plan }, "\u2039"), /* @__PURE__ */ k("button", { onClick: () => setPlaying(!playing), disabled: !plan || !assets, "aria-label": playing ? "Pause" : "Play" }, playing ? "Pause" : "Play"), /* @__PURE__ */ k("button", { onClick: () => step(1), title: "Next frame (.)", disabled: !plan }, "\u203A"), /* @__PURE__ */ k("output", { class: "timecode" }, timecode(time, fps), " / ", timecode(duration, fps)), /* @__PURE__ */ k("label", { class: "seek" }, /* @__PURE__ */ k("span", { class: "sr-only" }, "Seek"), /* @__PURE__ */ k("input", { type: "range", "aria-label": "Seek output time", min: "0", max: duration, step: 1 / fps, value: time, onInput: (e3) => {
+    return /* @__PURE__ */ k("section", { class: "preview", "aria-label": "Video preview" }, /* @__PURE__ */ k("video", { ref: video, src: "/media/raw.mp4", muted: true, playsInline: true, preload: "auto", hidden: true }), /* @__PURE__ */ k("div", { class: "preview-stage" }, /* @__PURE__ */ k("div", { class: "preview-canvas-wrap", style: { "--preview-aspect": plan ? plan.output.width / plan.output.height : 16 / 9 } }, /* @__PURE__ */ k("canvas", { ref: canvas, onClick: pick2, "aria-label": "Composition preview; click to pick zoom focus", style: { aspectRatio: plan ? `${plan.output.width}/${plan.output.height}` : "16/9" } }), crosshair && /* @__PURE__ */ k("span", { class: "focus-crosshair", style: crosshair, "aria-label": "Selected zoom focus" }, "+"))), error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, error), dropped && /* @__PURE__ */ k("p", { class: "warning", role: "status" }, "Preview below 24 fps \u2014 frames are being dropped."), /* @__PURE__ */ k("div", { class: "transport" }, /* @__PURE__ */ k("button", { onClick: () => step(-1), title: "Previous frame (,)", disabled: !plan }, "\u2039"), /* @__PURE__ */ k("button", { onClick: () => setPlaying(!playing), disabled: !plan || !assets, "aria-label": playing ? "Pause" : "Play" }, playing ? "Pause" : "Play"), /* @__PURE__ */ k("button", { onClick: () => step(1), title: "Next frame (.)", disabled: !plan }, "\u203A"), /* @__PURE__ */ k("output", { class: "timecode" }, timecode(time, fps), " / ", timecode(duration, fps)), /* @__PURE__ */ k("label", { class: "seek" }, /* @__PURE__ */ k("span", { class: "sr-only" }, "Seek"), /* @__PURE__ */ k("input", { type: "range", "aria-label": "Seek output time", min: "0", max: duration, step: 1 / fps, value: time, onInput: (e3) => {
       setPlaying(false);
       setTime(+e3.currentTarget.value);
     } })), /* @__PURE__ */ k("label", null, /* @__PURE__ */ k("input", { type: "checkbox", checked: loop, onChange: (e3) => setLoop(e3.currentTarget.checked) }), " Loop"), /* @__PURE__ */ k("label", null, /* @__PURE__ */ k("span", { class: "sr-only" }, "Playback rate"), /* @__PURE__ */ k("select", { "aria-label": "Playback rate", value: rate, onChange: (e3) => setRate(+e3.currentTarget.value) }, [0.5, 1, 2].map((n2) => /* @__PURE__ */ k("option", { value: n2 }, n2, "\xD7"))))));
@@ -15852,7 +15945,12 @@
     const [shortcuts, setShortcuts] = d2(false), [toast, setToast] = d2("");
     h2(() => {
       let active = true, opened;
-      const unsubscribe = store.subscribe(setState);
+      let composition = store.getState().composition;
+      const unsubscribe = store.subscribe((next) => {
+        if (next.composition !== composition) setPlaying(false);
+        composition = next.composition;
+        setState(next);
+      });
       store.load();
       openFrames().then((frames) => {
         opened = frames;

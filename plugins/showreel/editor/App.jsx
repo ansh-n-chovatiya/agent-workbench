@@ -26,7 +26,11 @@ export function App() {
   const [shortcuts, setShortcuts] = useState(false), [toast, setToast] = useState('');
   useEffect(() => {
     let active = true, opened;
-    const unsubscribe = store.subscribe(setState);
+    let composition = store.getState().composition;
+    const unsubscribe = store.subscribe(next => {
+      if (next.composition !== composition) setPlaying(false);
+      composition = next.composition; setState(next);
+    });
     store.load();
     openFrames().then(frames => {
       opened = frames;

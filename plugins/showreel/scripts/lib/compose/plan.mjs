@@ -58,7 +58,7 @@ export function stateAt(plan, tOut) {
   const effect = plan.cursor.clickEffect;
   const ripple = effect.style !== 'none' ? rippleAt(events, t, effect.durationSec) : null;
   return { section: mapped.section, alphaTitle: mapped.alphaTitle, alphaOutro: mapped.alphaOutro,
-    sourceT: t, camera: cameraAt(plan.camera, t),
+    sourceT: t, rate: mapped.rate, camera: cameraAt(plan.camera, t),
     cursor: { ...cursorAt(events, t), press, alpha, shape: shapeKey?.shape ?? 'arrow', pop },
     ripple,
     caption: cue ? { text: cue.text, alpha: captionAlpha(cue, t) } : null };

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { reducer, initialState, createEditorStore } from '../editor/state.js';
+import { sourceCrop } from '../scripts/lib/compose/draw.js';
 import { resolveComposition } from '../scripts/lib/compose/composition.mjs';
 
 const project = () => ({ name: 'Demo', runId: 'r1', composition: resolveComposition({ run: { id: 'r1' }, cards: { title: { enabled: false } } }),
@@ -132,5 +133,22 @@ test('timeline gesture commits one snapshot, then undo and redo restore edits an
     assert.equal(store.getState().plan.cues[0].text,'Edited');
     store.undo(); assert.equal(store.getState().plan.cues[0].text,'Original');
     store.undo(); assert.deepEqual(store.getState().composition,cut);
+  } finally { store.dispose(); }
+});
+
+test('large real source dimensions reach the plan independently of reduced preview pixels', async () => {
+  const store = createEditorStore({ api: async () => project(), debounce: 100000 });
+  try {
+    const realSize = { width: 3206, height: 1804 };
+    store.setSourceSize(realSize); await store.load();
+    const plan = store.getState().plan;
+    assert.deepEqual(plan.sourceSize, realSize);
+    assert.equal(plan.scale, 2);
+    const camera = { cx: 900, cy: 500, z: 2 };
+    const full = sourceCrop(plan, camera, realSize);
+    const preview = sourceCrop(plan, camera, { width: 1600, height: 900 });
+    assert.equal(preview.x / 1600, full.x / realSize.width);
+    assert.equal(preview.y / 900, full.y / realSize.height);
+    assert.deepEqual(plan.sourceSize, realSize);
   } finally { store.dispose(); }
 });

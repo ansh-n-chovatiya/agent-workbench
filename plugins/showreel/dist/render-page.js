@@ -1,4 +1,4 @@
-// showreel render sources sha256: 8562c026a83ac73ce428a818feca1204ea1e5b8469a005fa66ba04a8ac2c593e
+// showreel render sources sha256: 70ad928874a7cb7d18c9f709058efb35e4dc3e8f8981b92367d792b8d25b9981
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -22158,9 +22158,9 @@
       const chromaW = Math.ceil(width / 2);
       const chromaH = Math.ceil(height / 2);
       const uvSize = chromaW * chromaH;
-      const sourceSize = color.allocationSize();
-      if (!cpuColorBuffer || cpuColorBuffer.byteLength !== sourceSize) {
-        cpuColorBuffer = new Uint8Array(sourceSize);
+      const sourceSize2 = color.allocationSize();
+      if (!cpuColorBuffer || cpuColorBuffer.byteLength !== sourceSize2) {
+        cpuColorBuffer = new Uint8Array(sourceSize2);
       }
       await color.copyTo(cpuColorBuffer);
       const output = new Uint8Array(ySize + 2 * uvSize + ySize);
@@ -29041,9 +29041,9 @@
       if (!format) {
         throw new Error("CPU color/alpha splitting requires a known VideoFrame format.");
       }
-      const sourceSize = sourceFrame.allocationSize();
-      if (!cpuSourceBuffer || cpuSourceBuffer.byteLength !== sourceSize) {
-        cpuSourceBuffer = new Uint8Array(sourceSize);
+      const sourceSize2 = sourceFrame.allocationSize();
+      if (!cpuSourceBuffer || cpuSourceBuffer.byteLength !== sourceSize2) {
+        cpuSourceBuffer = new Uint8Array(sourceSize2);
       }
       await sourceFrame.copyTo(cpuSourceBuffer);
       if (format === "RGBA" || format === "BGRA") {
@@ -30269,6 +30269,7 @@
       alphaTitle: mapped.alphaTitle,
       alphaOutro: mapped.alphaOutro,
       sourceT: t,
+      rate: mapped.rate,
       camera: cameraAt(plan.camera, t),
       cursor: { ...cursorAt(events, t), press, alpha, shape: shapeKey?.shape ?? "arrow", pop },
       ripple,
@@ -30501,6 +30502,23 @@
       ctx.closePath();
     }
   }
+  function sourceSize(source) {
+    return {
+      width: source.videoWidth ?? source.naturalWidth ?? source.displayWidth ?? source.width,
+      height: source.videoHeight ?? source.naturalHeight ?? source.displayHeight ?? source.height
+    };
+  }
+  function sourceCrop(plan, camera, decoded) {
+    const size = sourceSize(decoded);
+    const sx = size.width / plan.sourceSize.width, sy = size.height / plan.sourceSize.height;
+    const w = plan.sourceSize.width / camera.z, h = plan.sourceSize.height / camera.z;
+    return {
+      x: (camera.cx * plan.scale - w / 2) * sx,
+      y: (camera.cy * plan.scale - h / 2) * sy,
+      width: w * sx,
+      height: h * sy
+    };
+  }
   function drawFrame(canvas, plan, tOut, decoded, assets) {
     if (assets) {
       images = assets.images;
@@ -30530,17 +30548,8 @@
       const cropW = plan.sourceSize.width / cam.z, cropH = plan.sourceSize.height / cam.z;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(
-        decoded,
-        cam.cx * plan.scale - cropW / 2,
-        cam.cy * plan.scale - cropH / 2,
-        cropW,
-        cropH,
-        f.x,
-        f.y,
-        f.w,
-        f.h
-      );
+      const crop = sourceCrop(plan, cam, decoded);
+      ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, f.x, f.y, f.w, f.h);
       const mapped = ({ x, y }) => ({
         x: f.x + (x * plan.scale - (cam.cx * plan.scale - cropW / 2)) * f.w / cropW,
         y: f.y + (y * plan.scale - (cam.cy * plan.scale - cropH / 2)) * f.h / cropH

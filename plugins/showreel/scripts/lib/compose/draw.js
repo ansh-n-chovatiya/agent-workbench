@@ -129,6 +129,21 @@ function cursorShape(ctx, style) {
     ctx.lineTo(13, 22); ctx.lineTo(9, 14); ctx.lineTo(16, 14); ctx.closePath();
   }
 }
+// Intrinsic media dimensions; video.width/height are layout attributes, not pixels.
+export function sourceSize(source) {
+  return { width: source.videoWidth ?? source.naturalWidth ?? source.displayWidth ?? source.width,
+    height: source.videoHeight ?? source.naturalHeight ?? source.displayHeight ?? source.height };
+}
+
+export function sourceCrop(plan, camera, decoded) {
+  const size = sourceSize(decoded);
+  // Camera and overlays stay in real capture coordinates even for reduced preview canvases.
+  const sx = size.width / plan.sourceSize.width, sy = size.height / plan.sourceSize.height;
+  const w = plan.sourceSize.width / camera.z, h = plan.sourceSize.height / camera.z;
+  return { x: (camera.cx * plan.scale - w / 2) * sx,
+    y: (camera.cy * plan.scale - h / 2) * sy, width: w * sx, height: h * sy };
+}
+
 export function drawFrame(canvas, plan, tOut, decoded, assets) {
   if (assets) { images = assets.images; cursorImages = assets.cursorImages; }
   const ctx = canvas.getContext('2d'), { width, height } = plan.output;
@@ -149,8 +164,8 @@ export function drawFrame(canvas, plan, tOut, decoded, assets) {
     ctx.save(); rounded(ctx, f, radius); ctx.clip();
     const cropW = plan.sourceSize.width / cam.z, cropH = plan.sourceSize.height / cam.z;
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(decoded, cam.cx * plan.scale - cropW / 2, cam.cy * plan.scale - cropH / 2,
-      cropW, cropH, f.x, f.y, f.w, f.h);
+    const crop = sourceCrop(plan, cam, decoded);
+    ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, f.x, f.y, f.w, f.h);
     const mapped = ({ x, y }) => ({ x: f.x + (x * plan.scale - (cam.cx * plan.scale - cropW / 2)) * f.w / cropW,
       y: f.y + (y * plan.scale - (cam.cy * plan.scale - cropH / 2)) * f.h / cropH });
     const cursorH = plan.cursor.sizePx * (plan.cursor.scaleWithZoom ? 1 + 0.35 * (cam.z - 1) : 1);
