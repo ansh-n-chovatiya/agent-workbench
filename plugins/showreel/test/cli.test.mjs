@@ -31,11 +31,11 @@ test('help succeeds and unknown commands print help with exit 2', async (t) => {
 
 test('init creates validated state, refuses overwrite and leaves the demoed project alone', async (t) => {
   const { home, cwd, cli } = await setup(t);
-  const result = cli('init', '--name', 'My App', '--url', 'https://example.test');
+  const result = cli('init', '--name', 'My App', '--url', 'https://example.com');
   assert.equal(result.status, 0, result.stderr);
   const file = path.join(home, 'state', 'projects', 'my-app', 'config.json');
   assert.equal(result.stdout.trim(), file);
-  assert.equal((await readConfigFile(file)).baseURL, 'https://example.test');
+  assert.equal((await readConfigFile(file)).baseURL, 'https://example.com');
   const original = await readFile(file, 'utf8');
   const second = cli('init', '--name', 'My App', '--url', 'https://other.test');
   assert.equal(second.status, 1);

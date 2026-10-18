@@ -1,0 +1,40 @@
+import { test, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, readFile, writeFile, readdir, mkdir } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+const home = await mkdtemp(path.join(os.tmpdir(), 'showreel-phase2-'));
+process.env.SHOWREEL_HOME = home;
+after(() => rm(home, { recursive: true, force: true }));
+const { PROJECT_FILES, readProjectFile, writeProjectFile, projectExists } = await import('../scripts/lib/project.mjs');
+const { projectDir } = await import('../scripts/lib/paths.mjs');
+test('project files match the schema and missing-file errors give creating commands', async () => {
+  assert.deepEqual(PROJECT_FILES, { config: 'config.json', brief: 'brief.json', guide: 'guide.json', resolved: 'guide.resolved.json', storyboard: 'storyboard.json', scenario: 'scenario.json' });
+  const commands = { config: 'init', brief: 'brief init', guide: 'guide', resolved: 'guide resolve', storyboard: 'storyboard draft', scenario: 'scenario build' };
+  assert.equal(await projectExists('missing'), false);
+  for (const [key, file] of Object.entries(PROJECT_FILES)) await assert.rejects(readProjectFile('missing', key), { message: `${file} not found for project missing; run: showreel ${commands[key]} --name missing` });
+  await assert.rejects(readProjectFile('missing', '__proto__'), /Unknown project file/);
+  await assert.rejects(writeProjectFile('../escape', 'brief', {}), /plain name/);
+});
+test('project writes complete pretty JSON and refuses overwrite without changing bytes', async () => {
+  const name = 'My App';
+  const file = await writeProjectFile(name, 'brief', { topic: 'Demo' }, { overwrite: false });
+  assert.equal(file, path.join(projectDir(name), 'brief.json'));
+  assert.equal(await projectExists(name), true);
+  assert.equal(await readFile(file, 'utf8'), '{\n  "topic": "Demo"\n}\n');
+  await assert.rejects(writeProjectFile(name, 'brief', { topic: 'Other' }, { overwrite: false }), /Refusing to overwrite/);
+  assert.deepEqual(await readProjectFile(name, 'brief'), { topic: 'Demo' });
+  await writeProjectFile(name, 'brief', { topic: 'Updated' });
+  assert.deepEqual(await readProjectFile(name, 'brief'), { topic: 'Updated' });
+  assert.deepEqual(await readdir(projectDir(name)), ['brief.json']);
+  const circular = {}; circular.self = circular;
+  await assert.rejects(writeProjectFile(name, 'brief', circular), /circular/i);
+  assert.deepEqual(await readdir(projectDir(name)), ['brief.json']);
+  await writeFile(file, '{'); await assert.rejects(readProjectFile(name, 'brief'), /not valid JSON/);
+});
+test('concurrent exclusive project writes publish exactly one complete file', async () => {
+  const results = await Promise.allSettled([writeProjectFile('race', 'brief', { winner: 1 }, { overwrite: false }), writeProjectFile('race', 'brief', { winner: 2 }, { overwrite: false })]);
+  assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
+  assert.ok([1, 2].includes((await readProjectFile('race', 'brief')).winner));
+  assert.deepEqual(await readdir(projectDir('race')), ['brief.json']);
+});

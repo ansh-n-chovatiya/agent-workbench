@@ -30,7 +30,7 @@ test('unknown keys fail with the exact label, including inherited object keys', 
 });
 
 test('baseURL is required and must be http(s)', () => {
-  for (const value of ['http://localhost:3000', 'https://example.test/path']) assert.equal(cfg({ baseURL: value }).baseURL, value);
+  for (const value of ['http://localhost:3000', 'https://example.com/path']) assert.equal(cfg({ baseURL: value }).baseURL, value);
   assert.throws(() => mergeConfig({}), /"baseURL" is required/);
   for (const value of [null, '', 1, 'file:///tmp/a', 'not a URL', 'https://', 'http://a b']) assert.throws(() => cfg({ baseURL: value }), /"baseURL"/);
 });

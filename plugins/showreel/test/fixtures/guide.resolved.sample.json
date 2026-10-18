@@ -1,0 +1,76 @@
+{
+  "url": "http://localhost:3000/index.html",
+  "steps": [
+    {
+      "i": 0,
+      "action": "click",
+      "selector": "article:has(:is(h1,h2,h3,h4,h5,h6):text-is(\"Connect\")) >> role=link[name=\"Learn more\"i]",
+      "how": "scoped",
+      "name": "Learn more",
+      "role": "link",
+      "url": "http://localhost:3000/index.html",
+      "tab": 0,
+      "frameUrl": "http://localhost:3000/index.html"
+    },
+    {
+      "i": 1,
+      "action": "click",
+      "selector": "role=tab[name=\"Share\"i]",
+      "how": "unique",
+      "name": "Share",
+      "role": "tab",
+      "url": "http://localhost:3000/index.html",
+      "tab": 0,
+      "frameUrl": "http://localhost:3000/index.html"
+    },
+    {
+      "i": 2,
+      "action": "fill",
+      "selector": "input[name=\"name\"]",
+      "how": "unique",
+      "name": "Name",
+      "role": "textbox",
+      "url": "http://localhost:3000/contact.html",
+      "tab": 0,
+      "frameUrl": "http://localhost:3000/contact.html",
+      "value": "Sam Example",
+      "sensitive": false
+    },
+    {
+      "i": 3,
+      "action": "fill",
+      "selector": "input[name=\"email\"]",
+      "how": "unique",
+      "name": "Email",
+      "role": "textbox",
+      "url": "http://localhost:3000/contact.html",
+      "tab": 0,
+      "frameUrl": "http://localhost:3000/contact.html",
+      "value": "sam@example.com",
+      "sensitive": false
+    },
+    {
+      "i": 4,
+      "action": "fill",
+      "selector": "#password",
+      "how": "unique",
+      "name": "Password",
+      "role": "textbox",
+      "url": "http://localhost:3000/contact.html",
+      "tab": 0,
+      "frameUrl": "http://localhost:3000/contact.html",
+      "sensitive": true
+    },
+    {
+      "i": 5,
+      "action": "click",
+      "selector": "role=button[name=\"Send message\"i]",
+      "how": "unique",
+      "name": "Send message",
+      "role": "button",
+      "url": "http://localhost:3000/contact.html",
+      "tab": 0,
+      "frameUrl": "http://localhost:3000/contact.html"
+    }
+  ]
+}
