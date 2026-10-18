@@ -1,6 +1,6 @@
 # Showreel spike findings
 
-Status: **partial, 2026-10-18.** B0, S1, S2, S2b, S2c, S6, S7 and S8 are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
+Status: **partial, 2026-10-18.** B0, S1, S2, S2b, S2c, S5 (speed and feasibility; blind listening pending), S6, S7 and S8 are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
 `spikes/showreel/results/*.json`. Test machine: Apple M4, 16 GB, macOS; Playwright 1.63.0; Node 24.
 
 ## B0: baseline token cost of the old skill
@@ -178,9 +178,36 @@ exports to disk in chunks** (File System Access API or a streamed download), nev
 1080p60, offer 4K as opt-in, and show progress with an ETA**. The synthetic frame drawing is CPU-bound, so this is a pessimistic upper
 bound for the real compositor. Windows and Linux are untested.
 
+## S5: voice models in Node: **go: Kokoro default; Kitten as a fast tier, with caveats**
+
+Same 25-word sentence (about 10 s of audio), M4, CPU only, ONNX Runtime in Node. RTF is generation time divided by audio length (lower is faster; below 1 is faster than real time).
+`spikes/showreel/results/s5-tts.json`.
+
+| Model | RTF (median) | Peak memory | Download | Notes |
+|---|---|---|---|---|
+| Kokoro-82M q8, default threads | 0.405 | 717 MB | 96 MB model cache | first run 47 s including download; Apache-2.0 |
+| Kokoro, 2 threads | 0.371 | 715 MB | | extra threads barely help (single-thread bound) |
+| Kokoro, 1 thread | 0.467 | 701 MB | | still 2.1x real time on one M4 core |
+| Kitten nano 0.8 (fp32) | **0.062** | 477 MB | about 56 MB | 16x real time; 8 English voices |
+| Kitten micro 0.8 | 0.130 | 662 MB | about 41 MB | |
+| Kitten mini 0.8 | 0.250 | 922 MB | about 80 MB | |
+
+(All Kitten models together are 178 MB in the cache; the three Kitten sizes are from the package's model list.)
+
+Findings:
+1. **Kokoro works in Node as designed** and is fast enough even on one thread. A slower PC core (say 3x slower than an M4 core) would land near real time, so `doctor` must benchmark on the user's machine and fall back to a faster tier when RTF exceeds about 1.
+2. **Kitten runs in Node, but not out of the box.** `kitten-tts-js` 0.1.2 (an unofficial hobbyist port: Apache-2.0, 62 KB, no install scripts, uses the same WebAssembly `phonemizer` as Kokoro, so **no system tool is needed**) fails under Node with "no available backend found: [wasm] backend not found". Cause: `src/kitten-tts.js` line 84 requests the `wasm` provider whenever `ort.env.wasm` exists, which is also true in Node. Forcing the `cpu` provider from outside (patching `InferenceSession.create`) fixes it. The package also whitelists only `nano-0.8` (fp32), `micro-0.8` and `mini-0.8`; the 25 MB int8 model is not exposed.
+3. **Kitten is not lighter in memory** (477 to 922 MB versus 717 MB), only faster. Its value is speed: nano is about 6.5x faster than Kokoro.
+4. **Licences:** Kokoro-82M, its ONNX build and Kitten nano int8 model cards are Apache-2.0; provenance of the voices' training data was not audited.
+5. **Process exit:** calling `process.exit()` while ONNX Runtime threads are alive aborts with "mutex lock failed" after the work completes; the real skill must dispose sessions or use a worker process. Also `audio.save()` is asynchronous: await it before exiting.
+
+Proposed role: **Kokoro as the default voice; Kitten nano as an instant draft voice** in the editor (hear the script immediately, then render the final with Kokoro) and as the fallback tier for slow PCs. Because the Kitten port is unofficial and needs a patch, vendor the 62 KB package (Apache-2.0, keep its NOTICE) and fix the one line, rather than depending on npm.
+**Quality verdict: pending the owner's blind listening** (`~/Desktop/showreel-voice-blind-test`, files A to D; the key is stored outside the repo).
+
 ## Tooling notes (2026-10-18)
 
 - Gemini CLI could not be used: its free API-key quota (20 requests a day) was exhausted in minutes, and Google ended Google-account sign-in for Gemini CLI on 2026-06-18, so the owner's Jio plan cannot power it. Browser spikes were run by Claude directly.
+- Codex's sandbox also cannot run `npm install` against the default cache (EPERM on `~/.npm`); a delegate needs `npm_config_cache` pointed inside the workspace, or Claude installs the dependency first.
 - A test Firefox ("Nightly", Playwright's own build) was left running by a failed Codex run; it was stopped and the Firefox and WebKit test browsers were removed after S1. Spike scripts must close their browsers on failure.
 
 ## Follow-ups added

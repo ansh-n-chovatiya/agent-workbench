@@ -1,0 +1,91 @@
+{
+  "kokoro_threads_default": {
+    "threads": "default",
+    "rtfFirstWarmup": 0.437,
+    "rtfMedian": 0.405,
+    "rtfBest": 0.402,
+    "loadSeconds": 47,
+    "peakRssMb": 717,
+    "audioSeconds": 9.4,
+    "textWords": 25,
+    "modelCacheMb": 96
+  },
+  "kokoro_threads_2": {
+    "threads": 2,
+    "rtfFirstWarmup": 0.415,
+    "rtfMedian": 0.371,
+    "rtfBest": 0.368,
+    "loadSeconds": 0.2,
+    "peakRssMb": 715,
+    "audioSeconds": 9.4,
+    "textWords": 25,
+    "modelCacheMb": 96
+  },
+  "kokoro_threads_1": {
+    "threads": 1,
+    "rtfFirstWarmup": 0.485,
+    "rtfMedian": 0.467,
+    "rtfBest": 0.457,
+    "loadSeconds": 0.3,
+    "peakRssMb": 701,
+    "audioSeconds": 9.4,
+    "textWords": 25,
+    "modelCacheMb": 96
+  },
+  "kitten": {
+    "kitten-tts-nano-0.8": {
+      "rtfFirstWarmup": 0.07,
+      "rtfMedian": 0.062,
+      "loadSeconds": 0.2,
+      "peakRssMb": 477,
+      "audioSeconds": 11.4,
+      "cacheMbAfterThisModel": 178,
+      "voices": [
+        "Bella",
+        "Jasper",
+        "Luna",
+        "Bruno",
+        "Rosie",
+        "Hugo",
+        "Kiki",
+        "Leo"
+      ]
+    },
+    "kitten-tts-micro-0.8": {
+      "rtfFirstWarmup": 0.127,
+      "rtfMedian": 0.13,
+      "loadSeconds": 0.2,
+      "peakRssMb": 662,
+      "audioSeconds": 11.2,
+      "cacheMbAfterThisModel": 178,
+      "voices": [
+        "Bella",
+        "Jasper",
+        "Luna",
+        "Bruno",
+        "Rosie",
+        "Hugo",
+        "Kiki",
+        "Leo"
+      ]
+    },
+    "kitten-tts-mini-0.8": {
+      "rtfFirstWarmup": 0.25,
+      "rtfMedian": 0.25,
+      "loadSeconds": 0.2,
+      "peakRssMb": 922,
+      "audioSeconds": 10,
+      "cacheMbAfterThisModel": 178,
+      "voices": [
+        "Bella",
+        "Jasper",
+        "Luna",
+        "Bruno",
+        "Rosie",
+        "Hugo",
+        "Kiki",
+        "Leo"
+      ]
+    }
+  }
+}
