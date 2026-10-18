@@ -4,7 +4,7 @@ import { drawFrame, loadFonts, loadAssets } from '../scripts/lib/compose/draw.js
 import { stateAt } from '../scripts/lib/compose/plan.mjs';
 import { timecode } from './helpers.mjs';
 
-export function Preview({ plan, provider, time, setTime, playing, setPlaying, onPick }) {
+export function Preview({ plan, provider, time, setTime, playing, setPlaying, onPick, focus }) {
   const canvas = useRef(), current = useRef(time), drawn = useRef(null);
   const [loop, setLoop] = useState(false), [rate, setRate] = useState(1);
   const [assets, setAssets] = useState(null), [error, setError] = useState(''), [dropped, setDropped] = useState(false);
@@ -72,9 +72,19 @@ export function Preview({ plan, provider, time, setTime, playing, setPlaying, on
     onPick({ x: camera.cx + ((x - f.x) / f.w - 0.5) * p.sourceSize.width / camera.z / p.scale,
       y: camera.cy + ((y - f.y) / f.h - 0.5) * p.sourceSize.height / camera.z / p.scale });
   }
+  let crosshair = null;
+  if (plan && focus) {
+    const state = stateAt(plan,time), f = plan.layout.frame;
+    const k = focus.keyframes.findLast(k => k.t <= state.sourceT) ?? focus.keyframes[0];
+    if (k && state.section === 'main') {
+      const x = f.x + (0.5 + (k.x-state.camera.cx)*state.camera.z*plan.scale/plan.sourceSize.width)*f.w;
+      const y = f.y + (0.5 + (k.y-state.camera.cy)*state.camera.z*plan.scale/plan.sourceSize.height)*f.h;
+      if (x >= f.x && x <= f.x+f.w && y >= f.y && y <= f.y+f.h) crosshair = {left:`${x/plan.output.width*100}%`,top:`${y/plan.output.height*100}%`};
+    }
+  }
   const step = direction => { setPlaying(false); setTime(Math.max(0, Math.min(duration, time + direction / fps))); };
   return <section class="preview" aria-label="Video preview">
-    <div class="preview-stage"><canvas ref={canvas} onClick={pick} aria-label="Composition preview; click to pick zoom focus" style={{ aspectRatio: plan ? `${plan.output.width}/${plan.output.height}` : '16/9' }} /></div>
+    <div class="preview-stage"><div class="preview-canvas-wrap" style={{'--preview-aspect':plan ? plan.output.width/plan.output.height : 16/9}}><canvas ref={canvas} onClick={pick} aria-label="Composition preview; click to pick zoom focus" style={{ aspectRatio: plan ? `${plan.output.width}/${plan.output.height}` : '16/9' }} />{crosshair && <span class="focus-crosshair" style={crosshair} aria-label="Selected zoom focus">+</span>}</div></div>
     {error && <p class="error" role="alert">{error}</p>}
     {dropped && <p class="warning" role="status">Preview below 24 fps — frames are being dropped.</p>}
     <div class="transport">

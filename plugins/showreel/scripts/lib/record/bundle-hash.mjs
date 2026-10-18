@@ -13,7 +13,7 @@ export const renderBundleInputs = [...bundleInputs,
 ];
 export const encoderHash = (root = new URL('../../../', import.meta.url)) => hashInputs(bundleInputs, root);
 export const renderHash = (root = new URL('../../../', import.meta.url)) => hashInputs(renderBundleInputs, root);
-export const editorBundleInputs = [...renderBundleInputs, ...['main.jsx', 'index.html', 'editor.css', 'App.jsx', 'Preview.jsx', 'Settings.jsx', 'TopBar.jsx', 'ExportDialog.jsx', 'state.js', 'frames.js', 'helpers.mjs'].map(name => `editor/${name}`), 'scripts/lib/compose/settings-schema.mjs'];
+export const editorBundleInputs = [...renderBundleInputs, ...['main.jsx', 'index.html', 'editor.css', 'App.jsx', 'Preview.jsx', 'Settings.jsx', 'TopBar.jsx', 'ExportDialog.jsx', 'state.js', 'frames.js', 'helpers.mjs', 'Timeline.jsx', 'edit-ops.mjs'].map(name => `editor/${name}`), 'scripts/lib/compose/settings-schema.mjs'];
 export const editorHash = (root = new URL('../../../', import.meta.url)) => hashInputs(editorBundleInputs, root);
 async function hashInputs(inputs, root) {
   const hash = createHash('sha256');

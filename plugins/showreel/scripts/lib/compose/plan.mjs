@@ -30,6 +30,7 @@ export function planRender({ composition, brief, storyboard, events, record, sou
   const cssSource = { width: sourceSize.width / record.scale.used, height: sourceSize.height / record.scale.used };
   const clone = (v) => JSON.parse(JSON.stringify(v));
   return { output: clone(output), layout, theme: THEMES[composition.theme], frame: clone(composition.frame), timemap,
+    regions: clone(regions),
     camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
     cues: !composition.captions.enabled ? [] : composition.captions.cues !== undefined ? clone(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true }),
     captions: clone(composition.captions),

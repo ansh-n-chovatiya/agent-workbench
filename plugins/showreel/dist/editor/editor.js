@@ -1,4 +1,4 @@
-// showreel editor sources sha256: c5282d40e8e86dfdbb483b90a7226afbf2fcd54942215b9d482e5c01180fb98b
+// showreel editor sources sha256: 00816a513515e7d412649b4eb10dec2b4e07d16964f6e090a4b61d212b0ebbbf
 (() => {
   // node_modules/preact/dist/preact.module.js
   var n;
@@ -739,7 +739,7 @@
   function validateComposition(c3, { duration = Number.MAX_VALUE } = {}) {
     const errors = [], warnings = [];
     const fail = (p3, m3) => errors.push(`composition.json: "${p3}" ${m3}`);
-    const range = (p3, v3, min, max, integer = false) => {
+    const range2 = (p3, v3, min, max, integer = false) => {
       if (!Number.isFinite(v3) || v3 < min || v3 > max || integer && !Number.isInteger(v3)) fail(p3, `must be ${integer ? "an integer" : "a number"} from ${min} to ${max}`);
     };
     const namedColors = new Set("aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato transparent turquoise violet wheat white whitesmoke yellow yellowgreen".split(" "));
@@ -755,7 +755,7 @@
       for (const [k3, x2] of Object.entries(v3)) {
         const key = p3 ? `${p3}.${k3}` : k3;
         if (p3 === "frame" && k3 === "paddingPct" || /^cards\.(title|outro)$/.test(p3) && k3 === "duration") {
-          range(key, x2, 0, k3 === "duration" ? 30 : 25);
+          range2(key, x2, 0, k3 === "duration" ? 30 : 25);
           continue;
         }
         if (key === "captions.cues") continue;
@@ -772,7 +772,7 @@
         else if (Array.isArray(model[k3])) {
           if (!Array.isArray(x2)) fail(key, "must be an array");
         } else if (typeof model[k3] === "boolean" && typeof x2 !== "boolean") fail(key, "must be boolean");
-        if (k3 === "heightPct" && p3.endsWith(".logo")) range(key, x2, 1, 40);
+        if (k3 === "heightPct" && p3.endsWith(".logo")) range2(key, x2, 1, 40);
         if (k3 === "image" && x2 !== null && !safeImagePath(x2)) fail(key, "must be a local path inside the project");
       }
     }
@@ -791,20 +791,20 @@
     enumAt("output.fps", [30, 60]);
     enumAt("output.quality", ["standard", "high"]);
     if (typeof c3.run?.id !== "string" || !c3.run.id.trim()) fail("run.id", "must be nonempty");
-    for (const [p3, min, max, int] of COMPOSITION_RANGES) range(p3, get(p3), min, max, int);
-    range("zoom.depth", zoomDepth(d3.zoom?.depth), 1.05, 4);
+    for (const [p3, min, max, int] of COMPOSITION_RANGES) range2(p3, get(p3), min, max, int);
+    range2("zoom.depth", zoomDepth(d3.zoom?.depth), 1.05, 4);
     for (const [p3, values] of Object.entries(COMPOSITION_ENUMS)) enumAt(p3, values);
     const custom = d3.cursor?.custom;
     if (d3.cursor?.style === "custom" && !safeImagePath(custom?.arrow?.image)) fail("cursor.custom.arrow.image", "is required for custom style");
     if (object(custom)) {
       if (!safeImagePath(custom.arrow?.image)) fail("cursor.custom.arrow.image", "must be a local PNG, SVG or WebP path");
-      if (custom.heightPct !== void 0) range("cursor.custom.heightPct", custom.heightPct, 1, 8);
+      if (custom.heightPct !== void 0) range2("cursor.custom.heightPct", custom.heightPct, 1, 8);
       for (const shape of ["arrow", "hand", "text"]) {
         const spec = custom[shape], p3 = `cursor.custom.${shape}`;
         if (spec === void 0) continue;
         if (!safeImagePath(spec?.image) || !/\.(png|svg|webp)$/i.test(spec.image)) fail(`${p3}.image`, "must be a local PNG, SVG or WebP path");
-        range(`${p3}.hotspot.x`, spec?.hotspot?.x, 0, 1);
-        range(`${p3}.hotspot.y`, spec?.hotspot?.y, 0, 1);
+        range2(`${p3}.hotspot.x`, spec?.hotspot?.x, 0, 1);
+        range2(`${p3}.hotspot.y`, spec?.hotspot?.y, 0, 1);
       }
     }
     if (!Array.isArray(d3.zoom?.onlyKinds) || d3.zoom.onlyKinds.some((k3) => !["click", "fill"].includes(k3))) fail("zoom.onlyKinds", "must contain click|fill");
@@ -814,7 +814,7 @@
       const p3 = `cards.${key}`;
       enumAt(`${p3}.align`, ["center", "left"]);
       enumAt(`${p3}.accent.shape`, ["bar", "underline", "none"]);
-      for (const [k3, min, max] of [["durationSec", 0, 30], ["titleSizePct", 1, 20], ["subtitleSizePct", 1, 12], ["accent.widthPct", 0, 100]]) range(`${p3}.${k3}`, get(`${p3}.${k3}`), min, max);
+      for (const [k3, min, max] of [["durationSec", 0, 30], ["titleSizePct", 1, 20], ["subtitleSizePct", 1, 12], ["accent.widthPct", 0, 100]]) range2(`${p3}.${k3}`, get(`${p3}.${k3}`), min, max);
       for (const k3 of ["titleColor", "subtitleColor", "accent.color"]) color(`${p3}.${k3}`, get(`${p3}.${k3}`));
       for (const k3 of [key === "title" ? "title" : "text", "subtitle"]) {
         const v3 = get(`${p3}.${k3}`);
@@ -822,12 +822,12 @@
       }
       if (get(`${p3}.enabled`) && !get(`${p3}.${key === "title" ? "title" : "text"}`)) fail(p3, "requires text when enabled");
       const logo = get(`${p3}.logo`);
-      if (object(logo)) range(`${p3}.logo.heightPct`, logo.heightPct, 1, 40);
+      if (object(logo)) range2(`${p3}.logo.heightPct`, logo.heightPct, 1, 40);
       if (object(logo) && !safeImagePath(logo.image)) fail(`${p3}.logo.image`, "must be a local path inside the project");
     }
     for (const p3 of ["frame.background", "cards.title.background", "cards.outro.background"]) {
       enumAt(`${p3}.type`, ["theme", "gradient", "solid", "image"]);
-      range(`${p3}.angle`, get(`${p3}.angle`), 0, 360);
+      range2(`${p3}.angle`, get(`${p3}.angle`), 0, 360);
       const colors = get(`${p3}.colors`);
       if (!Array.isArray(colors) || colors.length < 1 || colors.length > 16 || get(`${p3}.type`) === "gradient" && colors.length < 2) fail(`${p3}.colors`, "must contain 1 to 16 colors (at least 2 for a gradient)");
       else colors.forEach((v3, i3) => color(`${p3}.colors.${i3}`, v3));
@@ -1259,29 +1259,30 @@
     });
     if (!regionValidation.ok) throw new Error(regionValidation.errors.join("\n"));
     const cssSource = { width: sourceSize.width / record.scale.used, height: sourceSize.height / record.scale.used };
-    const clone2 = (v3) => JSON.parse(JSON.stringify(v3));
+    const clone3 = (v3) => JSON.parse(JSON.stringify(v3));
     return {
-      output: clone2(output),
+      output: clone3(output),
       layout,
       theme: THEMES[composition.theme],
-      frame: clone2(composition.frame),
+      frame: clone3(composition.frame),
       timemap,
+      regions: clone3(regions),
       camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
-      cues: !composition.captions.enabled ? [] : composition.captions.cues !== void 0 ? clone2(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true }),
-      captions: clone2(composition.captions),
+      cues: !composition.captions.enabled ? [] : composition.captions.cues !== void 0 ? clone3(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true }),
+      captions: clone3(composition.captions),
       cursor: {
         ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }),
         sizePx: output.height * (composition.cursor.style === "custom" ? composition.cursor.custom?.heightPct ?? composition.cursor.sizePct : composition.cursor.sizePct) / 100,
         color: THEMES[composition.theme].cursor.fill,
         ...composition.cursor
       },
-      clicks: clone2(events.clicks),
-      ripples: clone2(events.clicks),
+      clicks: clone3(events.clicks),
+      ripples: clone3(events.clicks),
       sourceSize: { ...sourceSize },
       viewport: { ...events.viewport },
       scale: record.scale.used,
       warnings: [...assetWarnings, ...record.warnings ?? [], ...regionValidation.warnings, ...composition.captions.mode === "overlay" ? ["overlay captions can cover the video"] : []],
-      cards: clone2(cards)
+      cards: clone3(cards)
     };
   }
   function stateAt(plan, tOut) {
@@ -2275,9 +2276,9 @@
       return this.bytes.length * 8 - this.pos;
     }
     clone() {
-      const clone2 = new _Bitstream(this.bytes);
-      clone2.pos = this.pos;
-      return clone2;
+      const clone3 = new _Bitstream(this.bytes);
+      clone3.pos = this.pos;
+      return clone3;
     }
   };
 
@@ -8443,15 +8444,15 @@
     assert(encryptionInfo.defaultCryptByteBlock !== null && encryptionInfo.defaultSkipByteBlock !== null);
     const cryptRanges = collectCryptRanges(sampleEncryption.subsamples, encryptionInfo.defaultCryptByteBlock, encryptionInfo.defaultSkipByteBlock);
     let totalCryptLen = 0;
-    for (const range of cryptRanges) {
-      for (const seg of range.perSubsample) {
+    for (const range2 of cryptRanges) {
+      for (const seg of range2.perSubsample) {
         totalCryptLen += seg.length;
       }
     }
     const cryptBuffer = new Uint8Array(totalCryptLen);
     let writePos = 0;
-    for (const range of cryptRanges) {
-      for (const seg of range.perSubsample) {
+    for (const range2 of cryptRanges) {
+      for (const seg of range2.perSubsample) {
         cryptBuffer.set(data.subarray(seg.offset, seg.offset + seg.length), writePos);
         writePos += seg.length;
       }
@@ -8459,8 +8460,8 @@
     const plain = await cryptApply(cryptBuffer);
     const output = new Uint8Array(data);
     let readPos = 0;
-    for (const range of cryptRanges) {
-      for (const seg of range.perSubsample) {
+    for (const range2 of cryptRanges) {
+      for (const seg of range2.perSubsample) {
         output.set(plain.subarray(readPos, readPos + seg.length), seg.offset);
         readPos += seg.length;
       }
@@ -8490,12 +8491,12 @@
     const output = new Uint8Array(data);
     const cryptRanges = collectCryptRanges(sampleEncryption.subsamples, cryptByteBlock, skipByteBlock);
     const ivView = new DataView(sampleEncryption.iv.buffer, sampleEncryption.iv.byteOffset, 16);
-    for (const range of cryptRanges) {
+    for (const range2 of cryptRanges) {
       ctx.iv[0] = ivView.getUint32(0, false);
       ctx.iv[1] = ivView.getUint32(4, false);
       ctx.iv[2] = ivView.getUint32(8, false);
       ctx.iv[3] = ivView.getUint32(12, false);
-      for (const seg of range.perSubsample) {
+      for (const seg of range2.perSubsample) {
         const numBlocks = seg.length / 16;
         for (let b2 = 0; b2 < numBlocks; b2++) {
           const offset = seg.offset + b2 * 16;
@@ -12406,7 +12407,7 @@
       const { id, color, alpha } = event.data;
       chain = chain.then(async () => {
         try {
-          const frame = await merge2(color, alpha);
+          const frame = await merge3(color, alpha);
           self.postMessage({ id, frame }, { transfer: [frame] });
         } catch (error) {
           self.postMessage({ id, error: error.message });
@@ -12416,7 +12417,7 @@
         }
       });
     });
-    const merge2 = async (color, alpha) => {
+    const merge3 = async (color, alpha) => {
       const format = color.format;
       const alphaFormat = alpha.format;
       if (!format || !alphaFormat) {
@@ -14901,7 +14902,7 @@
   var isTyping = (target) => !!target?.closest?.('input, textarea, select, [contenteditable="true"]');
 
   // editor/Preview.jsx
-  function Preview({ plan, provider, time, setTime, playing, setPlaying, onPick }) {
+  function Preview({ plan, provider, time, setTime, playing, setPlaying, onPick, focus }) {
     const canvas = A2(), current = A2(time), drawn = A2(null);
     const [loop, setLoop] = d2(false), [rate, setRate] = d2(1);
     const [assets, setAssets] = d2(null), [error, setError] = d2(""), [dropped, setDropped] = d2(false);
@@ -15011,11 +15012,21 @@
         y: camera.cy + ((y3 - f3.y) / f3.h - 0.5) * p3.sourceSize.height / camera.z / p3.scale
       });
     }
+    let crosshair = null;
+    if (plan && focus) {
+      const state = stateAt(plan, time), f3 = plan.layout.frame;
+      const k3 = focus.keyframes.findLast((k4) => k4.t <= state.sourceT) ?? focus.keyframes[0];
+      if (k3 && state.section === "main") {
+        const x2 = f3.x + (0.5 + (k3.x - state.camera.cx) * state.camera.z * plan.scale / plan.sourceSize.width) * f3.w;
+        const y3 = f3.y + (0.5 + (k3.y - state.camera.cy) * state.camera.z * plan.scale / plan.sourceSize.height) * f3.h;
+        if (x2 >= f3.x && x2 <= f3.x + f3.w && y3 >= f3.y && y3 <= f3.y + f3.h) crosshair = { left: `${x2 / plan.output.width * 100}%`, top: `${y3 / plan.output.height * 100}%` };
+      }
+    }
     const step = (direction) => {
       setPlaying(false);
       setTime(Math.max(0, Math.min(duration, time + direction / fps)));
     };
-    return /* @__PURE__ */ k("section", { class: "preview", "aria-label": "Video preview" }, /* @__PURE__ */ k("div", { class: "preview-stage" }, /* @__PURE__ */ k("canvas", { ref: canvas, onClick: pick2, "aria-label": "Composition preview; click to pick zoom focus", style: { aspectRatio: plan ? `${plan.output.width}/${plan.output.height}` : "16/9" } })), error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, error), dropped && /* @__PURE__ */ k("p", { class: "warning", role: "status" }, "Preview below 24 fps \u2014 frames are being dropped."), /* @__PURE__ */ k("div", { class: "transport" }, /* @__PURE__ */ k("button", { onClick: () => step(-1), title: "Previous frame (,)", disabled: !plan }, "\u2039"), /* @__PURE__ */ k("button", { onClick: () => setPlaying(!playing), disabled: !plan || !assets, "aria-label": playing ? "Pause" : "Play" }, playing ? "Pause" : "Play"), /* @__PURE__ */ k("button", { onClick: () => step(1), title: "Next frame (.)", disabled: !plan }, "\u203A"), /* @__PURE__ */ k("output", { class: "timecode" }, timecode(time, fps), " / ", timecode(duration, fps)), /* @__PURE__ */ k("label", { class: "seek" }, /* @__PURE__ */ k("span", { class: "sr-only" }, "Seek"), /* @__PURE__ */ k("input", { type: "range", "aria-label": "Seek output time", min: "0", max: duration, step: 1 / fps, value: time, onInput: (e3) => {
+    return /* @__PURE__ */ k("section", { class: "preview", "aria-label": "Video preview" }, /* @__PURE__ */ k("div", { class: "preview-stage" }, /* @__PURE__ */ k("div", { class: "preview-canvas-wrap", style: { "--preview-aspect": plan ? plan.output.width / plan.output.height : 16 / 9 } }, /* @__PURE__ */ k("canvas", { ref: canvas, onClick: pick2, "aria-label": "Composition preview; click to pick zoom focus", style: { aspectRatio: plan ? `${plan.output.width}/${plan.output.height}` : "16/9" } }), crosshair && /* @__PURE__ */ k("span", { class: "focus-crosshair", style: crosshair, "aria-label": "Selected zoom focus" }, "+"))), error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, error), dropped && /* @__PURE__ */ k("p", { class: "warning", role: "status" }, "Preview below 24 fps \u2014 frames are being dropped."), /* @__PURE__ */ k("div", { class: "transport" }, /* @__PURE__ */ k("button", { onClick: () => step(-1), title: "Previous frame (,)", disabled: !plan }, "\u2039"), /* @__PURE__ */ k("button", { onClick: () => setPlaying(!playing), disabled: !plan || !assets, "aria-label": playing ? "Pause" : "Play" }, playing ? "Pause" : "Play"), /* @__PURE__ */ k("button", { onClick: () => step(1), title: "Next frame (.)", disabled: !plan }, "\u203A"), /* @__PURE__ */ k("output", { class: "timecode" }, timecode(time, fps), " / ", timecode(duration, fps)), /* @__PURE__ */ k("label", { class: "seek" }, /* @__PURE__ */ k("span", { class: "sr-only" }, "Seek"), /* @__PURE__ */ k("input", { type: "range", "aria-label": "Seek output time", min: "0", max: duration, step: 1 / fps, value: time, onInput: (e3) => {
       setPlaying(false);
       setTime(+e3.currentTarget.value);
     } })), /* @__PURE__ */ k("label", null, /* @__PURE__ */ k("input", { type: "checkbox", checked: loop, onChange: (e3) => setLoop(e3.currentTarget.checked) }), " Loop"), /* @__PURE__ */ k("label", null, /* @__PURE__ */ k("span", { class: "sr-only" }, "Playback rate"), /* @__PURE__ */ k("select", { "aria-label": "Playback rate", value: rate, onChange: (e3) => setRate(+e3.currentTarget.value) }, [0.5, 1, 2].map((n2) => /* @__PURE__ */ k("option", { value: n2 }, n2, "\xD7"))))));
@@ -15037,19 +15048,127 @@
     ...["title", "outro"].map((k3) => ({ path: `cards.${k3}.logo`, reason: "Container; use logo image and height settings." }))
   ];
   var excluded = new Set(EXCLUDED.map((s3) => s3.path));
-  var labelFor = (path) => path.split(".").map((s3) => s3.replace(/([a-z])([A-Z])/g, "$1 $2")).join(" \u203A ");
+  var names = {
+    theme: "Theme",
+    width: "Width",
+    height: "Height",
+    fps: "Frame rate",
+    quality: "Quality",
+    paddingXPct: "Horizontal padding",
+    paddingYPct: "Vertical padding",
+    paddingPct: "Padding on both axes",
+    radiusPx: "Corner radius",
+    enabled: "Enabled",
+    blurPx: "Blur",
+    offsetYPx: "Vertical offset",
+    opacity: "Opacity",
+    color: "Colour",
+    widthPx: "Width",
+    type: "Style",
+    colors: "Gradient colours",
+    angle: "Gradient angle",
+    image: "Image",
+    visible: "Show cursor",
+    style: "Style",
+    sizePct: "Cursor size",
+    fill: "Fill colour",
+    stroke: "Outline colour",
+    shadow: "Show cursor shadow",
+    scaleWithZoom: "Scale with zoom",
+    hideWhenIdleSec: "Hide after idle",
+    pressScale: "Size while pressed",
+    autoShape: "Match cursor to target",
+    distancePx: "Travel distance",
+    durationSec: "Duration",
+    startAfterClickSec: "Delay after click",
+    microCorrection: "Subtle cursor correction",
+    entrance: "Animate cursor entrance",
+    sizeMult: "Effect size",
+    depth: "Zoom depth",
+    autoSuggest: "Suggest zoom regions",
+    speed: "Camera movement",
+    holdAfterClickSec: "Hold after click",
+    leadInSec: "Delay before zoom",
+    onlyKinds: "Zoom trigger types",
+    mode: "Caption layout",
+    position: "Caption position",
+    bandHeightPct: "Caption band height",
+    fontSizePct: "Text size",
+    fontWeight: "Text weight",
+    background: "Background colour",
+    maxLines: "Maximum lines",
+    align: "Text alignment",
+    title: "Title text",
+    text: "Outro text",
+    subtitle: "Subtitle text",
+    titleSizePct: "Title size",
+    subtitleSizePct: "Subtitle size",
+    titleColor: "Title colour",
+    subtitleColor: "Subtitle colour",
+    shape: "Accent shape",
+    widthPct: "Accent width",
+    heightPct: "Height",
+    fade: "Transition duration",
+    transition: "Transition style",
+    x: "Horizontal hotspot",
+    y: "Vertical hotspot"
+  };
+  var sections = {
+    shadow: "Frame shadow",
+    border: "Frame border",
+    background: "Background",
+    followThrough: "Cursor follow through",
+    clickEffect: "Click effect",
+    accent: "Accent",
+    logo: "Logo",
+    arrow: "Arrow cursor",
+    hand: "Hand cursor",
+    text: "Text cursor"
+  };
+  var labelFor = (path) => {
+    const parts = path.split("."), leaf = parts.at(-1), parent = parts.at(-2);
+    if (parent === "hotspot") return `${sections[parts.at(-3)]} ${names[leaf].toLowerCase()}`;
+    if (leaf === "enabled") return {
+      zoom: "Enable zoom",
+      captions: "Show captions",
+      title: "Show title card",
+      outro: "Show outro card",
+      shadow: "Show frame shadow",
+      border: "Show frame border",
+      followThrough: "Enable follow through",
+      accent: "Show accent"
+    }[parent];
+    if (path === "cursor.clickEffect.sizeMult") return "Click effect size";
+    if (path === "cursor.custom.heightPct") return "Custom cursor height";
+    if (path === "cursor.style") return "Cursor style";
+    if (path === "cursor.clickEffect.style") return "Show click effect";
+    const prefix = sections[parent];
+    return prefix && ["style", "color", "widthPx", "type", "colors", "angle", "image", "durationSec", "sizeMult", "heightPct", "x", "y"].includes(leaf) ? `${prefix} ${names[leaf].toLowerCase()}` : names[leaf];
+  };
+  var unitFor = (path) => /Pct$/.test(path) ? "%" : /Px$|output\.(width|height)$/.test(path) ? "px" : /Sec$|cards.fade$/.test(path) ? "s" : /Mult$|pressScale$|zoom.depth$/.test(path) ? "x" : void 0;
+  var helpFor = (path, label) => ({
+    "zoom.onlyKinds": "Enter a JSON list of click and fill actions that should trigger a suggested zoom.",
+    "zoom.depth": "Choose how much to magnify the recording during a zoom region.",
+    "frame.paddingXPct": "Set the space on the left and right as a percentage of the output width.",
+    "frame.paddingYPct": "Set the space above and below as a percentage of the output height.",
+    "cursor.clickEffect.style": "Choose a ripple or pulse to highlight clicks, or none to hide the effect.",
+    "cursor.hideWhenIdleSec": "Hide the cursor after this many seconds without movement.",
+    "zoom.autoSuggest": "Generate zoom regions from recorded clicks and typing when no regions are saved."
+  })[path] ?? (unitFor(path) === "%" ? `Adjust ${label.toLowerCase()} as a percentage of the containing frame.` : unitFor(path) === "s" ? `Set ${label.toLowerCase()} in seconds.` : unitFor(path) === "px" ? `Set ${label.toLowerCase()} in output pixels.` : unitFor(path) === "x" ? `Set the multiplier for ${label.toLowerCase()}.` : `Choose ${label.toLowerCase()} for the ${path.startsWith("cards.title") ? "title card" : path.startsWith("cards.outro") ? "outro card" : path.split(".")[0] === "frame" ? "video frame" : path.split(".")[0]} settings.`);
   var SETTINGS = Object.entries(compositionPaths({})).filter(([path]) => !excluded.has(path)).map(([path, value]) => {
     const group = /^(frame\.|theme$)/.test(path) ? "look" : path.split(".")[0];
     const options = SETTING_ENUMS[path];
-    const range = SETTING_RANGES[path];
-    const control = options ? "select" : range ? "number" : typeof value === "boolean" ? "toggle" : path.endsWith(".colors") ? "gradient" : path.endsWith(".image") ? "image" : /(?:color|Color|fill|stroke|captions.background)$/.test(path) ? "color" : "text";
+    const range2 = SETTING_RANGES[path];
+    const control = options ? "select" : range2 ? "number" : typeof value === "boolean" ? "toggle" : path.endsWith(".colors") ? "gradient" : path.endsWith(".image") ? "image" : /(?:color|Color|fill|stroke|captions.background)$/.test(path) ? "color" : "text";
     return {
       path,
       group,
+      section: path.startsWith("cards.") ? `${path.split(".")[1]} card \xB7 ${sections[path.split(".")[2]] ?? "Text and timing"}` : sections[path.split(".")[1]] ?? "General",
       label: labelFor(path),
-      help: path === "zoom.depth" ? "Zoom factor from 1.05 to 4; also accepts subtle, medium or strong." : path === "zoom.onlyKinds" ? "JSON array containing click and/or fill." : `Set ${labelFor(path).toLowerCase()}.${path.endsWith("Pct") ? " Measured as a percentage." : path.endsWith("Sec") ? " Measured in seconds." : ""}`,
+      help: helpFor(path, labelFor(path)),
+      unit: unitFor(path),
       control,
-      ...range ?? {},
+      ...range2 ?? {},
       ...options ? { options } : {},
       advanced: /custom|hotspot|followThrough|pressScale|microCorrection|paddingPct/.test(path)
     };
@@ -15067,7 +15186,7 @@
     if (s3.control === "select") return /* @__PURE__ */ k("select", { ...common, value, onChange: (e3) => onChange(s3.options.find((v3) => String(v3) === e3.currentTarget.value)) }, s3.options.map((option) => /* @__PURE__ */ k("option", { value: option }, option)));
     if (s3.control === "number") {
       const numeric = s3.path === "zoom.depth" ? zoomDepth(value) : value;
-      return /* @__PURE__ */ k("div", { class: "control-row" }, /* @__PURE__ */ k("input", { ...common, type: "range", min: s3.min, max: s3.max, step: s3.step, value: numeric ?? s3.min, onInput: (e3) => onChange(+e3.currentTarget.value) }), /* @__PURE__ */ k("input", { "aria-label": `${label} value`, "aria-invalid": invalid || void 0, type: "number", min: s3.min, max: s3.max, step: s3.step, value: numeric ?? "", onInput: (e3) => onChange(e3.currentTarget.value === "" ? null : +e3.currentTarget.value) }));
+      return /* @__PURE__ */ k("div", { class: "control-row" }, /* @__PURE__ */ k("input", { ...common, type: "range", min: s3.min, max: s3.max, step: s3.step, value: numeric ?? s3.min, onInput: (e3) => onChange(+e3.currentTarget.value) }), /* @__PURE__ */ k("input", { "aria-label": `${label} value`, "aria-invalid": invalid || void 0, type: "number", min: s3.min, max: s3.max, step: s3.step, value: numeric ?? "", onInput: (e3) => onChange(e3.currentTarget.value === "" ? null : +e3.currentTarget.value) }), s3.unit && /* @__PURE__ */ k("span", { class: "control-unit" }, s3.unit));
     }
     if (s3.control === "color") return /* @__PURE__ */ k(Color, { id, label, value, onChange, invalid });
     if (s3.control === "gradient") {
@@ -15097,20 +15216,25 @@
   }
   function Settings({ state, store }) {
     const [query, setQuery] = d2(""), [tab, setTab] = d2("look");
-    const groups = groupSettings(SETTINGS, query), names = Object.keys(groups), active = groups[tab] ? tab : names[0];
+    const groups = groupSettings(SETTINGS, query), names2 = Object.keys(groups), active = groups[tab] ? tab : names2[0];
     const values = compositionPaths(state.composition);
     const change = (path, value) => store.change(path, value);
     function field(s3) {
       const errors = errorsForPath(state.errors, s3.path), id = `setting-${s3.path}`;
-      return /* @__PURE__ */ k("div", { class: "setting", key: s3.path }, /* @__PURE__ */ k("div", { class: "setting-label" }, /* @__PURE__ */ k("label", { for: id, title: s3.help }, s3.label), /* @__PURE__ */ k("button", { class: "reset", "aria-label": `Reset ${s3.label}`, title: "Reset to default", onClick: () => store.change(s3.path, void 0, { reset: true }) }, "\u21BA")), /* @__PURE__ */ k(Control, { setting: s3, value: values[s3.path], onChange: (value) => change(s3.path, value), values, change, invalid: !!errors.length }), !!errors.length && /* @__PURE__ */ k("p", { class: "error", id: `${id}-error` }, errors.join("\n")));
+      return /* @__PURE__ */ k("div", { class: "setting", key: s3.path }, /* @__PURE__ */ k("div", { class: "setting-label" }, /* @__PURE__ */ k("label", { for: id, title: s3.help }, s3.label), /* @__PURE__ */ k("button", { class: "reset", "aria-label": `Reset ${s3.label}`, title: "Reset to default", onClick: () => store.change(s3.path, void 0, { reset: true }) }, "\u21BA")), /* @__PURE__ */ k(Control, { setting: s3, value: values[s3.path], onChange: (value) => change(s3.path, value), values, change, invalid: !!errors.length }), /* @__PURE__ */ k("p", { class: "setting-help" }, s3.help), !!errors.length && /* @__PURE__ */ k("p", { class: "error", id: `${id}-error` }, errors.join("\n")));
+    }
+    function fields(entries) {
+      const sections2 = {};
+      for (const entry of entries) (sections2[entry.section] ??= []).push(entry);
+      return Object.entries(sections2).map(([name, items]) => /* @__PURE__ */ k("fieldset", { class: "setting-group", key: name }, /* @__PURE__ */ k("legend", null, name), items.map(field)));
     }
     return /* @__PURE__ */ k("aside", { class: "settings", "aria-label": "Composition settings" }, /* @__PURE__ */ k("div", { class: "panel-heading" }, /* @__PURE__ */ k("h2", null, "Settings"), /* @__PURE__ */ k("span", null, "COMPOSITION")), /* @__PURE__ */ k("label", { class: "search" }, /* @__PURE__ */ k("span", { class: "sr-only" }, "Search settings"), /* @__PURE__ */ k("input", { type: "search", placeholder: "Search settings\u2026", value: query, onInput: (e3) => setQuery(e3.currentTarget.value) })), /* @__PURE__ */ k("div", { class: "tabs", role: "tablist", "aria-label": "Settings groups", onKeyDown: (e3) => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e3.key)) return;
       e3.preventDefault();
-      const index = names.indexOf(active), next = e3.key === "Home" ? 0 : e3.key === "End" ? names.length - 1 : (index + (e3.key === "ArrowRight" ? 1 : -1) + names.length) % names.length;
-      setTab(names[next]);
-      document.getElementById(`tab-${names[next]}`)?.focus();
-    } }, names.map((name) => /* @__PURE__ */ k("button", { role: "tab", id: `tab-${name}`, "aria-selected": active === name, "aria-controls": `panel-${name}`, tabIndex: active === name ? 0 : -1, onClick: () => setTab(name) }, name))), active ? /* @__PURE__ */ k("div", { class: "settings-body", role: "tabpanel", id: `panel-${active}`, "aria-labelledby": `tab-${active}` }, groups[active].filter((s3) => !s3.advanced).map(field), groups[active].some((s3) => s3.advanced) && /* @__PURE__ */ k("details", null, /* @__PURE__ */ k("summary", null, "Advanced settings"), groups[active].filter((s3) => s3.advanced).map(field))) : /* @__PURE__ */ k("p", { class: "empty" }, "No matching settings"));
+      const index = names2.indexOf(active), next = e3.key === "Home" ? 0 : e3.key === "End" ? names2.length - 1 : (index + (e3.key === "ArrowRight" ? 1 : -1) + names2.length) % names2.length;
+      setTab(names2[next]);
+      document.getElementById(`tab-${names2[next]}`)?.focus();
+    } }, names2.map((name) => /* @__PURE__ */ k("button", { role: "tab", id: `tab-${name}`, "aria-selected": active === name, "aria-controls": `panel-${name}`, tabIndex: active === name ? 0 : -1, onClick: () => setTab(name) }, name))), active ? /* @__PURE__ */ k("div", { class: "settings-body", role: "tabpanel", id: `panel-${active}`, "aria-labelledby": `tab-${active}` }, fields(groups[active].filter((s3) => !s3.advanced)), groups[active].some((s3) => s3.advanced) && /* @__PURE__ */ k("details", null, /* @__PURE__ */ k("summary", null, "Advanced settings"), fields(groups[active].filter((s3) => s3.advanced)))) : /* @__PURE__ */ k("p", { class: "empty" }, "No matching settings"));
   }
 
   // editor/ExportDialog.jsx
@@ -15195,16 +15319,534 @@
     }) }, "Retry save"), /* @__PURE__ */ k("div", { class: "history" }, /* @__PURE__ */ k("button", { disabled: !state.past.length, onClick: store.undo, title: "Undo (\u2318/Ctrl Z)" }, "Undo"), /* @__PURE__ */ k("button", { disabled: !state.future.length, onClick: store.redo, title: "Redo (\u2318/Ctrl Shift Z)" }, "Redo")), /* @__PURE__ */ k("button", { class: "primary", disabled: !state.composition, onClick: () => setExportOpen(true) }, "Export"), exportOpen && /* @__PURE__ */ k(ExportDialog, { store, onClose: () => setExportOpen(false) }));
   }
 
+  // editor/edit-ops.mjs
+  var snapFrame = (t3) => Math.round(t3 * 60) / 60;
+  var clone2 = (c3) => structuredClone(c3);
+  var overlap = (a3, b2) => a3.start < b2.end && b2.start < a3.end;
+  function range(start, end, { duration = Infinity } = {}) {
+    start = snapFrame(start);
+    end = Math.min(duration, snapFrame(end));
+    if (!Number.isFinite(start + end) || start < 0 || end > duration || end - start < 1 / 60 - 1e-9) throw new Error("Choose a valid range inside the recording.");
+    return { start, end };
+  }
+  function finish(c3, { duration } = {}) {
+    const result = validateComposition(c3, duration === void 0 ? {} : { duration });
+    if (!result.ok) throw new Error(result.errors.join("\n"));
+    return c3;
+  }
+  function merge2(ranges, speed = false) {
+    return ranges.sort((a3, b2) => a3.start - b2.start).reduce((out, r3) => {
+      const last2 = out.at(-1);
+      if (last2 && r3.start <= last2.end + 1e-9 && (!speed || last2.rate === r3.rate)) last2.end = Math.max(last2.end, r3.end);
+      else out.push({ ...r3 });
+      return out;
+    }, []);
+  }
+  var subtract = (ranges, cut) => ranges.flatMap((r3) => !overlap(r3, cut) ? [r3] : [
+    ...r3.start < cut.start ? [{ ...r3, end: cut.start }] : [],
+    ...r3.end > cut.end ? [{ ...r3, start: cut.end }] : []
+  ]);
+  var splitAt = (c3) => c3;
+  function cutRange(c3, start, end, context = {}) {
+    const r3 = range(start, end, context), next = clone2(c3);
+    if (r3.end - r3.start < 0.1 - 1e-9) throw new Error("A cut must be at least 0.1 seconds.");
+    next.edits.trims = merge2([...next.edits.trims, r3]);
+    if (next.edits.trims.some((t3) => t3.start === 0 && t3.end >= context.duration)) throw new Error("Keep at least one frame of the recording.");
+    next.edits.speeds = subtract(next.edits.speeds, r3);
+    return finish(next, context);
+  }
+  function restoreRange(c3, index, context) {
+    if (!c3.edits.trims[index]) throw new Error("Removed range no longer exists.");
+    const next = clone2(c3);
+    next.edits.trims.splice(index, 1);
+    return finish(next, context);
+  }
+  function setSpeed(c3, start, end, rate, context = {}) {
+    const r3 = range(start, end, context);
+    if (!Number.isFinite(rate) || rate < 0.25 || rate > 8) throw new Error("Speed must be between 0.25 and 8.");
+    if (c3.edits.trims.some((t3) => overlap(t3, r3))) throw new Error("Restore the removed range before changing its speed.");
+    const next = clone2(c3);
+    next.edits.speeds = merge2([...subtract(next.edits.speeds, r3), ...rate === 1 ? [] : [{ ...r3, rate }]], true);
+    return finish(next, context);
+  }
+  function clearSpeed(c3, index, context) {
+    if (!c3.edits.speeds[index]) throw new Error("Speed range no longer exists.");
+    const next = clone2(c3);
+    next.edits.speeds.splice(index, 1);
+    return finish(next, context);
+  }
+  var uniqueId = (items, prefix) => {
+    let n2 = 1;
+    while (items.some((r3) => r3.id === `${prefix}${n2}`)) n2++;
+    return `${prefix}${n2}`;
+  };
+  function addZoomRegion(c3, { tStart, tEnd, x: x2, y: y3, depth }, context = {}) {
+    const r3 = range(tStart, tEnd, context), next = clone2(c3);
+    if (next.zoom.regions.some((z3) => overlap({ start: z3.tStart, end: z3.tEnd }, r3))) throw new Error("Zoom regions cannot overlap; choose an empty range.");
+    next.zoom.regions.push({ id: uniqueId(next.zoom.regions, "manual-"), tStart: r3.start, tEnd: r3.end, depth, keyframes: [{ t: r3.start, x: x2, y: y3 }], stepIds: [], source: "manual" });
+    next.zoom.regions.sort((a3, b2) => a3.tStart - b2.tStart);
+    return finish(next, context);
+  }
+  function updateZoomRegion(c3, id, patch, context = {}) {
+    const next = clone2(c3), z3 = next.zoom.regions.find((z4) => z4.id === id);
+    if (!z3) throw new Error("Zoom region no longer exists.");
+    for (const k3 of Object.keys(patch)) if (!["tStart", "tEnd", "depth", "keyframes"].includes(k3)) throw new Error(`Cannot edit zoom ${k3}.`);
+    const oldStart = z3.tStart;
+    Object.assign(z3, clone2(patch), { source: "manual" });
+    const r3 = range(z3.tStart, z3.tEnd, context);
+    z3.tStart = r3.start;
+    z3.tEnd = r3.end;
+    if (!patch.keyframes) z3.keyframes = z3.keyframes.map((k3) => ({ ...k3, t: Math.max(z3.tStart, Math.min(z3.tEnd, k3.t + z3.tStart - oldStart)) }));
+    z3.keyframes.sort((a3, b2) => a3.t - b2.t);
+    if (z3.keyframes.length) z3.keyframes[0].t = z3.tStart;
+    next.zoom.regions.sort((a3, b2) => a3.tStart - b2.tStart);
+    return finish(next, context);
+  }
+  function deleteZoomRegion(c3, id, context) {
+    const next = clone2(c3);
+    next.zoom.regions = next.zoom.regions.filter((z3) => z3.id !== id);
+    next.zoom.autoSuggest = false;
+    return finish(next, context);
+  }
+  function setZoomFocus(c3, id, t3, x2, y3, context = {}) {
+    const z3 = c3.zoom.regions.find((z4) => z4.id === id);
+    if (!z3) throw new Error("Zoom region no longer exists.");
+    t3 = Math.max(z3.tStart, Math.min(z3.tEnd, snapFrame(t3)));
+    const keyframes = z3.keyframes.filter((k3) => Math.abs(k3.t - t3) > 1e-9);
+    keyframes.push({ t: t3, x: x2, y: y3 });
+    return updateZoomRegion(c3, id, { keyframes }, context);
+  }
+  function withCues(c3, context = {}) {
+    const next = clone2(c3);
+    next.captions.cues ??= clone2(context.plan?.cues ?? context.cues ?? []);
+    return next;
+  }
+  function setCaption(c3, id, patch, context = {}) {
+    const next = withCues(c3, context), cue = next.captions.cues.find((cue2) => cue2.id === id);
+    if (!cue) throw new Error("Caption no longer exists.");
+    for (const key of Object.keys(patch)) if (!["text", "start", "end"].includes(key)) throw new Error(`Cannot edit caption ${key}.`);
+    Object.assign(cue, patch);
+    Object.assign(cue, range(cue.start, cue.end, context));
+    next.captions.cues.sort((a3, b2) => a3.start - b2.start);
+    return finish(next, context);
+  }
+  function addCaption(c3, { text, start, end }, context = {}) {
+    const next = withCues(c3, context), r3 = range(start, end, context);
+    next.captions.cues.push({ id: uniqueId(next.captions.cues, "caption-"), text, ...r3 });
+    next.captions.cues.sort((a3, b2) => a3.start - b2.start);
+    return finish(next, context);
+  }
+  function deleteCaption(c3, id, context = {}) {
+    const next = withCues(c3, context);
+    next.captions.cues = next.captions.cues.filter((cue) => cue.id !== id);
+    return finish(next, context);
+  }
+  function autoZoomRegenerate(c3, events, record) {
+    const next = clone2(c3), manual = next.zoom.regions.filter((z3) => z3.source === "manual");
+    const auto = suggestZoomRegions({ events, record, options: zoomOptions(next.zoom) }).filter((z3) => !manual.some((m3) => z3.tStart < m3.tEnd && z3.tEnd > m3.tStart));
+    auto.forEach((z3, i3) => {
+      z3.id = uniqueId([...manual, ...auto.slice(0, i3)], "auto-");
+    });
+    next.zoom.regions = [...manual, ...auto].sort((a3, b2) => a3.tStart - b2.tStart);
+    return finish(next, { duration: record.durationSec });
+  }
+
+  // editor/Timeline.jsx
+  var clock = (t3) => `${Math.floor(t3 / 60)}:${(t3 % 60).toFixed(2).padStart(5, "0")}`;
+  var clamp6 = (v3, lo, hi) => Math.max(lo, Math.min(hi, v3));
+  function Timeline({ state, store, time, setTime, setPlaying, selection, setSelection }) {
+    const { composition: c3, plan, project } = state;
+    const [scale, setScale] = d2(80), [output, setOutput] = d2(false), [error, setError] = d2("");
+    const [splits, setSplits] = d2([]), [speedOpen, setSpeedOpen] = d2(false), [rate, setRate] = d2(2);
+    const [depth, setDepth] = d2(1.7), [editing, setEditing] = d2(null), [draft, setDraft] = d2(null);
+    const scroller = A2(), lanes = A2(), gesture = A2(null), anchor = A2(null);
+    const duration = project?.record.durationSec ?? 0, map = plan?.timemap;
+    const sourceT = map ? sourceAt(map, time).t : 0;
+    const context = { duration, plan };
+    const working = c3 && plan ? { ...c3, zoom: { ...c3.zoom, regions: c3.zoom.regions.length && !c3.zoom.enabled ? c3.zoom.regions : plan.regions } } : c3;
+    const shown = draft ?? working;
+    const cues = shown?.captions.cues ?? plan?.cues ?? [];
+    const steps = project?.events.steps ?? [];
+    const clicks = project?.events.clicks ?? [];
+    function displayTime(t3) {
+      if (!output || !map) return t3;
+      const mapped = outputAt(map, t3);
+      if (mapped !== null) return mapped;
+      const next = map.segments.find((s3) => s3.start >= t3);
+      return next?.outputStart ?? map.mainEnd;
+    }
+    const extent = output ? map?.outputDuration ?? duration : duration;
+    const width = Math.max(600, extent * scale);
+    const px = (t3) => displayTime(t3) * scale;
+    const style = (start, end) => ({ left: px(start), width: Math.max(4, px(end) - px(start)) });
+    const fromClient = (x2) => {
+      const t3 = clamp6((x2 - lanes.current.getBoundingClientRect().left) / scale, 0, extent);
+      return output && map ? sourceAt(map, t3).t : t3;
+    };
+    const snap = (t3, alt) => {
+      t3 = clamp6(t3, 0, duration);
+      if (!alt) {
+        const points = [sourceT, ...steps.flatMap((s3) => [s3.tStart, s3.tEnd]), ...clicks.map((c4) => c4.t), ...splits];
+        const nearest = points.reduce((best, p3) => best === null || Math.abs(px(p3) - px(t3)) < Math.abs(px(best) - px(t3)) ? p3 : best, null);
+        if (nearest !== null && Math.abs(px(nearest) - px(t3)) < 8) t3 = nearest;
+      }
+      return clamp6(snapFrame(t3), 0, duration);
+    };
+    function commit(operation) {
+      try {
+        const next = operation();
+        store.setComposition(next);
+        setError("");
+        return true;
+      } catch (e3) {
+        setError(e3.message);
+        return false;
+      }
+    }
+    function seek(t3) {
+      setPlaying(false);
+      setTime(outputAt(map, t3) ?? displayOutput(t3));
+    }
+    function displayOutput(t3) {
+      return map.segments.find((s3) => s3.start >= t3)?.outputStart ?? map.mainEnd;
+    }
+    function split() {
+      splitAt(c3, sourceT);
+      setSplits((values) => [.../* @__PURE__ */ new Set([...values, snapFrame(sourceT)])].sort((a3, b2) => a3 - b2));
+      setError("Split boundary added; select either side to cut or change speed.");
+    }
+    function selectedRange() {
+      if (selection?.type === "range") return selection;
+      if (selection?.type === "speed") return c3.edits.speeds[selection.index];
+      throw new Error("Select a range on the Video track first.");
+    }
+    function cut() {
+      commit(() => {
+        const r3 = selectedRange();
+        return cutRange(c3, r3.start, r3.end, context);
+      });
+    }
+    function speed(value) {
+      commit(() => {
+        const r3 = selectedRange();
+        const next = setSpeed(c3, r3.start, r3.end, value, context);
+        setSelection({ type: "range", start: r3.start, end: r3.end });
+        return next;
+      });
+    }
+    function addZoom() {
+      const start = snapFrame(sourceT), next = working.zoom.regions.find((z3) => z3.tStart >= start);
+      const end = Math.min(duration, start + 2, next?.tStart ?? duration);
+      if (commit(() => addZoomRegion(working, { tStart: start, tEnd: end, x: project.events.viewport.width / 2, y: project.events.viewport.height / 2, depth }, context))) {
+        const region = store.getState().composition.zoom.regions.find((z3) => z3.tStart === start);
+        setSelection({ type: "zoom", id: region.id });
+      }
+    }
+    function addCue() {
+      const start = snapFrame(sourceT), next = cues.find((cue) => cue.start >= start);
+      if (commit(() => addCaption(c3, { text: "New caption", start, end: Math.min(duration, start + 2, next?.start ?? duration) }, context))) {
+        const cue = store.getState().composition.captions.cues.find((cue2) => cue2.start === start);
+        setSelection({ type: "caption", id: cue.id });
+        setEditing({ id: cue.id, text: cue.text });
+      }
+    }
+    function remove() {
+      if (selection?.type === "zoom") commit(() => deleteZoomRegion(working, selection.id, context));
+      else if (selection?.type === "caption") commit(() => deleteCaption(c3, selection.id, context));
+      else if (selection?.type === "speed") commit(() => clearSpeed(c3, selection.index, context));
+      else cut();
+    }
+    function restore(index = selection?.index) {
+      commit(() => restoreRange(c3, index, context));
+    }
+    function itemRange(sel, base = working) {
+      if (sel.type === "zoom") {
+        const z3 = base.zoom.regions.find((z4) => z4.id === sel.id);
+        return z3 && { start: z3.tStart, end: z3.tEnd };
+      }
+      if (sel.type === "caption") return (base.captions.cues ?? plan.cues).find((q2) => q2.id === sel.id);
+      if (sel.type === "speed") return base.edits.speeds[sel.index];
+      return sel.type === "range" ? sel : null;
+    }
+    function moveItem(base, sel, start, end) {
+      if (sel.type === "zoom") return updateZoomRegion(base, sel.id, { tStart: start, tEnd: end }, context);
+      if (sel.type === "caption") return setCaption(base, sel.id, { start, end }, context);
+      if (sel.type === "speed") {
+        const rate2 = base.edits.speeds[sel.index].rate;
+        return setSpeed(clearSpeed(base, sel.index, context), start, end, rate2, context);
+      }
+    }
+    function movedSelection(next, sel, start) {
+      if (sel.type !== "speed") return sel;
+      const index = next.edits.speeds.findIndex((r3) => r3.start <= snapFrame(start) && r3.end > snapFrame(start));
+      return index < 0 ? null : { type: "speed", index };
+    }
+    h2(() => {
+      if (!plan) return;
+      const keydown = (e3) => {
+        if (isTyping(e3.target) || document.querySelector("dialog[open]") || e3.ctrlKey || e3.metaKey || e3.altKey) return;
+        const key = e3.key.toLowerCase();
+        if (["s", "x", "z", "c", "delete", "backspace"].includes(key)) {
+          if (e3.target.closest("button") && ["delete", "backspace"].includes(key)) return;
+          e3.preventDefault();
+          ({ s: split, x: cut, z: addZoom, c: addCue, delete: remove, backspace: remove })[key]();
+        } else if (["ArrowLeft", "ArrowRight"].includes(e3.key) && selection && !e3.target.closest("button")) {
+          e3.preventDefault();
+          const delta = (e3.key === "ArrowLeft" ? -1 : 1) * (e3.shiftKey ? 10 : 1) / 60;
+          const r3 = itemRange(selection);
+          if (!r3) return;
+          if (selection.type === "range") setSelection({ ...selection, start: clamp6(r3.start + delta, 0, duration - (r3.end - r3.start)), end: clamp6(r3.start + delta, 0, duration - (r3.end - r3.start)) + (r3.end - r3.start) });
+          else commit(() => {
+            const next = moveItem(working, selection, r3.start + delta, r3.end + delta);
+            setSelection(movedSelection(next, selection, r3.start + delta));
+            return next;
+          });
+        }
+      };
+      addEventListener("keydown", keydown);
+      return () => removeEventListener("keydown", keydown);
+    });
+    h2(() => () => {
+      gesture.current?.cleanup?.();
+    }, []);
+    function drag(e3, sel, edge) {
+      if (e3.button !== 0) return;
+      e3.preventDefault();
+      e3.stopPropagation();
+      e3.currentTarget.focus();
+      setSelection(sel);
+      setPlaying(false);
+      const base = working, r3 = itemRange(sel, base), origin = fromClient(e3.clientX);
+      let final = null, finalStart = r3.start, moved = false;
+      const move = (event) => {
+        if (Math.abs(event.clientX - e3.clientX) < 3 && !moved) return;
+        moved = true;
+        const t3 = fromClient(event.clientX);
+        let start = r3.start, end = r3.end;
+        if (edge === "start") start = snap(t3, event.altKey);
+        else if (edge === "end") end = snap(t3, event.altKey);
+        else {
+          start = snap(r3.start + t3 - origin, event.altKey);
+          end = start + r3.end - r3.start;
+        }
+        try {
+          final = moveItem(base, sel, start, end);
+          finalStart = start;
+          setDraft(final);
+          setError("");
+        } catch (err) {
+          final = null;
+          setDraft(null);
+          setError(err.message);
+        }
+      };
+      const cleanup = () => {
+        removeEventListener("pointermove", move);
+        removeEventListener("pointerup", up);
+        removeEventListener("pointercancel", cancel);
+      };
+      const up = () => {
+        cleanup();
+        if (final) {
+          store.setComposition(final);
+          setSelection(movedSelection(final, sel, finalStart));
+        }
+        setDraft(null);
+        gesture.current = null;
+      };
+      const cancel = () => {
+        cleanup();
+        setDraft(null);
+        gesture.current = null;
+      };
+      gesture.current?.cleanup?.();
+      gesture.current = { cleanup: cancel };
+      addEventListener("pointermove", move);
+      addEventListener("pointerup", up);
+      addEventListener("pointercancel", cancel);
+    }
+    function selectVideo(e3) {
+      if (e3.button !== 0) return;
+      e3.preventDefault();
+      e3.currentTarget.focus();
+      const t3 = snap(fromClient(e3.clientX), e3.altKey), initial = e3.shiftKey && anchor.current !== null ? anchor.current : t3;
+      anchor.current = initial;
+      const select = (value) => setSelection({ type: "range", start: Math.min(initial, value), end: Math.max(initial, value) });
+      const boundaries = [.../* @__PURE__ */ new Set([0, duration, ...steps.flatMap((s3) => [s3.tStart, s3.tEnd]), ...splits])].sort((a3, b2) => a3 - b2);
+      if (e3.shiftKey) select(t3);
+      else setSelection({ type: "range", start: boundaries.findLast((b2) => b2 <= t3) ?? 0, end: boundaries.find((b2) => b2 > t3) ?? duration });
+      seek(t3);
+      const move = (ev) => select(snap(fromClient(ev.clientX), ev.altKey));
+      const up = () => {
+        removeEventListener("pointermove", move);
+        removeEventListener("pointerup", up);
+        removeEventListener("pointercancel", up);
+        gesture.current = null;
+      };
+      gesture.current?.cleanup?.();
+      gesture.current = { cleanup: up };
+      addEventListener("pointermove", move);
+      addEventListener("pointerup", up);
+      addEventListener("pointercancel", up);
+    }
+    function rulerDrag(e3) {
+      if (e3.button !== 0) return;
+      const seekRuler = (x2) => {
+        setPlaying(false);
+        if (output) setTime(clamp6((x2 - lanes.current.getBoundingClientRect().left) / scale, 0, extent));
+        else seek(fromClient(x2));
+      };
+      e3.preventDefault();
+      seekRuler(e3.clientX);
+      const move = (ev) => seekRuler(ev.clientX);
+      const up = () => {
+        removeEventListener("pointermove", move);
+        removeEventListener("pointerup", up);
+        removeEventListener("pointercancel", up);
+        gesture.current = null;
+      };
+      gesture.current?.cleanup?.();
+      gesture.current = { cleanup: up };
+      addEventListener("pointermove", move);
+      addEventListener("pointerup", up);
+      addEventListener("pointercancel", up);
+    }
+    function changeScale(value, clientX) {
+      const el = scroller.current, next = clamp6(value, 10, 800), rect = el.getBoundingClientRect();
+      const offset = clientX === void 0 ? el.clientWidth / 2 : clientX - rect.left;
+      const position = (el.scrollLeft + offset) / scale;
+      setScale(next);
+      requestAnimationFrame(() => {
+        el.scrollLeft = position * next - offset;
+      });
+    }
+    h2(() => {
+      const el = scroller.current;
+      if (!el) return;
+      const wheel = (e3) => {
+        if (e3.ctrlKey || e3.metaKey) {
+          e3.preventDefault();
+          changeScale(scale * Math.exp(-e3.deltaY * 5e-3), e3.clientX);
+        } else if (e3.shiftKey || Math.abs(e3.deltaX) > 0) {
+          e3.preventDefault();
+          el.scrollLeft += e3.deltaX || e3.deltaY;
+        }
+      };
+      el.addEventListener("wheel", wheel, { passive: false });
+      return () => el.removeEventListener("wheel", wheel);
+    }, [scale, plan]);
+    if (!c3 || !plan) return /* @__PURE__ */ k("p", { class: "empty" }, "Load a recording to edit its timeline.");
+    const selectedZoom = shown.zoom.regions.find((z3) => selection?.type === "zoom" && z3.id === selection.id);
+    const ticks = [];
+    const tickStep = [0.25, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600].find((n2) => n2 * scale >= 65) ?? 600;
+    for (let t3 = 0; t3 <= extent; t3 += tickStep) ticks.push(t3);
+    function block(sel, start, end, label, kind) {
+      const active = selection?.type === sel.type && (sel.id ? selection.id === sel.id : selection.index === sel.index);
+      return /* @__PURE__ */ k(
+        "div",
+        {
+          key: sel.id ?? sel.index,
+          role: "button",
+          tabIndex: "0",
+          "aria-label": `${kind}: ${label}, ${clock(start)} to ${clock(end)}; arrow keys move`,
+          "aria-pressed": active,
+          class: `timeline-block ${kind} ${active ? "selected" : ""}`,
+          style: style(start, end),
+          onPointerDown: (e3) => drag(e3, sel),
+          onFocus: () => setSelection(sel),
+          onClick: () => setSelection(sel),
+          onDblClick: () => {
+            if (sel.type === "caption") setEditing({ id: sel.id, text: label });
+          },
+          onKeyDown: (e3) => {
+            if (e3.key === "Enter") {
+              setSelection(sel);
+              if (sel.type === "caption") setEditing({ id: sel.id, text: label });
+            }
+          }
+        },
+        /* @__PURE__ */ k("button", { class: "edge start", "aria-label": `Resize ${kind} start`, onPointerDown: (e3) => drag(e3, sel, "start"), onKeyDown: (e3) => resizeKey(e3, sel, "start") }),
+        /* @__PURE__ */ k("span", null, label),
+        /* @__PURE__ */ k("button", { class: "edge end", "aria-label": `Resize ${kind} end`, onPointerDown: (e3) => drag(e3, sel, "end"), onKeyDown: (e3) => resizeKey(e3, sel, "end") })
+      );
+    }
+    function resizeKey(e3, sel, edge) {
+      if (!["ArrowLeft", "ArrowRight"].includes(e3.key)) return;
+      e3.preventDefault();
+      e3.stopPropagation();
+      const r3 = itemRange(sel), delta = (e3.key === "ArrowLeft" ? -1 : 1) * (e3.shiftKey ? 10 : 1) / 60;
+      commit(() => {
+        const start = r3.start + (edge === "start" ? delta : 0);
+        const next = moveItem(working, sel, start, r3.end + (edge === "end" ? delta : 0));
+        setSelection(movedSelection(next, sel, start));
+        return next;
+      });
+    }
+    return /* @__PURE__ */ k("div", { class: "timeline-editor" }, /* @__PURE__ */ k("div", { class: "timeline-toolbar", role: "toolbar", "aria-label": "Timeline edits" }, /* @__PURE__ */ k("strong", null, "TIMELINE"), /* @__PURE__ */ k("button", { onClick: split, title: "Split at playhead (S)" }, "Split"), /* @__PURE__ */ k("button", { onClick: remove, title: "Cut range or delete selection (Delete / X)" }, "Delete / Cut"), /* @__PURE__ */ k("div", { class: "speed-menu" }, /* @__PURE__ */ k("button", { "aria-expanded": speedOpen, onClick: () => setSpeedOpen(!speedOpen) }, "Speed"), speedOpen && /* @__PURE__ */ k("div", { class: "speed-popover" }, /* @__PURE__ */ k("div", null, [0.5, 1, 1.5, 2, 4, 8].map((n2) => /* @__PURE__ */ k("button", { onClick: () => speed(n2) }, n2, "x"))), /* @__PURE__ */ k("label", null, "Custom speed ", /* @__PURE__ */ k("input", { type: "number", min: "0.25", max: "8", step: "0.05", value: rate, onInput: (e3) => setRate(+e3.currentTarget.value) }), " x"), /* @__PURE__ */ k("button", { onClick: () => speed(rate) }, "Apply"))), /* @__PURE__ */ k("button", { onClick: addZoom, title: "Add zoom region (Z)" }, "+ Zoom"), /* @__PURE__ */ k("label", null, "Depth ", /* @__PURE__ */ k("input", { "aria-label": "Zoom depth", type: "number", min: "1.05", max: "4", step: "0.05", value: selectedZoom?.depth ?? depth, onInput: (e3) => {
+      const value = +e3.currentTarget.value;
+      setDepth(value);
+      if (selectedZoom) commit(() => updateZoomRegion(working, selectedZoom.id, { depth: value }, context));
+    } }), " x"), /* @__PURE__ */ k("button", { onClick: addCue, title: "Add caption (C)" }, "+ Caption"), /* @__PURE__ */ k("button", { disabled: selection?.type !== "trim", onClick: () => restore() }, "Restore"), /* @__PURE__ */ k("button", { title: "Regenerate automatic zooms; preserve manual regions", onClick: () => commit(() => autoZoomRegenerate(working, project.events, project.record)) }, "Auto zoom"), /* @__PURE__ */ k("label", { class: "time-mode" }, /* @__PURE__ */ k("input", { type: "checkbox", checked: output, onChange: (e3) => setOutput(e3.currentTarget.checked) }), " Output time"), /* @__PURE__ */ k("button", { "aria-label": "Zoom timeline out", onClick: () => changeScale(scale / 1.4) }, "\u2212"), /* @__PURE__ */ k("button", { "aria-label": "Zoom timeline in", onClick: () => changeScale(scale * 1.4) }, "+")), /* @__PURE__ */ k("div", { class: "timeline-summary" }, /* @__PURE__ */ k("strong", null, clock(map.outputDuration), " output"), /* @__PURE__ */ k("span", null, clock(c3.edits.trims.reduce((n2, r3) => n2 + r3.end - r3.start, 0)), " removed \xB7 ", c3.edits.trims.length, " cuts"), /* @__PURE__ */ k("span", null, output ? "OUTPUT" : "SOURCE", " TIME \xB7 Drag to select \xB7 Alt disables snapping")), error && /* @__PURE__ */ k("p", { role: "status", class: "timeline-message" }, error), selectedZoom && /* @__PURE__ */ k("p", { class: "timeline-message" }, "Click the preview to set this region\u2019s focus at the playhead."), /* @__PURE__ */ k("div", { class: "timeline-grid" }, /* @__PURE__ */ k("div", { class: "track-labels", "aria-hidden": "true" }, ["Time", "Video", "Speed", "Zoom", "Captions", "Cursor"].map((label) => /* @__PURE__ */ k("div", null, label))), /* @__PURE__ */ k("div", { class: "timeline-scroll", ref: scroller, tabIndex: "0", "aria-label": "Timeline; scroll horizontally to pan" }, /* @__PURE__ */ k("div", { class: "timeline-lanes", ref: lanes, style: { width } }, /* @__PURE__ */ k(
+      "div",
+      {
+        class: "timeline-ruler",
+        role: "slider",
+        tabIndex: "0",
+        "aria-label": `Playhead in ${output ? "output" : "source"} time`,
+        "aria-valuemin": "0",
+        "aria-valuemax": extent,
+        "aria-valuenow": output ? time : sourceT,
+        onPointerDown: rulerDrag,
+        onKeyDown: (e3) => {
+          if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e3.key)) {
+            e3.preventDefault();
+            e3.stopPropagation();
+            const next = e3.key === "Home" ? 0 : e3.key === "End" ? extent : clamp6((output ? time : sourceT) + (e3.key === "ArrowLeft" ? -1 : 1) * (e3.shiftKey ? 10 : 1) / 60, 0, extent);
+            if (output) {
+              setPlaying(false);
+              setTime(next);
+            } else seek(next);
+          }
+        }
+      },
+      ticks.map((t3) => /* @__PURE__ */ k("span", { style: { left: t3 * scale } }, clock(t3)))
+    ), /* @__PURE__ */ k("div", { class: "timeline-track video-track", tabIndex: "0", "aria-label": "Video; drag or shift click to select a source range", onPointerDown: selectVideo }, steps.map((step) => /* @__PURE__ */ k(
+      "div",
+      {
+        class: "step-block",
+        role: "button",
+        tabIndex: "0",
+        "aria-label": `Select video step ${step.id}`,
+        style: style(step.tStart, step.tEnd),
+        onKeyDown: (e3) => {
+          if (e3.key === "Enter" || e3.key === " ") {
+            e3.preventDefault();
+            e3.stopPropagation();
+            setSelection({ type: "range", start: step.tStart, end: step.tEnd });
+            seek(step.tStart);
+          }
+        }
+      },
+      project.storyboard.steps.find((s3) => s3.id === step.id)?.name ?? project.storyboard.steps.find((s3) => s3.id === step.id)?.title ?? project.storyboard.steps.find((s3) => s3.id === step.id)?.caption ?? step.id
+    )), splits.map((t3) => /* @__PURE__ */ k("i", { class: "split-line", style: { left: px(t3) } })), c3.edits.trims.map((r3, index) => /* @__PURE__ */ k("button", { class: `trim-block ${selection?.type === "trim" && selection.index === index ? "selected" : ""}`, style: style(r3.start, r3.end), "aria-label": `Removed ${clock(r3.start)} to ${clock(r3.end)}`, onPointerDown: (e3) => e3.stopPropagation(), onClick: () => setSelection({ type: "trim", index }) }, "Removed")), selection?.type === "range" && /* @__PURE__ */ k("div", { class: "range-selection", style: style(selection.start, selection.end) })), /* @__PURE__ */ k("div", { class: "timeline-track" }, shown.edits.speeds.map((r3, index) => block({ type: "speed", index }, r3.start, r3.end, `${r3.rate}x`, "speed"))), /* @__PURE__ */ k("div", { class: "timeline-track" }, shown.zoom.regions.map((z3) => block({ type: "zoom", id: z3.id }, z3.tStart, z3.tEnd, `${zoomDepth(z3.depth)}x \xB7 ${z3.source}`, "zoom"))), /* @__PURE__ */ k("div", { class: "timeline-track" }, cues.map((cue) => block({ type: "caption", id: cue.id }, cue.start, cue.end, cue.text, "caption"))), /* @__PURE__ */ k("div", { class: "timeline-track cursor-track" }, clicks.map((click) => /* @__PURE__ */ k("span", { class: "click-marker", style: { left: px(click.t) }, title: `Click at ${clock(click.t)}` }))), /* @__PURE__ */ k("div", { class: "timeline-playhead", style: { left: (output ? time : sourceT) * scale } })))), editing && /* @__PURE__ */ k("form", { class: "caption-inline", onSubmit: (e3) => {
+      e3.preventDefault();
+      if (commit(() => setCaption(c3, editing.id, { text: editing.text }, context))) setEditing(null);
+    } }, /* @__PURE__ */ k("label", null, "Caption text ", /* @__PURE__ */ k("input", { autoFocus: true, maxLength: "140", value: editing.text, onInput: (e3) => setEditing({ ...editing, text: e3.currentTarget.value }), onKeyDown: (e3) => {
+      if (e3.key === "Escape") setEditing(null);
+    } })), /* @__PURE__ */ k("button", { type: "submit" }, "Save caption"), /* @__PURE__ */ k("button", { type: "button", onClick: () => setEditing(null) }, "Cancel")), !!c3.edits.trims.length && /* @__PURE__ */ k("details", { class: "removed-list" }, /* @__PURE__ */ k("summary", null, "Removed (", c3.edits.trims.length, ")"), c3.edits.trims.map((r3, index) => /* @__PURE__ */ k("div", null, /* @__PURE__ */ k("span", null, clock(r3.start), " \u2013 ", clock(r3.end), " \xB7 ", clock(r3.end - r3.start)), /* @__PURE__ */ k("button", { onClick: () => restore(index) }, "Restore")))));
+  }
+
   // editor/App.jsx
   function Shortcuts({ onClose }) {
     const dialog = A2();
     h2(() => {
       dialog.current.showModal();
     }, []);
-    return /* @__PURE__ */ k("dialog", { ref: dialog, "aria-labelledby": "shortcuts-title", onCancel: onClose }, /* @__PURE__ */ k("div", { class: "dialog-heading" }, /* @__PURE__ */ k("h2", { id: "shortcuts-title" }, "Keyboard shortcuts"), /* @__PURE__ */ k("button", { onClick: onClose, "aria-label": "Close shortcuts" }, "\xD7")), /* @__PURE__ */ k("dl", { class: "shortcuts" }, [["Space", "Play / pause"], [", / .", "Previous / next frame"], ["\u2318 / Ctrl Z", "Undo"], ["\u2318 / Ctrl Shift Z", "Redo"], ["S", "Autosave reminder"], ["?", "Show shortcuts"]].map(([key, action]) => /* @__PURE__ */ k("div", null, /* @__PURE__ */ k("dt", null, /* @__PURE__ */ k("kbd", null, key)), /* @__PURE__ */ k("dd", null, action)))));
+    return /* @__PURE__ */ k("dialog", { ref: dialog, "aria-labelledby": "shortcuts-title", onCancel: onClose }, /* @__PURE__ */ k("div", { class: "dialog-heading" }, /* @__PURE__ */ k("h2", { id: "shortcuts-title" }, "Keyboard shortcuts"), /* @__PURE__ */ k("button", { onClick: onClose, "aria-label": "Close shortcuts" }, "\xD7")), /* @__PURE__ */ k("dl", { class: "shortcuts" }, [["Space", "Play / pause"], [", / .", "Previous / next frame"], ["\u2318 / Ctrl Z", "Undo"], ["\u2318 / Ctrl Shift Z", "Redo"], ["S / X", "Split / cut range"], ["Z / C", "Add zoom / caption"], ["Delete", "Delete selected item"], ["\u2190 / \u2192", "Nudge one frame (Shift: ten)"], ["?", "Show shortcuts"]].map(([key, action]) => /* @__PURE__ */ k("div", null, /* @__PURE__ */ k("dt", null, /* @__PURE__ */ k("kbd", null, key)), /* @__PURE__ */ k("dd", null, action)))));
   }
   function App() {
     const [store] = d2(createEditorStore), [state, setState] = d2(store.getState());
+    const [selection, setSelection] = d2(null);
     const [provider, setProvider] = d2(null), [mediaError, setMediaError] = d2("");
     const [time, setTime] = d2(0), [playing, setPlaying] = d2(false);
     const [shortcuts, setShortcuts] = d2(false), [toast, setToast] = d2("");
@@ -15256,9 +15898,6 @@
             event.preventDefault();
             setPlaying(false);
             setTime((value) => Math.max(0, Math.min(state.plan?.timemap.outputDuration ?? 0, value + (key === "," ? -1 : 1) / (state.plan?.output.fps ?? 30))));
-          } else if (key === "s") {
-            event.preventDefault();
-            setToast("autosaved");
           } else if (event.key === "?") {
             event.preventDefault();
             setShortcuts(true);
@@ -15283,9 +15922,18 @@
         setTime,
         playing,
         setPlaying,
-        onPick: (sourcePoint) => document.getElementById("timeline-root")?.dispatchEvent(new CustomEvent("showreel:pick-focus", { bubbles: true, detail: sourcePoint }))
+        focus: selection?.type === "zoom" ? state.plan?.regions.find((z3) => z3.id === selection.id) : null,
+        onPick: (point) => {
+          if (selection?.type !== "zoom" || !state.plan) return;
+          try {
+            const c3 = { ...state.composition, zoom: { ...state.composition.zoom, regions: state.plan.regions } };
+            store.setComposition(setZoomFocus(c3, selection.id, sourceAt(state.plan.timemap, time).t, point.x, point.y, { duration: state.project.record.durationSec }));
+          } catch (e3) {
+            setToast(e3.message);
+          }
+        }
       }
-    )), state.composition && /* @__PURE__ */ k(Settings, { state, store })), /* @__PURE__ */ k("section", { id: "timeline-root", "aria-label": "Timeline" }, /* @__PURE__ */ k("span", null, "Timeline")), toast && /* @__PURE__ */ k("div", { class: "toast", role: "status" }, toast), shortcuts && /* @__PURE__ */ k(Shortcuts, { onClose: () => setShortcuts(false) }));
+    )), state.composition && /* @__PURE__ */ k(Settings, { state, store })), /* @__PURE__ */ k("section", { id: "timeline-root", "aria-label": "Timeline" }, /* @__PURE__ */ k(Timeline, { state, store, time, setTime, setPlaying, selection, setSelection })), toast && /* @__PURE__ */ k("div", { class: "toast", role: "status" }, toast), shortcuts && /* @__PURE__ */ k(Shortcuts, { onClose: () => setShortcuts(false) }));
   }
 
   // editor/main.jsx

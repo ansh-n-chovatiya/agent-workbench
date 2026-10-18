@@ -82,7 +82,7 @@ test('composition set creates from newest run, show paths, reset and rejected wr
   assert.equal(JSON.parse(await readFile(file,'utf8')).cursor.style,'ring');
   result = cli('composition','show','--name','settings','--paths'); assert.equal(result.status,0,result.stderr);
   for (const p of ['frame.paddingXPct = 8','cursor.style = "ring"','cards.title.logo.image = null','output.quality = "standard"']) assert.ok(result.stdout.includes(p),p);
-  assert.match(result.stdout,/frame.paddingXPct = 8 \[look\] frame › padding XPct/);
+  assert.match(result.stdout,/frame.paddingXPct = 8 \[look\] Horizontal padding/);
   result = set('cards.title.titleColor','#123456'); assert.equal(result.status,0,result.stderr);
   result = cli('composition','reset','--name','settings','--path','cards.title.titleColor'); assert.equal(result.status,0,result.stderr);
   assert.equal(JSON.parse(await readFile(file,'utf8')).cards.title.titleColor,'#f9fafb');

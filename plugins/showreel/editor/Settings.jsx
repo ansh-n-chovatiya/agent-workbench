@@ -16,7 +16,7 @@ function Control({ setting: s, value, onChange, values, change, invalid }) {
   if (s.control === 'number') {
     const numeric = s.path === 'zoom.depth' ? zoomDepth(value) : value;
     return <div class="control-row"><input {...common} type="range" min={s.min} max={s.max} step={s.step} value={numeric ?? s.min} onInput={e => onChange(+e.currentTarget.value)} />
-      <input aria-label={`${label} value`} aria-invalid={invalid || undefined} type="number" min={s.min} max={s.max} step={s.step} value={numeric ?? ''} onInput={e => onChange(e.currentTarget.value === '' ? null : +e.currentTarget.value)} /></div>;
+      <input aria-label={`${label} value`} aria-invalid={invalid || undefined} type="number" min={s.min} max={s.max} step={s.step} value={numeric ?? ''} onInput={e => onChange(e.currentTarget.value === '' ? null : +e.currentTarget.value)} />{s.unit && <span class="control-unit">{s.unit}</span>}</div>;
   }
   if (s.control === 'color') return <Color id={id} label={label} value={value} onChange={onChange} invalid={invalid} />;
   if (s.control === 'gradient') {
@@ -47,8 +47,14 @@ export function Settings({ state, store }) {
     return <div class="setting" key={s.path}>
       <div class="setting-label"><label for={id} title={s.help}>{s.label}</label><button class="reset" aria-label={`Reset ${s.label}`} title="Reset to default" onClick={() => store.change(s.path, undefined, { reset: true })}>↺</button></div>
       <Control setting={s} value={values[s.path]} onChange={value => change(s.path, value)} values={values} change={change} invalid={!!errors.length} />
+      <p class="setting-help">{s.help}</p>
       {!!errors.length && <p class="error" id={`${id}-error`}>{errors.join('\n')}</p>}
     </div>;
+  }
+  function fields(entries) {
+    const sections = {};
+    for (const entry of entries) (sections[entry.section] ??= []).push(entry);
+    return Object.entries(sections).map(([name,items]) => <fieldset class="setting-group" key={name}><legend>{name}</legend>{items.map(field)}</fieldset>);
   }
   return <aside class="settings" aria-label="Composition settings">
     <div class="panel-heading"><h2>Settings</h2><span>COMPOSITION</span></div>
@@ -60,8 +66,8 @@ export function Settings({ state, store }) {
       setTab(names[next]); document.getElementById(`tab-${names[next]}`)?.focus();
     }}>{names.map(name => <button role="tab" id={`tab-${name}`} aria-selected={active === name} aria-controls={`panel-${name}`} tabIndex={active === name ? 0 : -1} onClick={() => setTab(name)}>{name}</button>)}</div>
     {active ? <div class="settings-body" role="tabpanel" id={`panel-${active}`} aria-labelledby={`tab-${active}`}>
-      {groups[active].filter(s => !s.advanced).map(field)}
-      {groups[active].some(s => s.advanced) && <details><summary>Advanced settings</summary>{groups[active].filter(s => s.advanced).map(field)}</details>}
+      {fields(groups[active].filter(s => !s.advanced))}
+      {groups[active].some(s => s.advanced) && <details><summary>Advanced settings</summary>{fields(groups[active].filter(s => s.advanced))}</details>}
     </div> : <p class="empty">No matching settings</p>}
   </aside>;
 }

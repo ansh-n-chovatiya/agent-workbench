@@ -5,6 +5,9 @@ import { openFrames } from './frames.js';
 import { Preview } from './Preview.jsx';
 import { Settings } from './Settings.jsx';
 import { TopBar } from './TopBar.jsx';
+import { Timeline } from './Timeline.jsx';
+import { setZoomFocus } from './edit-ops.mjs';
+import { sourceAt } from '../scripts/lib/compose/timemap.mjs';
 import { isTyping } from './helpers.mjs';
 
 function Shortcuts({ onClose }) {
@@ -12,11 +15,12 @@ function Shortcuts({ onClose }) {
   useEffect(() => { dialog.current.showModal(); }, []);
   return <dialog ref={dialog} aria-labelledby="shortcuts-title" onCancel={onClose}>
     <div class="dialog-heading"><h2 id="shortcuts-title">Keyboard shortcuts</h2><button onClick={onClose} aria-label="Close shortcuts">×</button></div>
-    <dl class="shortcuts">{[['Space', 'Play / pause'], [', / .', 'Previous / next frame'], ['⌘ / Ctrl Z', 'Undo'], ['⌘ / Ctrl Shift Z', 'Redo'], ['S', 'Autosave reminder'], ['?', 'Show shortcuts']].map(([key, action]) => <div><dt><kbd>{key}</kbd></dt><dd>{action}</dd></div>)}</dl>
+    <dl class="shortcuts">{[['Space', 'Play / pause'], [', / .', 'Previous / next frame'], ['⌘ / Ctrl Z', 'Undo'], ['⌘ / Ctrl Shift Z', 'Redo'], ['S / X', 'Split / cut range'], ['Z / C', 'Add zoom / caption'], ['Delete', 'Delete selected item'], ['← / →', 'Nudge one frame (Shift: ten)'], ['?', 'Show shortcuts']].map(([key, action]) => <div><dt><kbd>{key}</kbd></dt><dd>{action}</dd></div>)}</dl>
   </dialog>;
 }
 export function App() {
   const [store] = useState(createEditorStore), [state, setState] = useState(store.getState());
+  const [selection, setSelection] = useState(null);
   const [provider, setProvider] = useState(null), [mediaError, setMediaError] = useState('');
   const [time, setTime] = useState(0), [playing, setPlaying] = useState(false);
   const [shortcuts, setShortcuts] = useState(false), [toast, setToast] = useState('');
@@ -46,8 +50,7 @@ export function App() {
         else if ([',', '.'].includes(key)) {
           event.preventDefault(); setPlaying(false);
           setTime(value => Math.max(0, Math.min(state.plan?.timemap.outputDuration ?? 0, value + (key === ',' ? -1 : 1) / (state.plan?.output.fps ?? 30))));
-        } else if (key === 's') { event.preventDefault(); setToast('autosaved'); }
-        else if (event.key === '?') { event.preventDefault(); setShortcuts(true); }
+        } else if (event.key === '?') { event.preventDefault(); setShortcuts(true); }
       }
     };
     addEventListener('keydown', keydown); return () => removeEventListener('keydown', keydown);
@@ -59,9 +62,16 @@ export function App() {
       <div class="viewer-heading"><span>PREVIEW</span><button onClick={() => setShortcuts(true)} aria-label="Keyboard shortcuts">?</button></div>
       {(state.error || mediaError) && <p class="error app-error" role="alert">{mediaError || state.error}</p>}
       <Preview plan={state.plan} provider={provider} time={time} setTime={setTime} playing={playing} setPlaying={setPlaying}
-        onPick={sourcePoint => document.getElementById('timeline-root')?.dispatchEvent(new CustomEvent('showreel:pick-focus', { bubbles: true, detail: sourcePoint }))} />
+        focus={selection?.type === 'zoom' ? state.plan?.regions.find(z => z.id === selection.id) : null}
+        onPick={point => {
+          if (selection?.type !== 'zoom' || !state.plan) return;
+          try {
+            const c = {...state.composition,zoom:{...state.composition.zoom,regions:state.plan.regions}};
+            store.setComposition(setZoomFocus(c,selection.id,sourceAt(state.plan.timemap,time).t,point.x,point.y,{duration:state.project.record.durationSec}));
+          } catch(e) { setToast(e.message); }
+        }} />
     </div>{state.composition && <Settings state={state} store={store} />}</div>
-    <section id="timeline-root" aria-label="Timeline"><span>Timeline</span></section>
+    <section id="timeline-root" aria-label="Timeline"><Timeline state={state} store={store} time={time} setTime={setTime} setPlaying={setPlaying} selection={selection} setSelection={setSelection} /></section>
     {toast && <div class="toast" role="status">{toast}</div>}
     {shortcuts && <Shortcuts onClose={() => setShortcuts(false)} />}
   </div>;

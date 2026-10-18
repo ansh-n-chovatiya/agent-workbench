@@ -107,3 +107,30 @@ test('a failed obsolete save cannot prevent a waiting newer revision from saving
     assert.equal(store.getState().error, null);
   } finally { store.dispose(); }
 });
+
+test('timeline gesture commits one snapshot, then undo and redo restore edits and planned output', async () => {
+  const { setSpeed, cutRange, addZoomRegion, setZoomFocus, setCaption } = await import('../editor/edit-ops.mjs');
+  const source = project(); source.storyboard.steps = [{id:'s1',caption:'Original'}]; source.events.steps = [{id:'s1',tStart:0,tEnd:4}];
+  const store = createEditorStore({ api: async () => source, debounce:100000 });
+  try {
+    store.setSourceSize({width:1280,height:720}); await store.load();
+    const original = store.getState().composition, originalDuration = store.getState().plan.timemap.outputDuration;
+    const context = {duration:4,plan:store.getState().plan};
+    // Pointer motion computes drafts; only the final draft reaches the store.
+    let final;
+    for (const end of [2,2.5,3]) final = setSpeed(original,1,end,2,context);
+    assert.equal(store.getState().past.length,0);
+    store.setComposition(final); assert.equal(store.getState().past.length,1);
+    assert.equal(store.getState().plan.timemap.outputDuration,originalDuration-1);
+    store.undo(); assert.deepEqual(store.getState().composition,original);
+    store.redo(); assert.deepEqual(store.getState().composition,final);
+    const cut = cutRange(final,0,0.5,context); store.setComposition(cut);
+    assert.equal(store.getState().past.length,2);
+    let zoom = addZoomRegion(cut,{tStart:1,tEnd:3,x:100,y:100,depth:2},context);
+    zoom = setZoomFocus(zoom,zoom.zoom.regions[0].id,2,300,200,context); store.setComposition(zoom);
+    const caption = setCaption(zoom,'s1',{text:'Edited'},context); store.setComposition(caption);
+    assert.equal(store.getState().plan.cues[0].text,'Edited');
+    store.undo(); assert.equal(store.getState().plan.cues[0].text,'Original');
+    store.undo(); assert.deepEqual(store.getState().composition,cut);
+  } finally { store.dispose(); }
+});

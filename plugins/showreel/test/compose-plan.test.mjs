@@ -70,3 +70,19 @@ test('caption overrides replace generated cues in source time under trims and sp
   input.composition.captions.cues = []; assert.deepEqual(planRender(input).cues,[]);
   input.composition.captions.enabled = false; input.composition.captions.cues = before.captions.cues; assert.deepEqual(planRender(input).cues,[]);
 });
+
+test('timeline receives detached regions and edited/deleted auto zooms persist in the plan', async () => {
+  const { updateZoomRegion, deleteZoomRegion, autoZoomRegenerate } = await import('../editor/edit-ops.mjs');
+  const input = run(), context = {duration:input.record.durationSec};
+  const original = input.composition.zoom.regions[0];
+  let plan = planRender(input);
+  assert.deepEqual(plan.regions,input.composition.zoom.regions);
+  plan.regions[0].depth = 4;
+  assert.equal(input.composition.zoom.regions[0].depth,original.depth);
+  input.composition = updateZoomRegion(input.composition,original.id,{depth:2.5},context);
+  plan = planRender(input); assert.equal(plan.regions[0].depth,2.5); assert.equal(plan.regions[0].source,'manual');
+  input.composition = deleteZoomRegion(input.composition,original.id,context);
+  assert.deepEqual(planRender(input).regions,[]);
+  input.composition = autoZoomRegenerate(input.composition,input.events,input.record);
+  assert.ok(planRender(input).regions.length);
+});
