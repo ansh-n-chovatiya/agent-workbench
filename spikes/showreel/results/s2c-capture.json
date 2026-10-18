@@ -1,0 +1,52 @@
+{
+  "site": "https://anshchovatiya.vercel.app/",
+  "seconds": 15,
+  "a": [
+    {
+      "variant": "a-2560x1440",
+      "fps": 51.4,
+      "framesDropped": 25,
+      "bytesPerMinute": 214306806,
+      "framePixels": "2560,1440"
+    },
+    {
+      "variant": "a-3200x1800",
+      "fps": 58.9,
+      "framesDropped": 0,
+      "bytesPerMinute": 931323082,
+      "framePixels": "3200,1800"
+    }
+  ],
+  "b": {
+    "layoutSsim": {
+      "noiseFloor_base_vs_base": 1,
+      "plain4k_vs_base": 0.771572,
+      "zoom2_vs_base": 0.971756
+    },
+    "innerWidthSeenByPage": {
+      "innerWidth": 3840,
+      "devicePixelRatio": 1,
+      "docWidth": 3840
+    },
+    "fps": 34.7,
+    "framesDropped": 0,
+    "bytesPerMinute": 760918053,
+    "framePixels": "3840,2160"
+  },
+  "c": {
+    "streamFps": 59.5,
+    "streamFramesDropped": 0,
+    "stillLatencyMs": [
+      30,
+      32,
+      32,
+      32,
+      37,
+      44,
+      32
+    ],
+    "stillPixels": "1920,1080",
+    "referenceNoStills": "S2/S2b: about 59.5 fps, 0 dropped"
+  },
+  "d": "images written: scratch/s2c/d-2x-crop.png and d-1x-up-crop.png (same content, true 2x versus upscaled 1x)"
+}

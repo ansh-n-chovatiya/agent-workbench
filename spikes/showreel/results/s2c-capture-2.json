@@ -1,0 +1,39 @@
+{
+  "b2": [
+    {
+      "variant": "b2-2560x1440-zoom1.33",
+      "scale": 1.33,
+      "layoutSsimVsBase1080p": 0.97676,
+      "fps": 56.9,
+      "framesDropped": 0,
+      "bytesPerMinute": 700917017,
+      "framePixels": "2560,1440"
+    },
+    {
+      "variant": "b2-3200x1800-zoom1.67",
+      "scale": 1.67,
+      "layoutSsimVsBase1080p": 0.975048,
+      "fps": 51,
+      "framesDropped": 0,
+      "bytesPerMinute": 857108065,
+      "framePixels": "3200,1800"
+    }
+  ],
+  "c2": {
+    "stillsAlone": {
+      "fps": 29.9,
+      "framesDropped": 1,
+      "bytesPerMinute": 265436747
+    },
+    "stillsWithStream": {
+      "fps": 30.1,
+      "framesDropped": 0,
+      "bytesPerMinute": 266315326
+    },
+    "streamWhileStillsRun": {
+      "fps": 60.1,
+      "framesDropped": 0
+    },
+    "stillPixels": "1920x1080 for the 960x540 CSS clip (true 2x)"
+  }
+}

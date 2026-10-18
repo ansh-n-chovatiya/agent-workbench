@@ -223,7 +223,7 @@ hard budget for showreel and track it with a per-run meter in CI-style benchmark
 | ID | Question |
 |---|---|
 | S1 | Does H.264 WebCodecs export work in Chrome, Edge and Safari, and what is the fallback in headless or unsupported browsers? |
-| S2 | Capture quality: screencast frames at 2x scale, 30 versus 60 fps, versus Playwright's built-in video. |
+| S2 | Capture quality: screencast frames at 2x scale, 30 versus 60 fps, versus Playwright's built-in video. **Result: see section 22 and `docs/42`.** |
 | S3 | How cleanly do OpenScreen's exporter, cursor renderer and timeline extract from Electron? Is PixiJS needed? |
 | S4 | Can Playwright's selector generator drive Guide mode, and what does `guide.json` need to contain? |
 | S5 | Kokoro on a low-end CPU: real-time factor, RAM, first-run download; do its voices carry any extra licence terms? Can the Kitten nano/micro ONNX models run in Node (`kitten-tts-js` or `onnxruntime-node` plus a WebAssembly phonemizer), and how do they compare with Kokoro in a blind listen? |
@@ -275,3 +275,25 @@ A video passes when all of these hold:
 | Cursor motion | The owner prefers it in a blind side-by-side against the old skill's cursor |
 | Token cost | At or under the budget set after the phase 0 baseline, and below the baseline |
 | Platforms | Records and exports on Mac, Windows and Linux in CI |
+
+## 22. Capture design (from spikes S2, S2b and S2c, 2026-10-18)
+
+Measured on an Apple M4 (see `docs/42-showreel-spike-findings.md`); verify on Windows and Linux in Phase 3.
+
+- **Do not use Playwright's built-in video** (25 fps VP8, soft text) and **never store raw frames** (about 490 MB per minute at 1080p):
+  capture with CDP screencast and stream-encode while recording.
+- **CDP screencast frames are capped at the page's CSS viewport size** in headless Chromium (old and new headless), whatever the
+  device scale factor. Sharper capture therefore uses a **larger viewport with CSS `zoom`**: viewport = scale x 1920 wide and
+  `document.documentElement.style.zoom = scale`, which keeps the desktop layout (layout SSIM about 0.97) at `scale`x pixel density.
+- **Capture scale** is chosen per machine, 1.0x to 2.0x: 1.0x holds 59.5 fps, 1.33x 56.9, 1.67x 51, 2.0x 34.7 (worst-case scrolling
+  workload). `doctor` benchmarks for 10 s and picks the highest scale at or above 50 fps. Sharp zoom depth equals the capture
+  scale; deeper zoom shows a softness warning in the editor.
+- **Layout guard:** at record time, compare a 1x reference screenshot with the scaled capture (SSIM). Below about 0.93 the site reacts
+  to viewport width, so fall back to 1x or the hybrid layer.
+- **Hybrid zoom layer (optional):** the recorder knows each target's bounding box, so it can capture 2x region stills (clip
+  screenshots at deviceScaleFactor 2, about 30 fps, 30 to 44 ms each) alongside a 60 fps 1x stream (stream stays at 60 fps, no
+  drops) and composite them during zoom holds.
+- **Frame rate:** screencast emits frames only when the page changes, so the compositor treats the input as variable frame rate and
+  fills to the output rate.
+- **Readiness:** wait for `domcontentloaded` plus a settle time (or an explicit readiness signal), never `networkidle`.
+- **Open checks:** fixed-position elements, canvas, iframes and `vh` units under CSS zoom; Windows and Linux behaviour.

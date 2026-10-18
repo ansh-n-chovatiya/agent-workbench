@@ -1,6 +1,6 @@
 # Showreel spike findings
 
-Status: **partial, 2026-10-18.** B0, S1, S2 and S2b are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
+Status: **partial, 2026-10-18.** B0, S1, S2, S2b and S2c are done; S3 to S8 and the go/no-go gate are not run yet. Numbers come from
 `spikes/showreel/results/*.json`. Test machine: Apple M4, 16 GB, macOS; Playwright 1.63.0; Node 24.
 
 ## B0: baseline token cost of the old skill
@@ -94,6 +94,44 @@ Implication for the quality bar: zoom animations magnify pixels, so capture scal
 (c) hybrid capture: 60 fps screencast at 1x plus high-resolution stills (route C with `clip`) of the zoom target for the zoom hold;
 (d) accept 1x capture with a maximum zoom of about 1.5x and judge perceived softness by eye.
 
+## S2c: sharp capture routes: **go: a tunable capture scale plus an optional hybrid zoom layer**
+
+Same workload (live site, 15 s of scrolling, M4). Raw data: `spikes/showreel/results/s2c-capture.json` and `s2c-capture-2.json`.
+
+**CSS `zoom` on a larger viewport keeps the desktop layout at higher pixel density.** Set the viewport to scale x 1920 wide and
+`document.documentElement.style.zoom = scale`. Layout fidelity is measured by SSIM against a plain 1920x1080 screenshot (a noise floor
+of two identical captures is 1.0; a plain 4K viewport without zoom scores only 0.77, i.e. the layout changes):
+
+| Capture scale | Viewport | Layout SSIM | fps | Dropped | Real pixels | Raw disk per minute |
+|---|---|---|---|---|---|---|
+| 1.0x (S2) | 1920x1080 | 1.0 | 59.5 | 0 | 1920x1080 | about 490 MB |
+| 1.33x | 2560x1440 | 0.977 | 56.9 | 0 | 2560x1440 | about 700 MB |
+| 1.67x | 3200x1800 | 0.975 | 51.0 | 0 | 3200x1800 | about 860 MB |
+| 2.0x | 3840x2160 | 0.972 | 34.7 | 0 | 3840x2160 | about 760 MB |
+
+(One earlier run of a plain 2560x1440 viewport without zoom gave 51 fps and 25 dropped frames, so single runs vary; repeat before relying on
+a number.) The page sees the larger viewport width (`innerWidth` 3840 at 2x), so sites with media queries or `vw` units may lay out
+differently; this site did not.
+
+**Hybrid capture is free for the stream.** A 960x540 CSS clip screenshot at deviceScaleFactor 2 (1920x1080 real pixels, true 2x)
+takes about 30 to 44 ms; looped, it runs at about 30 fps, and while it runs the 1x screencast still delivers **60.1 fps with zero
+dropped frames**.
+
+**Visual check (same CSS region, true 2x versus 1x upscaled 2x):** real 2x is crisp, including small caps text and icons; upscaled 1x is
+clearly softer, especially small text. Large headings survive upscaling.
+
+### Capture design this implies (applied to the spec, section 22)
+
+1. Record at a **capture scale** chosen per machine (1.0x to 2.0x), using the CSS zoom route, so every zoom region is sharp up to
+   that scale without re-recording.
+2. At record time, compare a reference 1x screenshot with the scaled one (SSIM). If fidelity is below a threshold (about 0.93), fall
+   back to 1x capture, because the site's layout reacts to viewport width.
+3. Optional **hybrid zoom layer** for auto-zoom targets (the recorder knows each target's box): 2x region stills at about 30 fps,
+   composited over the stream during zoom holds.
+4. `doctor` runs a 10-second benchmark and picks the highest scale that holds 50 fps or better.
+5. The sharp zoom depth equals the capture scale; beyond it, the editor shows a "softness" warning on that zoom region.
+6. Still to verify: sites with fixed-position elements, canvas, iframes and `vh` units under CSS zoom, and behaviour on Windows and Linux.
+
 ## Tooling notes (2026-10-18)
 
 - Gemini CLI could not be used: its free API-key quota (20 requests a day) was exhausted in minutes, and Google ended Google-account sign-in for Gemini CLI on 2026-06-18, so the owner's Jio plan cannot power it. Browser spikes were run by Claude directly.
@@ -101,7 +139,7 @@ Implication for the quality bar: zoom animations magnify pixels, so capture scal
 
 ## Follow-ups added
 
-- **S2c (before Phase 3):** see the S2b section: find a capture route that keeps 60 fps and enough pixels for zoom.
+- S2c done (see above); verify the CSS-zoom route on more sites and on Windows and Linux in Phase 3.
 - **B0-hard:** baseline on a harder multi-page, login-gated flow.
 - Run S1 and S2 on Windows and Linux CI before relying on them.
 - **Tooling lesson:** Codex's sandbox cannot launch browsers (every launch failed), so spike results from Codex were sandbox
