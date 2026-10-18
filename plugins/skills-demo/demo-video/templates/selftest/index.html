@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Catalog</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: #1f2937; background: #f3f4f6; }
+  header { display: flex; align-items: center; gap: 24px; padding: 18px 40px; background: #1e293b; color: #fff; }
+  header h1 { margin: 0; font-size: 22px; font-weight: 600; }
+  header form { display: flex; gap: 10px; margin-left: auto; }
+  header input { width: 360px; padding: 10px 14px; border: 0; border-radius: 8px; font: inherit; }
+  button { padding: 10px 18px; border: 0; border-radius: 8px; background: #2563eb; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  main { display: grid; grid-template-columns: 280px 1fr; gap: 32px; padding: 32px 40px; }
+  aside { background: #fff; border-radius: 12px; padding: 20px 24px; align-self: start; }
+  aside h2 { margin: 0 0 12px; font-size: 18px; }
+  aside h3 { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
+  aside label { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
+  aside input { width: 18px; height: 18px; }
+  #grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; transition: opacity .2s; }
+  #grid[aria-busy="true"] { opacity: .35; }
+  .card { background: #fff; border-radius: 12px; overflow: hidden; }
+  .card .img { height: 180px; }
+  .card div.body { padding: 14px 16px; }
+  .card .name { font-weight: 600; }
+  .card .price { color: #059669; font-weight: 700; margin-top: 4px; }
+  .card .stock { font-size: 13px; color: #6b7280; }
+  #count { margin: 0 0 16px; color: #4b5563; }
+  #toast { position: fixed; right: 40px; bottom: 40px; padding: 14px 20px; border-radius: 10px; background: #111827; color: #fff; opacity: 0; transform: translateY(12px); transition: all .3s; }
+  #toast.show { opacity: 1; transform: none; }
+  @media (max-width: 640px) {
+    header { flex-wrap: wrap; gap: 12px; padding: 14px 16px; }
+    header form { margin-left: 0; width: 100%; }
+    header input { width: auto; flex: 1; min-width: 0; }
+    main { grid-template-columns: 1fr; gap: 16px; padding: 16px; }
+    #grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .card .img { height: 110px; }
+    #toast { left: 16px; right: 16px; bottom: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Catalog</h1>
+  <form id="save">
+    <input id="list-name" aria-label="List name" placeholder="Name this list">
+    <button type="submit">Save list</button>
+  </form>
+</header>
+<main>
+  <aside aria-label="Filters">
+    <h2>Filters</h2>
+    <h3>Availability</h3>
+    <label><input type="checkbox" name="stock"> In stock only</label>
+    <label><input type="checkbox" name="sale"> On sale</label>
+    <h3>Price</h3>
+    <label><input type="radio" name="price" value="any" checked> Any price</label>
+    <label><input type="radio" name="price" value="0-50"> Under $50</label>
+    <label><input type="radio" name="price" value="50-150"> $50 to $150</label>
+    <label><input type="radio" name="price" value="150-9999"> Over $150</label>
+  </aside>
+  <section>
+    <p id="count"></p>
+    <div id="grid" aria-label="Products"></div>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+<script>
+  const products = [
+    ['Desk lamp', 39, true, true, '#fde68a'], ['Office chair', 189, true, false, '#bfdbfe'],
+    ['Notebook set', 12, false, true, '#fecaca'], ['Monitor stand', 64, true, false, '#bbf7d0'],
+    ['Headphones', 129, true, true, '#ddd6fe'], ['Keyboard', 89, false, false, '#fbcfe8'],
+    ['Webcam', 72, true, true, '#a5f3fc'], ['Standing desk', 420, true, false, '#fed7aa'],
+  ];
+  const grid = document.getElementById('grid');
+  const form = document.querySelector('aside');
+  function render() {
+    const stock = form.querySelector('[name=stock]').checked;
+    const sale = form.querySelector('[name=sale]').checked;
+    const [lo, hi] = (form.querySelector('[name=price]:checked').value.split('-').map(Number));
+    const shown = products.filter(([, p, s, o]) => (!stock || s) && (!sale || o) && (isNaN(lo) || (p >= lo && p < hi)));
+    grid.innerHTML = shown.map(([n, p, s, , c]) =>
+      `<div class="card"><div class="img" style="background:${c}"></div><div class="body"><div class="name">${n}</div>` +
+      `<div class="price">$${p}</div><div class="stock">${s ? 'In stock' : 'Ships in 2 weeks'}</div></div></div>`).join('');
+    document.getElementById('count').textContent = `Showing ${shown.length} of ${products.length} products`;
+  }
+  // Filters take a moment, like a real server round trip.
+  form.addEventListener('change', () => {
+    grid.setAttribute('aria-busy', 'true');
+    setTimeout(() => { render(); grid.removeAttribute('aria-busy'); }, 1500);
+  });
+  const toast = (text) => {
+    const t = document.getElementById('toast');
+    t.textContent = text;
+    t.classList.add('show');
+  };
+  document.getElementById('save').addEventListener('submit', (e) => {
+    e.preventDefault();
+    // file:// requests never reach the network layer, so from a file the write
+    // goes to a host that cannot resolve; the recorder's guard must abort it.
+    fetch(location.protocol === 'file:' ? 'http://selftest.invalid/save' : location.href, { method: 'POST' })
+      .then(() => toast('List saved'))
+      .catch(() => toast('Save blocked: nothing was changed'));
+  });
+  render();
+</script>
+</body>
+</html>
