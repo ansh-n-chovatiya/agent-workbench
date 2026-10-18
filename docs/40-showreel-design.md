@@ -1,7 +1,7 @@
 # Showreel: design
 
-Status: **proposed, awaiting owner review (2026-10-18).** No code exists for this yet. Showreel replaces the `demo-video`
-skill in `plugins/skills-demo`. Decisions below were made by the owner in conversation on 2026-10-18; items marked
+Status: **proposed, awaiting owner review (2026-10-18).** No code exists for this yet. Showreel is built side by side as `plugins/showreel` and replaces the
+`demo-video` skill in `plugins/skills-demo` only after it passes the quality bar. Decisions below were made by the owner in conversation on 2026-10-18; items marked
 *spike* are facts to be verified before they are relied on.
 
 ## 1. Goal
@@ -207,7 +207,7 @@ hard budget for showreel and track it with a per-run meter in CI-style benchmark
 | # | Phase | Acceptance |
 |---|---|---|
 | 0 | Baseline and spikes | Baseline token cost recorded. Spikes S1 to S8 answered in writing (below). |
-| 1 | Strip and rename | Recordly, Voicebox, `say`/`espeak` and ffmpeg code removed; skill renamed `showreel`; tests green on three OSes. |
+| 1 | Scaffold `plugins/showreel` side by side | New plugin builds, validates and tests on three OSes; safe code reused from `skills-demo` (config, doctor, recorder safety, write blocking); `skills-demo` keeps working untouched. |
 | 2 | Intake, storyboard, Guide mode | A user-guided flow produces a working scenario with no exploration loop. |
 | 3 | Recorder and motion | `events.json` captured; cursor paths pass property tests; blind side-by-side beats the old cursor. |
 | 4 | Compositor and exporter | Golden frames match; export plays in QuickTime, VLC and browsers. |
@@ -215,7 +215,7 @@ hard budget for showreel and track it with a per-run meter in CI-style benchmark
 | 6 | Voice with preview, own voice, music | Real-time factor target met on the reference low-end PC. |
 | 7 | Themes, templates, brand kit, multi-scene | Three themes render the same storyboard distinctly. |
 | 8 | Token meter and benchmark | Per-video tokens at or under the budget, and below the baseline. |
-| 9 | Release | `skills-demo` tag and release; first showreel demo video made with showreel. |
+| 9 | Parity, release, retire the old skill | Showreel passes the quality bar (section 21) on the acceptance corpus; tag `showreel-v0.1.0`; first demo video made with showreel; only then `plugins/skills-demo` is removed and its marketplace entry replaced. |
 
 ### Spikes (Phase 0)
 
@@ -236,8 +236,41 @@ OpenScreen is archived (vendor a pinned snapshot). Browser codec support varies.
 (S2). Kokoro quality is good but not human; the own-voice path covers that. The editor is a large build; phases 5 and 6
 carry most of the effort.
 
-## 19. Removed
+## 19. Removed (at phase 9, after parity; nothing is removed earlier)
 
 `recordly.mjs`, `recordly-project.mjs`, the frame-alignment code (`align.mjs`) and its tests, Voicebox integration, `say` and
 `espeak` paths, and the `for-recordly/` folder. The ffmpeg-based compose and render path is replaced by the compositor and
 exporter once phase 4 passes.
+
+## 20. Gaps closed on 2026-10-18 (second review)
+
+| Gap | Resolution |
+|---|---|
+| Replacing in place would break the working skill for months | **Decided:** build side by side as `plugins/showreel` (own tags `showreel-vX.Y.Z`); retire `skills-demo` at phase 9. |
+| The editor has a build step but plugins install by git clone | **Decided:** CI builds the editor on each release and commits the bundle into the plugin; CI also checks that the committed bundle is reproducible from source. |
+| Capture size and disk use (4K frames are large; machines may have little free disk) | Stream-encode while recording; a retention policy; `showreel clean`. Spike S2 also measures disk footprint per minute of recording. |
+| Demos look amateur without page hygiene | On by default, each switchable: hide known dev overlays (Next.js and React indicators), hide scrollbars, hide caret blink, wait for fonts and images, dismiss cookie banners. |
+| Waits and spinners waste viewer time | The editor suggests cuts or speed-ups for dead air; nothing is applied automatically. |
+| Remote or SSH use | Editor stays loopback-only with a token and prints its URL (works with port forwarding). A `--host` option is a later, explicit opt-in. |
+| Borrowed assets may carry different licences from code | Copy OpenScreen code only. Wallpapers, images and fonts are not copied unless S3 verifies their licence. |
+| Install footprint | Browser about 170 MB; voice model about 86 MB, downloaded only when voice is enabled; `onnxruntime-node` platform binaries checked on Windows, Mac and Linux, x64 and ARM, in S5. |
+| App audio and a webcam bubble | Not in v1. |
+| Build cost | Reasoned, not measured: roughly 10 to 20 million Claude tokens in total, with Codex doing much of the mechanical work. Re-estimated after phase 0. |
+
+## 21. Quality bar and acceptance corpus
+
+Acceptance subject: **https://ansh-chovatiya.vercel.app/** (the owner's public portfolio: no login, no writes, safe to record
+repeatedly and from CI). A second, public open-source app can be added later for variety.
+
+A video passes when all of these hold:
+
+| Measure | Target |
+|---|---|
+| Frame rate | Steady 60 fps (or the chosen rate) with no dropped frames |
+| A/V drift | 40 ms or less over a 3-minute video |
+| Loudness | -16 LUFS, within 1 |
+| Caption overlap and frozen frames | Zero |
+| Preview versus export | Golden frames match within a set tolerance |
+| Cursor motion | The owner prefers it in a blind side-by-side against the old skill's cursor |
+| Token cost | At or under the budget set after the phase 0 baseline, and below the baseline |
+| Platforms | Records and exports on Mac, Windows and Linux in CI |
