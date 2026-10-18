@@ -1,7 +1,7 @@
 import http from 'node:http';
 import path from 'node:path';
 import { createReadStream } from 'node:fs';
-import { access, mkdir, open, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, open, readFile, readdir, realpath, stat, writeFile, rm } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { projectDir } from '../paths.mjs';
@@ -141,7 +141,10 @@ export async function startRenderServer({ rawFile, outFile, assets = new Map(), 
     return { url: `http://127.0.0.1:${server.address().port}${prefix}`, close,
       options: { cursorImages: Object.fromEntries([...assets.keys()].map((image) => [image, imageAssetUrl(image)])) },
       async finish() { await writes; if (failure) throw failure; await file.sync(); return bytes; } };
-  } catch (error) { await close(); throw error; }
+  } catch (error) {
+    try { await close(); } finally { if (file) await rm(outFile,{force:true}); }
+    throw error;
+  }
 }
 
 // CLI edits and rendering select the same newest completed run without launching a browser.
@@ -173,10 +176,15 @@ export async function loadRunComposition({ name, runId, rebuild = false }) {
   if (!composition) {
     composition = buildComposition({ brief, storyboard, events, record });
   }
+  const bounds = validateComposition(composition, { duration: record.durationSec });
+  if (!bounds.ok) throw new Error(bounds.errors.join('\n'));
   return { dir, compositionFile, composition, runId, runDir, rawFile, brief, storyboard, events, record };
 }
 
-export async function renderRun({ name, runId, size, fps, out, rebuild = false, stills = null, log = console.log }) {
+export async function renderRun({ name, runId, size, fps, out, rebuild = false, stills = null, log = console.log, signal, isCancelled = () => false, onProgress = () => {} }) {
+  const cancelled = () => signal?.aborted || isCancelled();
+  const checkCancelled = () => { if (cancelled()) throw new Error('Render aborted'); };
+  checkCancelled();
   if (size !== undefined && !['1080', '4k'].includes(size)) throw new Error('size must be 1080 or 4k');
   if (fps !== undefined && ![30, 60].includes(fps)) throw new Error('fps must be 30 or 60');
   const { dir, compositionFile, rawFile, brief, storyboard, events, record, composition: loaded } = await loadRunComposition({ name, runId, rebuild });
@@ -190,16 +198,27 @@ export async function renderRun({ name, runId, size, fps, out, rebuild = false, 
   const finalFile = out ? path.resolve(out) : path.join(renderDir, 'final.mp4');
   await mkdir(path.dirname(finalFile), { recursive: true });
   let server, browser, page, plan, result;
-  let lastLog = 0;
+  let lastLog = 0, cancelTimer, completed = false, ownsOutput = false;
   const started = Date.now();
   try {
+    checkCancelled();
     server = await startRenderServer({ rawFile, outFile: finalFile, assets, onProgress({ frame, total }) {
+      onProgress({frame,total});
       const now = Date.now();
       if (now - lastLog < 1000) return;
       const eta = Math.max(0, Math.round((now - started) / 1000 * (total - frame) / Math.max(1, frame)));
       log(`rendering ${Math.round(frame / total * 100)}%  ETA ${eta} s`); lastLog = now;
     } });
+    ownsOutput = true;
+    checkCancelled();
     browser = await chromium.launch({ headless: true }); page = await browser.newPage();
+    cancelTimer = setInterval(() => {
+      if (cancelled()) {
+        // Closing the page also interrupts decode/encode and pending transport immediately.
+        page?.close().catch(() => {});
+      }
+    }, 50);
+    checkCancelled();
     await page.goto(server.url); await page.waitForFunction(() => typeof window.renderComposition === 'function');
     const sourceSize = await page.evaluate(() => window.probeRenderSource());
     plan = planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings: assets.warnings });
@@ -207,12 +226,14 @@ export async function renderRun({ name, runId, size, fps, out, rebuild = false, 
     if (stills) {
       const files = [];
       for (const t of stills) {
+        checkCancelled();
         const { png, warnings } = await page.evaluate(async ({ plan, t, options }) => ({ png: await window.renderStill(plan, t, options), warnings: plan.warnings }), { plan: JSON.parse(JSON.stringify(plan)), t, options: server.options });
         for (const warning of warnings) if (!plan.warnings.includes(warning)) { plan.warnings.push(warning); log(`warning: ${warning}`); }
         const file = path.join(renderDir, `still-${t}.png`);
         await writeFile(file, Buffer.from(png.split(',')[1], 'base64')); files.push(file);
       }
       log(`Stills: ${files.join(' ')}`);
+      checkCancelled(); completed = true;
       return { renderDir, plan, files };
     }
     result = await page.evaluate(({ plan, options }) => window.renderComposition(plan, { ...options, audio: null }), { plan: JSON.parse(JSON.stringify(plan)), options: server.options });
@@ -228,9 +249,14 @@ export async function renderRun({ name, runId, size, fps, out, rebuild = false, 
       writeFile(path.join(renderDir, 'poster.png'), Buffer.from(poster.split(',')[1], 'base64')),
     ]);
     log(`Final video: ${finalFile} (${plan.timemap.outputDuration.toFixed(2)} s, ${composition.output.width}x${composition.output.height}, ${composition.output.fps} fps)`);
+    checkCancelled(); completed = true;
     return { renderDir, finalFile, plan, ...result };
   } finally {
+    clearInterval(cancelTimer);
     try { await page?.close(); }
-    finally { try { await browser?.close(); } finally { await server?.close(); } }
+    finally { try { await browser?.close(); } finally {
+      try { await server?.close(); }
+      finally { if (!completed && ownsOutput) await rm(finalFile,{force:true}); }
+    } }
   }
 }

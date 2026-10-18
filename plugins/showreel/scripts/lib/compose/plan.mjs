@@ -10,7 +10,7 @@ import { maxSharpZoom, validateRegions, suggestZoomRegions } from './zoom.mjs';
 
 export function planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings = [] }) {
   void brief;
-  const validation = validateComposition(composition);
+  const validation = validateComposition(composition, { duration: record.durationSec });
   if (!validation.ok) throw new Error(validation.errors.join('\n'));
   if (![sourceSize.width, sourceSize.height, record.scale.used].every((v) => Number.isFinite(v) && v > 0)) throw new Error('Invalid source size or capture scale');
   composition = resolveComposition(composition);
@@ -31,7 +31,7 @@ export function planRender({ composition, brief, storyboard, events, record, sou
   const clone = (v) => JSON.parse(JSON.stringify(v));
   return { output: clone(output), layout, theme: THEMES[composition.theme], frame: clone(composition.frame), timemap,
     camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
-    cues: cuesFromRun({ storyboard, events, captionsEnabled: composition.captions.enabled }),
+    cues: !composition.captions.enabled ? [] : composition.captions.cues !== undefined ? clone(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true }),
     captions: clone(composition.captions),
     cursor: { ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }), sizePx: output.height * (composition.cursor.style === 'custom' ? composition.cursor.custom?.heightPct ?? composition.cursor.sizePct : composition.cursor.sizePct) / 100,
       color: THEMES[composition.theme].cursor.fill, ...composition.cursor },

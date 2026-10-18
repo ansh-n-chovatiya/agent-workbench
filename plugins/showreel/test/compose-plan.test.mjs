@@ -59,3 +59,14 @@ test('disabled tracks and cards do not draw effects, and invalid composition or 
   const short = run(); short.record.durationSec = 1; assert.throws(() => planRender(short), /speeds\[0\]/);
   const invalid = run(); invalid.composition.zoom.regions[0].tEnd = 10; assert.throws(() => planRender(invalid), /invalid times/);
 });
+
+test('caption overrides replace generated cues in source time under trims and speed changes', () => {
+  const input = run(); input.composition.captions.cues = [{id:'edited',text:'Edited report',start:3,end:5}];
+  input.composition.edits.trims = [{start:0.5,end:1}];
+  const before = structuredClone(input.composition), plan = planRender(input);
+  assert.deepEqual(plan.cues,before.captions.cues);
+  assert.equal(stateAt(plan,plan.timemap.toOutput(4)).caption.text,'Edited report');
+  assert.equal(stateAt(plan,plan.timemap.toOutput(2)).caption,null); assert.deepEqual(input.composition,before);
+  input.composition.captions.cues = []; assert.deepEqual(planRender(input).cues,[]);
+  input.composition.captions.enabled = false; input.composition.captions.cues = before.captions.cues; assert.deepEqual(planRender(input).cues,[]);
+});

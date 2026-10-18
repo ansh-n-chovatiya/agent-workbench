@@ -7,12 +7,14 @@ export const bundleInputs = [
 ];
 
 export const renderBundleInputs = [...bundleInputs,
-  'scripts/lib/compose/render-page.js',
+  'scripts/lib/compose/render-page.js', 'scripts/lib/compose/draw.js',
   ...['timemap', 'zoom', 'camera', 'cursor-track', 'cursor-director', 'custom-cursor', 'captions', 'themes', 'layout', 'composition', 'plan']
     .map((name) => `scripts/lib/compose/${name}.mjs`),
 ];
 export const encoderHash = (root = new URL('../../../', import.meta.url)) => hashInputs(bundleInputs, root);
 export const renderHash = (root = new URL('../../../', import.meta.url)) => hashInputs(renderBundleInputs, root);
+export const editorBundleInputs = [...renderBundleInputs, 'editor/main.jsx', 'editor/index.html', 'scripts/lib/compose/settings-schema.mjs'];
+export const editorHash = (root = new URL('../../../', import.meta.url)) => hashInputs(editorBundleInputs, root);
 async function hashInputs(inputs, root) {
   const hash = createHash('sha256');
   for (const name of inputs) {

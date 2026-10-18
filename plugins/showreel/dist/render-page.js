@@ -1,4 +1,4 @@
-// showreel render sources sha256: dc3e9238f9e3218f882eefd4c7d6ff3b6d4f92c66b8c8ed851b185fed889afe6
+// showreel render sources sha256: 4b44dccaf0d9d77a99a4f89412852a0b9697e0cb9f401788732e4e50e8a92ec4
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -30189,6 +30189,58 @@
     },
     edits: { trims: [], speeds: [] }
   });
+  var COMPOSITION_RANGES = [
+    ["output.width", 2, 7680, true],
+    ["output.height", 2, 4320, true],
+    ["frame.paddingXPct", 0, 25],
+    ["frame.paddingYPct", 0, 25],
+    ["frame.radiusPx", 0, 300],
+    ["frame.shadow.blurPx", 0, 300],
+    ["frame.shadow.offsetYPx", -300, 300],
+    ["frame.shadow.opacity", 0, 1],
+    ["frame.border.widthPx", 0, 30],
+    ["cursor.followThrough.distancePx", 0, 500],
+    ["cursor.followThrough.durationSec", 0.1, 5],
+    ["cursor.followThrough.startAfterClickSec", 0, 5],
+    ["cursor.sizePct", 1, 8],
+    ["cursor.hideWhenIdleSec", 0, 60],
+    ["cursor.pressScale", 0.1, 1],
+    ["cursor.clickEffect.sizeMult", 0.1, 10],
+    ["cursor.clickEffect.durationSec", 0.05, 5],
+    ["zoom.holdAfterClickSec", 0, 30],
+    ["zoom.leadInSec", 0, 5],
+    ["captions.bandHeightPct", 6, 25],
+    ["captions.fontSizePct", 1, 10],
+    ["cards.fade", 0, 1.5]
+  ];
+  var COMPOSITION_ENUMS = {
+    "cursor.style": ["arrow", "pointer", "dot", "ring", "crosshair", "custom"],
+    "cursor.clickEffect.style": ["ripple", "pulse", "none"],
+    "zoom.speed": ["slow", "normal", "fast"],
+    "captions.mode": ["band", "overlay"],
+    "captions.position": ["top", "bottom"],
+    "captions.fontWeight": [400, 600, 700],
+    "captions.maxLines": [1, 2, 3],
+    "captions.align": ["center", "left"],
+    "cards.transition": ["crossfade", "cut"]
+  };
+  var SETTING_RANGES = Object.fromEntries([
+    ...COMPOSITION_RANGES,
+    ["frame.paddingPct", 0, 25],
+    ["zoom.depth", 1.05, 4],
+    ["cursor.custom.heightPct", 1, 8],
+    ...["arrow", "hand", "text"].flatMap((s) => ["x", "y"].map((k) => [`cursor.custom.${s}.hotspot.${k}`, 0, 1])),
+    ...["title", "outro"].flatMap((k) => [["durationSec", 0, 30], ["titleSizePct", 1, 20], ["subtitleSizePct", 1, 12], ["accent.widthPct", 0, 100], ["logo.heightPct", 1, 40]].map(([p, a, b]) => [`cards.${k}.${p}`, a, b])),
+    ...["frame.background", "cards.title.background", "cards.outro.background"].map((p) => [`${p}.angle`, 0, 360])
+  ].map(([p, min, max, integer = false]) => [p, { min, max, step: integer ? 1 : 0.01 }]));
+  var SETTING_ENUMS = {
+    ...COMPOSITION_ENUMS,
+    theme: Object.keys(THEMES),
+    "output.fps": [30, 60],
+    "output.quality": ["standard", "high"],
+    ...Object.fromEntries(["title", "outro"].flatMap((k) => [[`cards.${k}.align`, ["center", "left"]], [`cards.${k}.accent.shape`, ["bar", "underline", "none"]]])),
+    ...Object.fromEntries(["frame.background", "cards.title.background", "cards.outro.background"].map((p) => [`${p}.type`, ["theme", "gradient", "solid", "image"]]))
+  };
   var outputBitrate = ({ width, height, fps, quality }) => Math.min(6e7, Math.round(width * height * fps * (quality === "high" ? 0.12 : 0.07)));
 
   // scripts/lib/compose/plan.mjs
@@ -30245,16 +30297,7 @@
     return loaded;
   }
 
-  // scripts/lib/compose/render-page.js
-  var defaults = () => ({
-    source: new URL("raw.mp4", location.href).href,
-    fonts: {
-      regular: new URL("fonts/Inter-Regular.woff2", location.href).href,
-      semibold: new URL("fonts/Inter-SemiBold.woff2", location.href).href
-    },
-    audio: null
-  });
-  var stillOptions;
+  // scripts/lib/compose/draw.js
   var fontLoads = /* @__PURE__ */ new Map();
   async function loadFonts(fonts) {
     const key = JSON.stringify(fonts);
@@ -30267,25 +30310,6 @@
     })));
     await fontLoads.get(key);
   }
-  async function openVideo(url2) {
-    const input = new Input({ source: new UrlSource(url2, { getRetryDelay: () => null }), formats: ALL_FORMATS });
-    try {
-      const track = await input.getPrimaryVideoTrack();
-      if (!track || !await track.canDecode()) throw new Error("Source has no decodable video track");
-      return { input, track, sink: new CanvasSink(track, { poolSize: 2 }) };
-    } catch (error) {
-      input.dispose();
-      throw error;
-    }
-  }
-  window.probeRenderSource = async (url2 = defaults().source) => {
-    const { input, track } = await openVideo(url2);
-    try {
-      return { width: await track.getDisplayWidth(), height: await track.getDisplayHeight(), duration: await track.computeDuration() };
-    } finally {
-      input.dispose();
-    }
-  };
   var images = /* @__PURE__ */ new Map();
   var cursorImages = /* @__PURE__ */ new Map();
   var loadCursorImage = (url2) => new Promise((resolve, reject) => {
@@ -30313,6 +30337,11 @@
       const loaded = await images.get(image);
       images.set(image, loaded);
     }));
+  }
+  async function loadAssets(plan, options = {}) {
+    await loadImages(plan);
+    cursorImages = await loadCustomCursorImages(plan, options.cursorImages, loadCursorImage);
+    return { images, cursorImages };
   }
   function background2(ctx, spec, width, height, fallback) {
     if (spec.type === "theme") spec = fallback;
@@ -30466,7 +30495,11 @@
       ctx.closePath();
     }
   }
-  function draw(canvas, plan, tOut, decoded) {
+  function drawFrame(canvas, plan, tOut, decoded, assets) {
+    if (assets) {
+      images = assets.images;
+      cursorImages = assets.cursorImages;
+    }
     const ctx = canvas.getContext("2d"), { width, height } = plan.output;
     const state = stateAt(plan, tOut), f = plan.layout.frame, cam = state.camera;
     background2(ctx, plan.frame.background, width, height, plan.theme.background);
@@ -30572,15 +30605,44 @@
     canvas.height = plan.output.height;
     return canvas;
   }
+
+  // scripts/lib/compose/render-page.js
+  var defaults = () => ({
+    source: new URL("raw.mp4", location.href).href,
+    fonts: {
+      regular: new URL("fonts/Inter-Regular.woff2", location.href).href,
+      semibold: new URL("fonts/Inter-SemiBold.woff2", location.href).href
+    },
+    audio: null
+  });
+  var stillOptions;
+  async function openVideo(url2) {
+    const input = new Input({ source: new UrlSource(url2, { getRetryDelay: () => null }), formats: ALL_FORMATS });
+    try {
+      const track = await input.getPrimaryVideoTrack();
+      if (!track || !await track.canDecode()) throw new Error("Source has no decodable video track");
+      return { input, track, sink: new CanvasSink(track, { poolSize: 2 }) };
+    } catch (error) {
+      input.dispose();
+      throw error;
+    }
+  }
+  window.probeRenderSource = async (url2 = defaults().source) => {
+    const { input, track } = await openVideo(url2);
+    try {
+      return { width: await track.getDisplayWidth(), height: await track.getDisplayHeight(), duration: await track.computeDuration() };
+    } finally {
+      input.dispose();
+    }
+  };
   window.renderStill = async (plan, tOut, overrides = {}) => {
     const options = { ...stillOptions ?? defaults(), ...overrides };
     await loadFonts(options.fonts);
-    await loadImages(plan);
-    cursorImages = await loadCustomCursorImages(plan, options.cursorImages, loadCursorImage);
+    await loadAssets(plan, options);
     const { input, sink } = await openVideo(options.source);
     try {
       const frame = await sink.getCanvas(stateAt(plan, tOut).sourceT);
-      return draw(canvasFor(plan), plan, tOut, frame?.canvas).toDataURL("image/png");
+      return drawFrame(canvasFor(plan), plan, tOut, frame?.canvas).toDataURL("image/png");
     } finally {
       input.dispose();
     }
@@ -30590,8 +30652,7 @@
     if (options.audio !== null) throw new Error("Audio is not supported yet; pass audio: null");
     stillOptions = options;
     await loadFonts(options.fonts);
-    await loadImages(plan);
-    cursorImages = await loadCustomCursorImages(plan, options.cursorImages, loadCursorImage);
+    await loadAssets(plan, options);
     const { width, height, fps } = plan.output, canvas = canvasFor(plan);
     const bitrate = outputBitrate(plan.output);
     let codec;
@@ -30626,7 +30687,7 @@
       for await (const decoded of video.sink.canvasesAtTimestamps(timestamps())) {
         if (window.__renderAbort || options.signal?.aborted) throw new Error("Render aborted");
         if (!decoded) throw new Error(`No source frame for output frame ${frame}`);
-        draw(canvas, plan, frame / fps, decoded.canvas);
+        drawFrame(canvas, plan, frame / fps, decoded.canvas);
         await source.add(frame / fps, 1 / fps);
         frame++;
         if (performance.now() - lastProgress >= 250 || frame === total) {

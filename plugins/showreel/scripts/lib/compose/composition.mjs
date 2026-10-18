@@ -29,6 +29,26 @@ export const DEFAULT_COMPOSITION = freeze({
     outro: { ...cardDefaults, enabled: true, text: 'Thank you', subtitle: null, durationSec: 2 }, fade: 0.4, transition: 'crossfade' },
   edits: { trims: [], speeds: [] },
 });
+export const COMPOSITION_RANGES = [
+    ['output.width',2,7680,true],['output.height',2,4320,true],['frame.paddingXPct',0,25],['frame.paddingYPct',0,25],
+    ['frame.radiusPx',0,300],['frame.shadow.blurPx',0,300],['frame.shadow.offsetYPx',-300,300],['frame.shadow.opacity',0,1],['frame.border.widthPx',0,30],
+    ['cursor.followThrough.distancePx',0,500],['cursor.followThrough.durationSec',0.1,5],['cursor.followThrough.startAfterClickSec',0,5],
+    ['cursor.sizePct',1,8],['cursor.hideWhenIdleSec',0,60],['cursor.pressScale',0.1,1],['cursor.clickEffect.sizeMult',0.1,10],['cursor.clickEffect.durationSec',0.05,5],
+    ['zoom.holdAfterClickSec',0,30],['zoom.leadInSec',0,5],['captions.bandHeightPct',6,25],['captions.fontSizePct',1,10],['cards.fade',0,1.5],
+  ];
+export const COMPOSITION_ENUMS = { 'cursor.style':['arrow','pointer','dot','ring','crosshair','custom'], 'cursor.clickEffect.style':['ripple','pulse','none'],
+    'zoom.speed':['slow','normal','fast'], 'captions.mode':['band','overlay'], 'captions.position':['top','bottom'],
+    'captions.fontWeight':[400,600,700], 'captions.maxLines':[1,2,3], 'captions.align':['center','left'], 'cards.transition':['crossfade','cut'] };
+export const SETTING_RANGES = Object.fromEntries([
+  ...COMPOSITION_RANGES, ['frame.paddingPct',0,25], ['zoom.depth',1.05,4], ['cursor.custom.heightPct',1,8],
+  ...['arrow','hand','text'].flatMap(s => ['x','y'].map(k => [`cursor.custom.${s}.hotspot.${k}`,0,1])),
+  ...['title','outro'].flatMap(k => [['durationSec',0,30],['titleSizePct',1,20],['subtitleSizePct',1,12],['accent.widthPct',0,100],['logo.heightPct',1,40]].map(([p,a,b]) => [`cards.${k}.${p}`,a,b])),
+  ...['frame.background','cards.title.background','cards.outro.background'].map(p => [`${p}.angle`,0,360]),
+].map(([p,min,max,integer=false]) => [p,{min,max,step:integer ? 1 : 0.01}]));
+export const SETTING_ENUMS = { ...COMPOSITION_ENUMS, theme:Object.keys(THEMES), 'output.fps':[30,60], 'output.quality':['standard','high'],
+  ...Object.fromEntries(['title','outro'].flatMap(k => [[`cards.${k}.align`,['center','left']],[`cards.${k}.accent.shape`,['bar','underline','none']]])),
+  ...Object.fromEntries(['frame.background','cards.title.background','cards.outro.background'].map(p => [`${p}.type`,['theme','gradient','solid','image']])),
+};
 export const zoomDepth = (depth) => ({ subtle: 1.35, medium: 1.7, strong: 2.1 })[depth] ?? depth;
 function merge(base, patch) {
   if (!object(base) || !object(patch)) return copy(patch);
@@ -62,7 +82,7 @@ export function resolveComposition(input) {
   if (typeof patch.cursor?.clickEffect === 'boolean') patch.cursor.clickEffect = { ...DEFAULT_COMPOSITION.cursor.clickEffect, style: patch.cursor.clickEffect ? 'ripple' : 'none' };
   return merge(themed, patch);
 }
-export function validateComposition(c) {
+export function validateComposition(c, { duration = Number.MAX_VALUE } = {}) {
   const errors = [], warnings = [];
   const fail = (p, m) => errors.push(`composition.json: "${p}" ${m}`);
   const range = (p, v, min, max, integer = false) => {
@@ -78,6 +98,7 @@ export function validateComposition(c) {
     for (const [k, x] of Object.entries(v)) {
       const key = p ? `${p}.${k}` : k;
       if ((p === 'frame' && k === 'paddingPct') || (/^cards\.(title|outro)$/.test(p) && k === 'duration')) { range(key, x, 0, k === 'duration' ? 30 : 25); continue; }
+      if (key === 'captions.cues') continue;
       if (!Object.hasOwn(model, k)) { fail(key, 'is an unknown key'); continue; }
       if (key === 'cursor.clickEffect' && typeof x === 'boolean') continue;
       if (key === 'cursor.custom') {
@@ -102,17 +123,9 @@ export function validateComposition(c) {
   const enumAt = (p, values) => { if (!values.includes(get(p))) fail(p, `must be ${values.join('|')}`); };
   enumAt('version',[1]); enumAt('theme',Object.keys(THEMES)); enumAt('output.fps',[30,60]); enumAt('output.quality',['standard','high']);
   if (typeof c.run?.id !== 'string' || !c.run.id.trim()) fail('run.id','must be nonempty');
-  for (const [p,min,max,int] of [
-    ['output.width',2,7680,true],['output.height',2,4320,true],['frame.paddingXPct',0,25],['frame.paddingYPct',0,25],
-    ['frame.radiusPx',0,300],['frame.shadow.blurPx',0,300],['frame.shadow.offsetYPx',-300,300],['frame.shadow.opacity',0,1],['frame.border.widthPx',0,30],
-    ['cursor.followThrough.distancePx',0,500],['cursor.followThrough.durationSec',0.1,5],['cursor.followThrough.startAfterClickSec',0,5],
-    ['cursor.sizePct',1,8],['cursor.hideWhenIdleSec',0,60],['cursor.pressScale',0.1,1],['cursor.clickEffect.sizeMult',0.1,10],['cursor.clickEffect.durationSec',0.05,5],
-    ['zoom.holdAfterClickSec',0,30],['zoom.leadInSec',0,5],['captions.bandHeightPct',6,25],['captions.fontSizePct',1,10],['cards.fade',0,1.5],
-  ]) range(p,get(p),min,max,int);
+  for (const [p,min,max,int] of COMPOSITION_RANGES) range(p,get(p),min,max,int);
   range('zoom.depth',zoomDepth(d.zoom?.depth),1.05,4);
-  for (const [p,values] of Object.entries({ 'cursor.style':['arrow','pointer','dot','ring','crosshair','custom'], 'cursor.clickEffect.style':['ripple','pulse','none'],
-    'zoom.speed':['slow','normal','fast'], 'captions.mode':['band','overlay'], 'captions.position':['top','bottom'],
-    'captions.fontWeight':[400,600,700], 'captions.maxLines':[1,2,3], 'captions.align':['center','left'], 'cards.transition':['crossfade','cut'] })) enumAt(p,values);
+  for (const [p,values] of Object.entries(COMPOSITION_ENUMS)) enumAt(p,values);
   const custom = d.cursor?.custom;
   if (d.cursor?.style === 'custom' && !safeImagePath(custom?.arrow?.image)) fail('cursor.custom.arrow.image', 'is required for custom style');
   if (object(custom)) {
@@ -150,6 +163,18 @@ export function validateComposition(c) {
     else colors.forEach((v,i) => color(`${p}.colors.${i}`,v));
     if (get(`${p}.type`) === 'image' && !safeImagePath(get(`${p}.image`))) fail(`${p}.image`,'must be a local path inside the project');
   }
+  if (c.captions?.cues !== undefined) {
+    const cues = c.captions.cues;
+    if (!Array.isArray(cues) || cues.length > 200) fail('captions.cues','must be an array of at most 200 cues');
+    else cues.forEach((cue,i) => {
+      const p = `captions.cues.${i}`;
+      walk(cue,{ id:'', text:'', start:0, end:0 },p);
+      if (typeof cue?.id !== 'string' || !cue.id.trim()) fail(`${p}.id`,'must be nonempty text');
+      if (typeof cue?.text !== 'string' || !cue.text.trim() || cue.text.length > 140) fail(`${p}.text`,'must contain 1 to 140 characters');
+      if (!Number.isFinite(cue?.start) || !Number.isFinite(cue?.end) || cue.start < 0 || cue.start >= cue.end || cue.end > duration) fail(p,'has out of range source times');
+      if (i && cue?.start < cues[i-1]?.end) fail(p,'overlaps the previous cue or is unsorted');
+    });
+  }
   const regions = validateRegions(c.zoom?.regions); errors.push(...regions.errors); warnings.push(...regions.warnings);
   for (const [k,model] of [['trims',{start:0,end:0}],['speeds',{start:0,end:0,rate:1}]]) if (Array.isArray(c.edits?.[k])) c.edits[k].forEach((v,i) => {
     walk(v,model,`edits.${k}.${i}`);
@@ -167,6 +192,7 @@ export function compositionPaths(c) {
     }
   }
   visit(value);
+  result['captions.cues'] = value.captions.cues;
   result['frame.paddingPct'] = value.frame.paddingPct ?? null;
   for (const k of ['title','outro']) {
     result[`cards.${k}.logo.image`] = value.cards[k].logo?.image ?? null;
@@ -222,7 +248,7 @@ export function buildComposition({ brief, storyboard, events, record, edits = {}
     captions: brief.captions,
     cards: { title: { ...brief.titleCard, title: brief.titleCard.title ?? brief.topic }, outro: brief.outroCard }, edits,
   }, overrides));
-  const schema = validateComposition(c);
+  const schema = validateComposition(c, { duration: record.durationSec });
   if (!schema.ok) throw new Error(schema.errors.join('\n'));
   if (c.zoom?.autoSuggest && Array.isArray(c.zoom.regions) && !c.zoom.regions.length) {
     c.zoom.regions = suggestZoomRegions({ events, record, options: zoomOptions(c.zoom) });

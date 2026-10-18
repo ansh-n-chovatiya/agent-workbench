@@ -10,6 +10,7 @@ import { DEFAULT_BRIEF, validateBrief, setPath, questions } from './lib/brief.mj
 import { draftFromGuide, validateStoryboard } from './lib/storyboard.mjs';
 import { buildScenario, validateScenario } from './lib/scenario.mjs';
 import { validateComposition, compositionPaths, changeComposition } from './lib/compose/composition.mjs';
+import { settingFor, EXCLUDED } from './lib/compose/settings-schema.mjs';
 import { readFile } from 'node:fs/promises';
 import { addGuideStep } from './lib/guide/commands.mjs';
 
@@ -27,6 +28,7 @@ Commands:
   login --name <name> [--url <URL>]              Save a browser login session
   runs --name <name>                            List completed recordings
   render --name <name> [--run <ID>] [--size 1080|4k] [--fps 30|60] [--out <FILE>] [--rebuild] [--stills T1,T2]
+  edit --name <name> [--run <ID>] [--no-open] [--port <P>]    Open the local editor
   composition show --name <name> [--paths]      Inspect settings or list every settable path
   composition validate --name <name>            Validate composition.json
   composition set --name <name> --path a.b.c --value <json-or-string>
@@ -180,6 +182,21 @@ async function main(args) {
       fps: options['--fps'] === undefined ? undefined : Number(options['--fps']), out: options['--out'], rebuild: Boolean(options['--rebuild']),
       stills: options['--stills'] ? options['--stills'].split(',').map(Number) : null });
   }
+  if (command === 'edit') {
+    const { options } = parseOptions(flags,['--name','--run','--no-open','--port'],['--no-open']);
+    const { startEditorServer } = await import('./lib/editor/server.mjs');
+    const server = await startEditorServer({name:options['--name'],runId:options['--run'],port:options['--port'] === undefined ? 0 : Number(options['--port'])});
+    console.log(`Editor: ${server.url}`);
+    const stop = new Promise(resolve => { process.once('SIGINT',resolve); process.once('SIGTERM',resolve); });
+    try {
+      if (!options['--no-open']) {
+        const { openDefault } = await import('./lib/editor/opener.mjs');
+        try { await openDefault(server.url); } catch (error) { console.error(`Cannot open browser: ${error.message}`); }
+      }
+      await stop;
+    } finally { await server.close(); }
+    return;
+  }
   if (command === 'composition') {
     const [subcommand, ...rest] = flags;
     if (!['show', 'validate', 'set', 'reset'].includes(subcommand)) throw new Error('Usage: showreel composition <show|validate|set|reset> --name <name>');
@@ -193,7 +210,7 @@ async function main(args) {
       const { loadRunComposition } = await import('./lib/compose/render.mjs');
       c = (await loadRunComposition({ name })).composition;
     }
-    if (subcommand === 'show') console.log(options['--paths'] ? Object.entries(compositionPaths(c)).map(([p,v]) => `${p} = ${JSON.stringify(v)}`).join('\n') : JSON.stringify(c, null, 2));
+    if (subcommand === 'show') console.log(options['--paths'] ? Object.entries(compositionPaths(c)).map(([p,v]) => `${p} = ${JSON.stringify(v)} [${settingFor(p)?.group ?? "managed"}] ${settingFor(p)?.label ?? EXCLUDED.find(s => s.path === p)?.reason ?? p}`).join('\n') : JSON.stringify(c, null, 2));
     else {
       if (['set','reset'].includes(subcommand)) {
         if (!options['--path'] || (subcommand === 'set' && options['--value'] === undefined)) throw new Error('--path and (for set) --value are required');

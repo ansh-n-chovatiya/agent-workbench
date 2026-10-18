@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "esbuild": "^0.25.0",
-    "mediabunny": "^1.40.1"
+    "mediabunny": "^1.40.1",
+    "preact": "^10.27.0"
   }
 }
