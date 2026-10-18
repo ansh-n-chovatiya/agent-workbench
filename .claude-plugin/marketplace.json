@@ -9,6 +9,11 @@
       "name": "ctx",
       "source": "./plugins/ctx",
       "description": "Keeps specs, plans, decisions and memory on disk instead of in the context window, so sessions are disposable and compaction stops losing state."
+    },
+    {
+      "name": "skills-demo",
+      "source": "./plugins/skills-demo",
+      "description": "Skills for producing client-ready demo videos from a single Playwright test."
     }
   ]
 }
