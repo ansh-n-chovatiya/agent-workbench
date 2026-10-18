@@ -1,0 +1,38 @@
+{
+  "site": "https://anshchovatiya.vercel.app/",
+  "seconds": 15,
+  "methods": {
+    "screencast-jpeg-90": {
+      "fps": 59.5,
+      "framesDropped": 0,
+      "bytesPerMinute": 491031476,
+      "width": 1920,
+      "height": 1080,
+      "frames": 891
+    },
+    "screencast-jpeg-100": {
+      "fps": 59.5,
+      "framesDropped": 0,
+      "bytesPerMinute": 995330984,
+      "width": 1920,
+      "height": 1080,
+      "frames": 891
+    },
+    "screencast-jpeg-90-dsf2": {
+      "fps": 59.2,
+      "framesDropped": 0,
+      "bytesPerMinute": 488555101,
+      "width": 1920,
+      "height": 1080,
+      "frames": 889
+    },
+    "playwright-recordVideo": {
+      "fps": null,
+      "framesDropped": null,
+      "bytesPerMinute": 9627472,
+      "width": 1920,
+      "height": 1080,
+      "file": "page.webm"
+    }
+  }
+}

@@ -260,7 +260,7 @@ exporter once phase 4 passes.
 
 ## 21. Quality bar and acceptance corpus
 
-Acceptance subject: **https://ansh-chovatiya.vercel.app/** (the owner's public portfolio: no login, no writes, safe to record
+Acceptance subject: **https://anshchovatiya.vercel.app/** (the owner's public portfolio: no login, no writes, safe to record
 repeatedly and from CI). A second, public open-source app can be added later for variety.
 
 A video passes when all of these hold:

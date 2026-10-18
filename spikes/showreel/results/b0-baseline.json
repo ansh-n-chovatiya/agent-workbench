@@ -1,0 +1,53 @@
+{
+  "okRuns": 3,
+  "runs": [
+    {
+      "input": 16,
+      "output": 1929,
+      "cacheRead": 337010,
+      "cacheCreate": 42395,
+      "costUsd": 0.22260299999999997,
+      "durationMs": 61011,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "isError": false,
+      "result": "Final video: ~/Desktop/Demo Videos/portfolio-2026-10-18-1402/portfolio.mp4 (14.2 s, 1920x1080, 60 fps)",
+      "ok": true
+    },
+    {
+      "input": 14,
+      "output": 1648,
+      "cacheRead": 281835,
+      "cacheCreate": 40437,
+      "costUsd": 0.20643949999999997,
+      "durationMs": 53526,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "isError": false,
+      "result": "Final video: ~/Desktop/Demo Videos/tour-2026-10-18-1402/tour.mp4 (14.8 s, 1920x1080, 60 fps)",
+      "ok": true
+    },
+    {
+      "input": 14,
+      "output": 2125,
+      "cacheRead": 272478,
+      "cacheCreate": 37528,
+      "costUsd": 0.19863780000000003,
+      "durationMs": 66834,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "isError": false,
+      "result": "Final video: ~/Desktop/Demo Videos/portfolio-2026-10-18-1403/portfolio.mp4 (15.3 s, 1920x1080, 60 fps)",
+      "ok": true
+    }
+  ],
+  "median": {
+    "input": 14,
+    "output": 1929,
+    "cacheRead": 281835,
+    "cacheCreate": 40437
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "engines": {
+    "chromium-bundled": {
+      "avc": true,
+      "vp9": true,
+      "av1": true,
+      "mp4Bytes": 651114,
+      "error": null,
+      "diag": {
+        "secure": true,
+        "hasVideoEncoder": true,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Hea"
+      }
+    },
+    "chrome-installed": {
+      "avc": true,
+      "vp9": true,
+      "av1": true,
+      "mp4Bytes": 164482,
+      "error": null,
+      "diag": {
+        "secure": true,
+        "hasVideoEncoder": true,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Hea"
+      }
+    },
+    "msedge-installed": {
+      "error": "launch failed: browserType.launch: Chromium distribution 'msedge' is not found at /Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge | Run \"npx playwright install msedge\""
+    },
+    "webkit-playwright": {
+      "avc": true,
+      "vp9": true,
+      "av1": true,
+      "mp4Bytes": 148825,
+      "error": null,
+      "diag": {
+        "secure": true,
+        "hasVideoEncoder": true,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) V"
+      }
+    },
+    "firefox-playwright": {
+      "avc": true,
+      "vp9": true,
+      "av1": true,
+      "mp4Bytes": 165526,
+      "error": null,
+      "diag": {
+        "secure": true,
+        "hasVideoEncoder": true,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0"
+      }
+    }
+  }
+}

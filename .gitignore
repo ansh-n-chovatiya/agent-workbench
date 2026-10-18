@@ -12,3 +12,5 @@ usage-snapshots/
 transcripts/
 .ruff_cache/
 .coverage
+spikes/showreel/node_modules/
+spikes/showreel/scratch/

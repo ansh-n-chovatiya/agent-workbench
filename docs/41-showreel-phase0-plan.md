@@ -1,5 +1,7 @@
 # Showreel Phase 0 Implementation Plan
 
+> **Progress 2026-10-18:** Tasks 0, 1 (B0), 2 (S1) and 3 (S2) are done; results are in `docs/42-showreel-spike-findings.md`. Corrections found while running: S1 must serve its page from `http://127.0.0.1` (WebCodecs needs a secure context, `about:blank` fails); S2 must not use `waitUntil: 'networkidle'`; B0 must resolve the plugin path from the script's own location and count only runs that print `Final video:`; the acceptance URL has no hyphen. Added follow-up **S2b** (2x capture) after S2. Tasks 5 to 9 still contain steps that describe code instead of showing it (Task 6 steps 3 and 4, Task 7 step 5, Task 9 step 1); write those out in full before running them.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Measure the old skill's per-video token cost and answer spikes S1 to S8 of the showreel design with evidence, so Phase 1 starts from facts and a go/no-go decision.
@@ -16,11 +18,13 @@
 - Runs on Mac, Windows and Linux; a spike that is macOS-only must say so in its result.
 - No GPL, AGPL or GSAP dependency. No Recordly code. Copy OpenScreen **code only**, never its images or fonts.
 - Free forever: no accounts, API keys or paid services. The only local model is text-to-speech.
-- Acceptance subject: `https://ansh-chovatiya.vercel.app/` (public, read-only).
+- Acceptance subject: `https://anshchovatiya.vercel.app/` (public, read-only).
 - Nothing personal in committed files (no home paths, usernames or emails); run `python3 scripts/scan-personal-data.py` before every commit.
 - Commits use the existing identity and end with `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
+- **Operating model (owner's rule, 2026-10-18):** Claude plans, reviews and owns quality and consistency (specs, task briefs, diff review, independent verification of numbers, write-ups, go/no-go). Codex and Gemini do the implementation tasks (see the division of labour below). Every delegated task gets an exact brief and acceptance check from Claude, and Claude reviews the diff and re-runs the check before anything is committed.
+- **Commit hygiene:** stage first, then run `python3 scripts/scan-personal-data.py` (it reads staged files; running it before `git add` skips new files). Results files must contain no home paths: scripts sanitise `~` at the source.
 - Token stop rule: each task has a budget below. If a task passes its budget, stop and ask the owner.
-- Codex (`codex exec -s workspace-write`) may write throwaway spike code from the exact spec in a task; the owner reviews diffs. Judgement calls and write-ups stay with Claude.
+- Codex (`codex exec -s workspace-write`) may write throwaway spike code from the exact spec in a task; the owner reviews diffs. Judgement calls and write-ups stay with Claude. **Codex's sandbox cannot launch browsers** (verified 2026-10-18: every launch failed and its results were discarded). **Gemini CLI 0.64.0 is also configured and has an unsandboxed shell** (verified: it launched Chromium and ran a Playwright script), so it can run browser, network and timing spikes (`gemini -p "<prompt>" --approval-mode yolo`, scoped to `spikes/`), and its large context suits reading a whole repo (S3). Division of labour: Codex writes pure-logic code and tests from exact specs (S6 loudness, S3 scanner); Gemini runs browser and network spikes and long-context reading (S2b, S7, S8, S3 analysis); Claude decides, reviews and writes up. Never trust a delegate's numbers: re-run or spot-check every measurement before it goes into the findings doc.
 
 ## File Structure
 
@@ -126,7 +130,7 @@ import { join, resolve } from 'node:path';
 
 const RUNS = Number(process.argv[2] ?? 3);
 const plugin = resolve('../../plugins/skills-demo');
-const prompt = `Use the demo-video skill to make a demo video of https://ansh-chovatiya.vercel.app/ : ` +
+const prompt = `Use the demo-video skill to make a demo video of https://anshchovatiya.vercel.app/ : ` +
   `scroll the home page and open two sections, 5 steps, no voice, no Recordly. ` +
   `Do not ask me questions; use ~/Desktop/Demo Videos as the deliverables folder. ` +
   `When the render finishes, reply with the single line it prints beginning "Final video:".`;
@@ -290,7 +294,7 @@ git commit -m "chore(showreel): S1 browser H.264 export results" -m "Co-Authored
 import { chromium } from 'playwright';
 import { writeFileSync, mkdirSync, statSync, readdirSync } from 'node:fs';
 
-const URL = 'https://ansh-chovatiya.vercel.app/';
+const URL = 'https://anshchovatiya.vercel.app/';
 const SECONDS = 15;
 mkdirSync('../scratch/s2', { recursive: true });
 const methods = {};
@@ -445,7 +449,7 @@ git commit -m "chore(showreel): S3 OpenScreen extractability results" -m "Co-Aut
 import { chromium } from 'playwright';
 import { writeFileSync } from 'node:fs';
 
-const url = process.argv[2] ?? 'https://ansh-chovatiya.vercel.app/';
+const url = process.argv[2] ?? 'https://anshchovatiya.vercel.app/';
 const steps = [];
 const browser = await chromium.launch({ headless: false });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
