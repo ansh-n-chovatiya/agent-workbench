@@ -1,0 +1,7 @@
+# Checkouts use LF on every OS (Git for Windows would otherwise convert to CRLF), so hashes and golden files are identical everywhere.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.mp4 binary
+*.webp binary
+*.zip binary
