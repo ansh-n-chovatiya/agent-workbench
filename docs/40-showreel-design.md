@@ -132,8 +132,9 @@ browser, and the fallback (VP9 in MP4 or WebM) when H.264 is unavailable.
 | Role | Model | Notes |
 |---|---|---|
 | Default | Kokoro 82M, quantised, via `kokoro-js` (Apache-2.0) | About 86 MB, CPU, runs in Node, no Python. Best quality for its size. *Spike:* real-time factor and RAM on a low-end 4-core, 8 GB machine; voice licences. |
-| Tiny fallback | KittenTTS nano (Apache-2.0), about 24 MB | For slow or small PCs; fewer, plainer voices. |
+| Tiny fallback | Kitten TTS lightweight ONNX, nano int8 (about 25 MB) or micro (about 41 MB), Apache-2.0 weights | For slow or small PCs; 8 English voices, no cloning. The official package is Python, so it needs a Node path (an unofficial port, `kitten-tts-js`, plus a WebAssembly phonemizer); *spike S5.* If that path is not good enough, the tiny tier is Kokoro at its lowest-cost setting. |
 | Other languages | Piper | Only if Kokoro lacks the language. |
+| Not in v1 | KittenTTS 2 (1.7B parameters, 506 to 947 MiB, about 6 GB RAM, PyTorch or a native C++ build) | Breaks the low-hardware, no-complicated-model and permissive-licence rules (its Hugging Face weight licence is tagged "other"). Voice cloning is attractive for branded voices; revisit only as an opt-in tier if a lightweight JavaScript path appears and the weight licence is verified. The free KittenTTS cloud API is also excluded (third-party service). |
 | Own voice | Microphone recording in the editor | No model. |
 | Bring your own audio | A file per step | No model. |
 
@@ -225,7 +226,7 @@ hard budget for showreel and track it with a per-run meter in CI-style benchmark
 | S2 | Capture quality: screencast frames at 2x scale, 30 versus 60 fps, versus Playwright's built-in video. |
 | S3 | How cleanly do OpenScreen's exporter, cursor renderer and timeline extract from Electron? Is PixiJS needed? |
 | S4 | Can Playwright's selector generator drive Guide mode, and what does `guide.json` need to contain? |
-| S5 | Kokoro on a low-end CPU: real-time factor, RAM, first-run download; do its voices carry any extra licence terms? |
+| S5 | Kokoro on a low-end CPU: real-time factor, RAM, first-run download; do its voices carry any extra licence terms? Can the Kitten nano/micro ONNX models run in Node (`kitten-tts-js` or `onnxruntime-node` plus a WebAssembly phonemizer), and how do they compare with Kokoro in a blind listen? |
 | S6 | Loudness normalisation and offline mixing in JavaScript: accuracy and speed. |
 | S7 | A/V sync of the editor preview over long clips with a single audio clock. |
 | S8 | Memory behaviour of 4K export, and where a proxy is needed. |
