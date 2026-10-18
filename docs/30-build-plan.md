@@ -5,6 +5,8 @@ acceptance check that a command or a measurement can decide.
 
 ## Phase 0: verification spikes (research only, no product code)
 
+**Status 2026-10-18: S1 to S5 done (results in 10 section 8, 15 and 31). S6 needs the owner's past review outputs and the built-in `/code-review` text (Q1, Q10), so it is still open.**
+
 | Spike | Answers | Done when |
 |---|---|---|
 | S1 `claude --version`; `claude plugin validate` on a stub mod using `agent.spawn` | Q2, Q3 | A stub mod rewrites a subagent's model and `$.store` survives two sessions |
@@ -15,6 +17,8 @@ acceptance check that a command or a measurement can decide.
 | S6 Collect the owner's past review outputs and built-in `/code-review` text | Q1, Q10 | Category table created in 31 |
 
 ## Phase 0.9: create the repo and move first (ordering fix, 2026-10-17)
+
+**Status 2026-10-18: done locally, nothing pushed.** `agent-workbench` is a local git repo with `context-ledger` (as `plugins/ctx`, 136 commits) and `ai-skills` (as `plugins/skills-demo`) folded in with history via `git subtree`; tags `ctx-v1.0.0`, `ctx-v1.1.0`, `ctx-v1.2.0` recreated at the original commits; root `.claude-plugin/marketplace.json`, root `.github/workflows/ci.yml` (ctx jobs copied from the plugin's own workflow, which stays because ctx's tests read it, plus a `scan` job), `.gitignore`, `LICENSE` (MIT, copied from ctx), `scripts/scan-personal-data.py` with tests. Checks: ctx suite 2267 tests pass from `plugins/ctx`; `/ctx:init` runs live from there; tracked-file scan clean. **Not done, needs the owner:** (1) the history scan finds the `.ctx/journal` exposure described in 31, so decide whether to rewrite history before the first push; (2) creating the public GitHub repo; (3) the MIT licence for `ai-skills` (Q21), which also blocks making `plugins/skills-demo` a proper plugin (it has no `plugin.json`; that is phase 5). The skills plugin is not in the marketplace yet for that reason.
 
 The plan changes ctx (phases 0.5 and 4) and adds `plugins/ctx-optimize` (phases 1 to 3), and D3 puts all of it in one
 repo. Doing the move last (the old phase 5) would mean editing ctx in the old repo and migrating it afterwards.

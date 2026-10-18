@@ -44,3 +44,14 @@ Read locally on 2026-10-17 from `~/Desktop/Personal/context-ledger` (v1.2.0 per 
 - Read `ctx/briefing.py` and the hooks for always-on token cost; run `claude plugin details ctx`.
 - Check whether the `.ctx/` review packages already hold a history of finding types (12 packages in the ctx repo;
   Hark and DevFlow have none stored).
+
+## Update 2026-10-18 (spike S5, code read)
+
+- **Test suite is 2267 tests**, not 165 (CI floor 2145). Run from `plugins/ctx` in the monorepo: 0 failures, 4 skips.
+- **Why unit-runners can run on Opus (Q11, Q17).** `dispatch.model_for` precedence: the unit's own `model:`, then a score-derived
+  tier (score at or above `complexity.thresholds.deep` = 6.0 maps to the dearest tier, Opus), then `models.<role>`. But `ctx`
+  only *names* a model on the dispatch line; `commands/start.md` tells the orchestrator to pass it, and no agent file declares
+  `model:`. If the orchestrator omits it, the Task call inherits the session (Opus). Nothing enforces it. That is the case a
+  phase 3 `agent.spawn` mod closes.
+- **Always-on cost.** Unchanged from doc 10: about 845 tokens per session.
+- **Review round cap.** `MAX_ROUNDS = 3`, enforced by the caller in `ctx/commands.py`, not by `Ledger.bump_round`.

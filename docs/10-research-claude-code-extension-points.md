@@ -116,3 +116,22 @@ Verified from the mods docs (create, events) and the type file `mods/types/claud
 
 Open after this spike: sandbox limits of `$.process.run` and `$.http.fetch` (Q3, run `claude plugin validate` on a
 stub), full `SubagentStop` payload (Q6), marketplace entry for an external repo (Q5), auto-install prompt (Q4).
+
+## 8. Phase-0 spike results, round two (2026-10-18, Claude Code 2.1.302)
+
+- **Handler signature (verified, mods docs):** `on('agent.spawn', async ($, e, next) => next({ ...e, model }))`. `$` is the first
+  argument, not a global; passing it as another position makes `claude plugin validate` reject the module. `$.process.run` takes an
+  argv array (`['git', 'branch']`), not a string. The module path in `hooks.json` is relative to `hooks/`.
+- **S1, live proof.** A stub mod (`agent.spawn` rewriting to `haiku`, counting in `$.store`, calling `$.process.run` and
+  `$.http.fetch`) was run with `claude -p --plugin-dir` three times. The `general-purpose` subagent of a Sonnet parent ran on
+  Haiku, the store count read 1, 2, 3 across the three separate sessions, `process.run` exited 0 and `http.fetch` returned 200.
+  `claude plugin test` also passes the same mod offline (store and process stubbed). `claude plugin validate` flags `agent.spawn`
+  as a "gating hook without .catch"; our rule is fail open, and a hook that throws before `next` is skipped, so the call is not
+  blocked.
+- **S2, `SubagentStop`:** see Q6 in 31. A mod can also read per-agent usage live from `turn.step` / `turn.complete`.
+- **S3, subdirectory plugin:** works. `claude plugin validate` on the repo root passes with `source: ./plugins/ctx`. ctx's own
+  plugin validation passes with six warnings: hooks use `${CLAUDE_PLUGIN_ROOT}` unquoted in shell commands, which breaks if the
+  install path contains a space. Fix in ctx (use the exec form or quote the placeholder) before wide distribution.
+- **S4, auto-install:** interactive sessions register a project's `extraKnownMarketplaces` only after the workspace trust dialog;
+  `enabledPlugins` applies at session start; `-p` runs need trust accepted earlier.
+- **Type files for the build** are still not generated (needs an interactive session with the mod loaded).
