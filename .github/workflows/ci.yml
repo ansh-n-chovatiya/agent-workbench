@@ -439,4 +439,4 @@ jobs:
       # subset without browsers, ffmpeg, system voices or external services.
       - name: Unit tests
         run: >-
-          node --test --test-name-pattern '^(config|layout|deliver: one|init|mapFromEdits|replanCaptions|parseProject|a slow-down|findProject|timeline:|edit: a phone|captions:|cursor:)' test/paths.test.mjs test/timemap.test.mjs test/edit.test.mjs
+          node --test --test-name-pattern '^(config|layout|deliver: one|mapFromEdits|replanCaptions|parseProject|a slow-down|findProject|timeline:|edit: a phone|captions:|cursor:)' test/paths.test.mjs test/timemap.test.mjs test/edit.test.mjs

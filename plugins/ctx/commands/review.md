@@ -55,7 +55,7 @@ Then act on what came back.
   With `review.stop_rule: true` (default off), stop after two reviewed rounds
   unless a `critical` finding is still open; even then, four is the hard ceiling.
   Park what remains with a ruling or ask the owner to decide (`/ctx:decide`).
-  An unchanged fix round prints “unchanged since the last review” instead of
+  An unchanged fix round prints "unchanged since the last review" instead of
   writing a package: fix the open findings or park them with a ruling. Do not
   dispatch a reviewer for that notice.
 - **A disputed finding** — a dispute is a technical claim, so it needs evidence:

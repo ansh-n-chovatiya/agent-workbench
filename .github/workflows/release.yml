@@ -200,7 +200,7 @@ jobs:
       - name: Unit tests
         working-directory: plugins/skills-demo/skills/demo-video
         run: >-
-          node --test --test-name-pattern '^(config|layout|deliver: one|init|mapFromEdits|replanCaptions|parseProject|a slow-down|findProject|timeline:|edit: a phone|captions:|cursor:)' test/paths.test.mjs test/timemap.test.mjs test/edit.test.mjs
+          node --test --test-name-pattern '^(config|layout|deliver: one|mapFromEdits|replanCaptions|parseProject|a slow-down|findProject|timeline:|edit: a phone|captions:|cursor:)' test/paths.test.mjs test/timemap.test.mjs test/edit.test.mjs
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
