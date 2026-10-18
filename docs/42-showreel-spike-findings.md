@@ -332,6 +332,28 @@ Defects found by running it (all fixed, with tests):
 3. Two contradictions in my own plan, caught by Codex and left failing rather than bent: `voice.enabled` defaulted to false so intake could not tell unanswered from answered (now `null` until asked), and a sensitive fill had to be both null and valid once filled (now a **pending secret**: valid, reported as pending, and the Phase 3 recorder refuses to start until each is supplied at run time).
 4. The personal-data scan caught a reserved-domain test email (`example.test`) that its allowlist does not cover; test data now uses `example.com`.
 
+## Phase 3: the recorder (2026-10-18)
+
+`showreel record --name N` runs `scenario.json` and writes `raw.mp4` (H.264), `events.json` and `record.json`. Frames stream from CDP screencast over loopback HTTP to a hidden encoder page
+(WebCodecs through mediabunny) that writes H.264 chunks to disk behind a bounded queue (frames beyond the queue are dropped and counted, never spooled).
+
+Results:
+- **Live recording of the real portfolio** (4 steps, Auto-mode scenario): 16.7 s, **3206x1804 (capture scale 1.67, chosen by the benchmark)**, 792 frames, **47.5 fps effective, 0 dropped, max backlog 2**, 10.7 MB, valid H.264 High profile. The desktop layout is intact at 1.67x and every navigation is zoomed correctly from its first frame; no browser chrome, scrollbars or cursor in the raw video (the cursor is drawn in post).
+- **`events.json`:** 60 Hz planned cursor path (16.7 ms spacing), 4 clicks at exact positions, about 20 Hz real mouse moves for hover, per-step target boxes and hold times; tab and URL changes.
+- **CI on Ubuntu, macOS and Windows:** unit tests and the browser tests (including recording the six-step fixture scenario, playback in a `<video>`, blocked and allowed writes, pending secrets, rehearsal failure, scale 1.33 dimensions, 60-frame encoder test) all pass: 20 of 20 jobs.
+- **Safety:** non-GET writes are blocked unless an `allowWrites` rule allows them; pending secrets refuse before any browser opens and secret values never appear in output files; rehearsal reports the step and selector before any video is made.
+- **Cursor motion (owner-approved):** one smooth stroke: gentle one-sided arc, skewed bell-shaped speed with a soft landing, 320 ms to 1.3 s, a still dwell before the click; no overshoot, tremor or wobble. Verified jolt-free (no speed step above 2% of peak at 1000 Hz, 0.5 to 1.4% measured). Owner's words after reviewing `cursor-demo`: acceptable.
+
+Defects found by running or reviewing (all fixed, with tests):
+1. Two tests built a script path with a file URL's `.pathname`, which is `/D:/...` on Windows (a guard test now fails any source that does it).
+2. The committed encoder bundle's header hash changed under Windows CRLF checkouts, failing the freshness test only on Windows; the hash now normalises line endings and `plugins/showreel/.gitattributes` pins LF.
+3. The disk-headroom estimate (from my plan) assumed 80 MB per *second*; it is now the capped encoder bitrate with 50% margin (a 5-minute recording at the top scale needs about 3.4 GB).
+4. The click target box was measured after a fixed 600 ms, so a long smooth scroll could misplace the click; it now waits until the box stops moving.
+5. My first smoothness test (a 12% per-frame speed step at 60 Hz) was wrong for short strokes (a 320 ms stroke has about 19 frames); smoothness is now tested on the continuous curve at 1000 Hz.
+6. A test email on a reserved domain tripped the personal-data scanner again; test data uses `example.com`.
+
+Known limits carried forward: a plain `allowWrites` string matches anywhere in a URL, including other hosts (parity with the old skill; tighten in Phase 9); `Next-Action-Name` rules do not resolve yet (Phase 9); the optional 2x hybrid zoom layer, the phone and vertical profile (Phase 7), the benchmark warm-up and median, and `login` against a real authenticated app are not done or not exercised; JPEG ringing is faintly visible around very large headings at 1.67x (quality 90).
+
 ## Tooling notes (2026-10-18)
 
 - Gemini CLI could not be used: its free API-key quota (20 requests a day) was exhausted in minutes, and Google ended Google-account sign-in for Gemini CLI on 2026-06-18, so the owner's Jio plan cannot power it. Browser spikes were run by Claude directly.

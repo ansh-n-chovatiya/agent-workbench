@@ -89,7 +89,7 @@ the DOM, which removes the expensive dry-run. *Spike:* build on Playwright's own
 
 ## 6. Motion that does not feel robotic
 
-- **Cursor path.** One smooth stroke per move, designed to look natural and be easy to follow, not mechanical: a single gentle one-sided arc (a straight line reads as robotic), a bell-shaped speed with a soft landing (peak speed at about 42% of the move, so it accelerates quickly and settles slowly), a duration that grows with distance (Fitts-style, 320 ms to 1.3 s), and a still pause before the click and a short settle after it. Deliberately **no overshoot-and-correct, no tremor and no wobble**: they read as extra movement in a demo (owner feedback, 2026-10-18). The curve is verified jolt-free (no speed step above 2% of peak at 1000 Hz). Playwright drives only coarse real mouse moves (about 20 Hz) so hover states fire; the cursor itself is drawn in post from the planned path, so style, size and smoothing stay editable.
+- **Cursor path.** One smooth stroke per move, designed to look natural and be easy to follow, not mechanical: a single gentle one-sided arc (a straight line reads as robotic), a bell-shaped speed with a soft landing (peak speed at about 42% of the move, so it accelerates quickly and settles slowly), a duration that grows with distance (Fitts-style, 320 ms to 1.3 s), and a still pause before the click and a short settle after it. Deliberately **no overshoot-and-correct, no tremor and no wobble**: they read as extra movement in a demo (owner feedback, 2026-10-18; **the owner reviewed the demo and approved the motion as acceptable**). The curve is verified jolt-free (no speed step above 2% of peak at 1000 Hz). Playwright drives only coarse real mouse moves (about 20 Hz) so hover states fire; the cursor itself is drawn in post from the planned path, so style, size and smoothing stay editable.
 - **Element-aware zoom.** Because the recorder knows each target's bounding box, zoom frames the element with padding
   instead of guessing from the cursor. Triggers: click, text entry focus, a step marked "highlight". Spring easing, dwell
   and hold times, no zoom thrash on rapid clicks, smooth follow while the cursor moves inside a zoom.
@@ -206,7 +206,7 @@ hard budget for showreel and track it with a per-run meter in CI-style benchmark
 | 0 | Baseline and spikes | **Done 2026-10-18.** Baseline and spikes S1 to S8 (plus S2b, S2c) answered in `docs/42`; gate: go. |
 | 1 | **Done 2026-10-18.** Scaffold `plugins/showreel` side by side | New plugin builds, validates and tests on three OSes; safe code reused from `skills-demo` (config, doctor, recorder safety, write blocking); `skills-demo` keeps working untouched. |
 | 2 | **Done 2026-10-18.** Intake, storyboard, Guide mode | A user-guided flow produces a working scenario with no exploration loop. |
-| 3 | Recorder and motion | `events.json` captured; cursor paths pass property tests; blind side-by-side beats the old cursor. |
+| 3 | **Done 2026-10-18.** Recorder and motion | `events.json` captured; cursor paths pass property tests; blind side-by-side beats the old cursor. |
 | 4 | Compositor and exporter | Golden frames match; export plays in QuickTime, VLC and browsers. |
 | 5 | Editor | All section 7 features work; edit-rule tests pass; preview matches export. |
 | 6 | Voice with preview, own voice, music | Real-time factor target met on the reference low-end PC. |
@@ -319,3 +319,9 @@ Measured on an Apple M4 and, for the smoke tests, on CPU-only CI runners for Ubu
 - A guide step with `url: null` continues on the current page; two URLs are the same document when origin, path and query match (hash and trailing slash ignored).
 - A sensitive value is never stored. A sensitive fill is a pending secret: valid in the scenario, but the Phase 3 recorder must refuse to start until each pending step has a secret supplied at run time (environment variable or prompt).
 - `voice.enabled` is `null` until answered; null counts as off downstream.
+
+## 27. Phase 3 outcome (2026-10-18)
+
+- `showreel record` produces `raw.mp4` plus `events.json` (60 Hz planned cursor path, clicks, target boxes per step, step and hold times, blocked writes, tabs) and `record.json`; verified on this Mac against the live portfolio (1.67x capture, 47.5 fps effective, 0 dropped) and on Ubuntu, macOS and Windows in CI against the fixture app.
+- The cursor is one smooth stroke (owner-approved): single gentle arc, skewed bell-shaped speed with a soft landing, no overshoot or tremor.
+- Phase 4 inputs are ready: for zoom, `events.targets` (the clicked or typed-into element's box at the moment of the action) and `events.clicks`; for the cursor, `events.cursor`; for captions, step times and hold times; capture scale and the video's real size are in `record.json`.

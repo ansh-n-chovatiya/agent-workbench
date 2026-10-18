@@ -1,6 +1,6 @@
 # Showreel Phase 3 plan: the recorder
 
-Status: executing from 2026-10-18. Spec: `docs/40-showreel-design.md` (sections 4, 6, 22 to 26). Evidence: `docs/42-showreel-spike-findings.md`
+Status: **complete 2026-10-18** (results in `docs/42`). Spec: `docs/40-showreel-design.md` (sections 4, 6, 22 to 26). Evidence: `docs/42-showreel-spike-findings.md`
 (S1, S2, S2b, S2c, S8, Phase 1 smoke results). Operating model as before: Claude writes briefs and reviews every diff; Codex writes code and unit tests
 (no browser, no local ports, no `~/.npm` writes); Claude runs everything that launches a browser and fixes what it finds.
 
