@@ -1,0 +1,234 @@
+name: release
+
+# Only per-plugin tags release artifacts; no registry publishing is configured.
+on:
+  push:
+    tags:
+      - "ctx-v*"
+      - "skills-demo-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  ctx:
+    if: startsWith(github.ref_name, 'ctx-v')
+    runs-on: ubuntu-latest
+    # gh release needs only contents write, with no package or OIDC scope.
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: plugins/ctx
+    steps:
+      # Every `uses:` is pinned to a full commit SHA rather than a tag: a tag
+      # is a mutable pointer, and a release workflow that resolves one at run
+      # time executes whatever it was repointed at overnight. The trailing
+      # comment carries the human-readable version.
+      # `fetch-tags: true`: the test step below runs the full suite,
+      # including `test_the_ci_recipe_pins_a_ref_that_resolves_in_this_
+      # repository`, which needs `ctx-v1.0.0` — a different tag from the one this
+      # job checked out — to resolve. A shallow checkout of just the pushed
+      # tag does not include any other tag's object without this.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-tags: true
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      # The tag is a claim about the source. Check it before building, so a
+      # mistyped tag fails in ten seconds instead of shipping a wheel whose
+      # filename disagrees with the code inside it.
+      - name: The tag agrees with the source
+        shell: python
+        run: |
+          import json, os, pathlib, re, sys
+
+          tag = os.environ["GITHUB_REF_NAME"]
+          source = pathlib.Path("ctx/__init__.py").read_text(encoding="utf-8")
+          declared = re.search(r'__version__ = "([^"]+)"', source).group(1)
+          manifest = json.loads(
+              pathlib.Path(".claude-plugin/plugin.json").read_text(encoding="utf-8")
+          )["version"]
+
+          if tag != "ctx-v" + declared or manifest != declared:
+              print("FAIL: tag %r, ctx.__version__ %r, plugin.json %r do not "
+                    "describe one release." % (tag, declared, manifest))
+              sys.exit(1)
+          print("OK: %s == ctx-v%s == ctx-v%s" % (tag, declared, manifest))
+
+      # The worktree tier runs real git, so the runner needs an identity.
+      - name: Configure git
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+          git config --global init.defaultBranch main
+
+      # A tag push builds and publishes a GitHub Release from whatever the
+      # tag points at. `ci.yml` triggers on `branches: [main]` and
+      # `pull_request`, neither of which matches `refs/tags/*`, so a tag is
+      # the one ref this repository's own test suite never runs against
+      # unless this step runs it here. No `continue-on-error`, no
+      # `if: always()` and no `|| true`: a failing suite stops this job
+      # before the build step below, and the release is never built, let
+      # alone attached.
+      - name: Run the test suite
+        run: python -m unittest discover -s tests -q
+
+      # Pinned exactly, and the build then runs with `--no-isolation`, so the
+      # backend that produces the artefacts is the version named here rather
+      # than whatever PyPI resolved `hatchling>=1.18` to this morning. Held
+      # equal to the `coverage` job's pin in `ci.yml`: that job is the only
+      # place `SdistContainsWhatTheReadmeLinksTo` (tests/test_lint_and_coverage.py)
+      # actually builds an sdist and reads the archive, and a mismatched pin
+      # there would exercise a different build backend than the one that
+      # produces the artefacts this workflow ships.
+      - name: Install the pinned build toolchain
+        run: |
+          python -m pip install --upgrade --disable-pip-version-check \
+            "build==1.6.1" "hatchling==1.32.0" "cyclonedx-bom==7.3.1"
+
+      - name: Build the sdist and the wheel
+        run: python -m build --no-isolation --sdist --wheel --outdir dist/
+
+      # Install what was actually built — not the checkout — and prove the
+      # console script runs. A wheel that imports nothing useful still builds.
+      # `--without-pip` leaves exactly one distribution in the environment,
+      # which is what makes the SBOM below a statement about this artefact
+      # rather than about the venv's own bootstrap tooling.
+      - name: The built wheel installs and runs
+        run: |
+          python -m venv --without-pip /tmp/smoke
+          python -m pip --python /tmp/smoke/bin/python install \
+            --disable-pip-version-check --no-index --find-links dist/ context-ledger
+          test "$(/tmp/smoke/bin/ctx --version)" = "$(python bin/ctx.py --version)"
+          /tmp/smoke/bin/ctx --version
+
+      # The SBOM describes the *installed* distribution, so it reports the
+      # dependency graph a consumer actually gets. For this project that graph
+      # is one component with no dependencies, which is the claim the whole
+      # packaging effort exists to make checkable — so the assertion below is
+      # part of the release, not a nicety: a build that acquired a dependency
+      # fails here instead of shipping an SBOM nobody reads.
+      - name: CycloneDX SBOM
+        run: |
+          cyclonedx-py environment /tmp/smoke \
+            --of JSON --output-reproducible \
+            -o dist/context-ledger.cdx.json
+          python - <<'PY'
+          import json
+          bom = json.load(open("dist/context-ledger.cdx.json"))
+          names = sorted(c["name"] for c in bom.get("components", []))
+          assert bom["bomFormat"] == "CycloneDX", bom["bomFormat"]
+          assert names == ["context-ledger"], names
+          print("SBOM: CycloneDX %s, components=%s" % (bom["specVersion"], names))
+          PY
+
+      # Checksums over everything else in dist/, so a mirror can verify what it
+      # copied without trusting the transport it copied over.
+      - name: SHA256SUMS
+        working-directory: plugins/ctx/dist
+        run: |
+          sha256sum -- *.whl *.tar.gz *.cdx.json > SHA256SUMS
+          cat SHA256SUMS
+
+      # Retained on the workflow run as well as on the release: a deleted
+      # release asset then still has a second copy with an audit trail.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-artifacts
+          path: plugins/ctx/dist/
+          if-no-files-found: error
+
+      # Prefer this plugin's version section; never use another plugin's notes.
+      - name: Extract changelog notes
+        shell: python
+        run: |
+          import json, os, pathlib, re
+
+          version = json.loads(pathlib.Path(".claude-plugin/plugin.json").read_text())["version"]
+          changelog = pathlib.Path("CHANGELOG.md")
+          text = changelog.read_text(encoding="utf-8") if changelog.is_file() else ""
+          headings = list(re.finditer(r"^##[ \t]+(.+)$", text, re.MULTILINE))
+          for index, heading in enumerate(headings):
+              title = heading.group(1).strip()
+              if re.match(r"^(?:\[" + re.escape(version) + r"\]|v?" + re.escape(version) + r")(?=\s|$)", title):
+                  end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+                  body = text[heading.end():end].strip()
+                  if body:
+                      pathlib.Path(os.environ["RUNNER_TEMP"], "release-notes.md").write_text(body + "\n", encoding="utf-8")
+                  break
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes=(--generate-notes)
+          if [ -s "$RUNNER_TEMP/release-notes.md" ]; then
+            notes=(--notes-file "$RUNNER_TEMP/release-notes.md")
+          fi
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+            --verify-tag "${notes[@]}" \
+            dist/*.whl dist/*.tar.gz dist/SHA256SUMS dist/context-ledger.cdx.json
+
+  skills-demo:
+    if: startsWith(github.ref_name, 'skills-demo-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: plugins/skills-demo
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The tag agrees with the manifest
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          const { version } = JSON.parse(fs.readFileSync('.claude-plugin/plugin.json', 'utf8'));
+          if (process.env.GITHUB_REF_NAME !== `skills-demo-v${version}`) {
+            throw new Error('Tag does not match plugin.json version');
+          }
+          JS
+      # Use the runner's Node: this repo has no pinned setup-node SHA.
+      - name: Install locked dependencies
+        working-directory: plugins/skills-demo/skills/demo-video
+        run: npm ci
+      # npm test includes browser/media integration tests; select pure unit
+      # tests so releases need no browser, ffmpeg or system voice setup.
+      - name: Unit tests
+        working-directory: plugins/skills-demo/skills/demo-video
+        run: >-
+          node --test --test-name-pattern '^(config|layout|deliver: one|init|mapFromEdits|replanCaptions|parseProject|a slow-down|findProject|timeline:|edit: a phone|captions:|cursor:)' test/paths.test.mjs test/timemap.test.mjs test/edit.test.mjs
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      # Prefer this plugin's version section; never use another plugin's notes.
+      - name: Extract changelog notes
+        shell: python
+        run: |
+          import json, os, pathlib, re
+
+          version = json.loads(pathlib.Path(".claude-plugin/plugin.json").read_text())["version"]
+          changelog = pathlib.Path("CHANGELOG.md")
+          text = changelog.read_text(encoding="utf-8") if changelog.is_file() else ""
+          headings = list(re.finditer(r"^##[ \t]+(.+)$", text, re.MULTILINE))
+          for index, heading in enumerate(headings):
+              title = heading.group(1).strip()
+              if re.match(r"^(?:\[" + re.escape(version) + r"\]|v?" + re.escape(version) + r")(?=\s|$)", title):
+                  end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+                  body = text[heading.end():end].strip()
+                  if body:
+                      pathlib.Path(os.environ["RUNNER_TEMP"], "release-notes.md").write_text(body + "\n", encoding="utf-8")
+                  break
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes=(--generate-notes)
+          if [ -s "$RUNNER_TEMP/release-notes.md" ]; then
+            notes=(--notes-file "$RUNNER_TEMP/release-notes.md")
+          fi
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+            --verify-tag "${notes[@]}"

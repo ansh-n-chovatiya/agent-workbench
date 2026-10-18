@@ -405,3 +405,38 @@ jobs:
         run: python -m unittest discover -s scripts -p 'test_scan_personal_data.py'
       - name: Scan tracked files
         run: python scripts/scan-personal-data.py
+
+  manifests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Validate marketplace manifests
+        run: python3 scripts/check-manifests.py
+      - name: Script tests
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
+  skills-demo:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: plugins/skills-demo/skills/demo-video
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # No setup-node SHA exists in this repo; use ubuntu-latest's Node.
+      - name: Install locked dependencies
+        run: npm ci
+      # npm test also records browsers and processes media. Run the unit
+      # subset without browsers, ffmpeg, system voices or external services.
+      - name: Unit tests
+        run: >-
+          node --test --test-name-pattern '^(config|layout|deliver: one|init|mapFromEdits|replanCaptions|parseProject|a slow-down|findProject|timeline:|edit: a phone|captions:|cursor:)' test/paths.test.mjs test/timemap.test.mjs test/edit.test.mjs

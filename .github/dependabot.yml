@@ -1,0 +1,19 @@
+# Keep immutable action pins current, grouped as in ctx's configuration.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      actions:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "github-actions", "supply-chain"]
+    commit-message:
+      prefix: "ci"
+  - package-ecosystem: "npm"
+    directory: "/plugins/skills-demo/skills/demo-video"
+    schedule:
+      interval: "weekly"
