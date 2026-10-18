@@ -140,11 +140,15 @@ test('real editor: load, edit, undo, autosave, play and export', { timeout: 2400
       assert.equal(await page.getByText('Select a part of the video, then choose Speed',{exact:true}).count(),0);
       const before = (await saved()).zoom.regions.filter(z => z.source === 'manual').length;
       const ruler=page.locator('.timeline-ruler'), rulerBox=await ruler.boundingBox();
-      await page.mouse.click(rulerBox.x + 3.9 * 80, rulerBox.y + rulerBox.height/2);
+      const tick = async (label) => (await ruler.getByText(label, { exact: true }).first().boundingBox()).x;
+      const [x0, x1] = [await tick('0:00.00'), await tick('0:01.00')];
+      await page.mouse.click(x0 + (x1 - x0) * 2.9, rulerBox.y + rulerBox.height/2);
       await page.getByRole('button', { name: 'Add zoom', exact:true }).click();
+      await page.waitForTimeout(300);
+      const stage = await page.locator('.preview canvas').boundingBox(); await page.mouse.click(stage.x + stage.width * 0.5, stage.y + stage.height * 0.5);
       await until(async () => (await saved()).zoom.regions.filter(z => z.source === 'manual').length === before + 1, 'manual zoom saved');
       assert.equal(await page.getByText('Add zoom to bring a detail closer',{exact:true}).count(),0);
-      assert.ok((await saved()).zoom.regions.some(z => z.source === 'manual' && z.tStart >= 3.8));
+      assert.ok((await saved()).zoom.regions.some(z => z.source === 'manual' && z.tStart >= 2.8));
       await page.getByLabel('Seek output time').focus();await page.keyboard.press('Home');
       await waitSaved();
     });
