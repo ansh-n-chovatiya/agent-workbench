@@ -23,6 +23,7 @@ class Request:
     ts: str
     context: int       # input + cache_read + cache_write
     label: str = ""    # subagent description from meta.json (task label), else ""
+    key: str = ""      # requestId|message.id, to drop copies a resumed session repeats
 
 
 def _int(v) -> int:
@@ -42,7 +43,8 @@ def _parse(obj: dict, sf: SessionFiles, seat: str, agent: str, agent_id: str, la
     thinking = _int(details.get("thinking_tokens")) if isinstance(details, dict) else 0
     return Request(sf.session_id, sf.project, seat, agent, agent_id, str(msg.get("model") or "unknown"),
                    inp, _int(usage.get("output_tokens")), cr, cw, thinking,
-                   str(obj.get("timestamp") or ""), inp + cr + cw, label)
+                   str(obj.get("timestamp") or ""), inp + cr + cw, label,
+                   f"{obj.get('requestId') or ''}|{msg.get('id') or ''}")
 
 
 def _load_file(path, sf, seat, agent, agent_id, stats, label="") -> List[Request]:
@@ -105,3 +107,26 @@ def aggregate(reqs: List[Request]) -> dict:
                            else {"mean": 0.0, "p95": 0, "max": 0}) for seat, v in ctx.items()},
         "seat_share": {s: (reads[s] / total if total else 0.0) for s in reads},
     }
+
+
+def dedupe_across(per_session: Dict[str, List[Request]]) -> Dict[str, List[Request]]:
+    """Count each request once even when a resumed session's file repeats it.
+
+    A resumed or continued session copies earlier messages, with the same
+    requestId and message id, into its own transcript. On real data that was 867
+    requests (17% of cache-read volume), so per-file counting overstated totals.
+    The session whose first request is earliest keeps a repeated request.
+    """
+    order = sorted(per_session, key=lambda sid: (min((r.ts for r in per_session[sid]), default=""), sid))
+    seen = set()
+    out: Dict[str, List[Request]] = {}
+    for sid in order:
+        kept = []
+        for r in per_session[sid]:
+            if r.key and r.key != "|":
+                if r.key in seen:
+                    continue
+                seen.add(r.key)
+            kept.append(r)
+        out[sid] = kept
+    return out

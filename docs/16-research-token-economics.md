@@ -57,14 +57,21 @@ without the log.
 
 Volume only, no prices. Source: transcripts in `~/.claude/projects` for the ctx (`context-ledger`), Hark and DevFlow
 projects; 14 sessions, 0 skipped lines. Totals of this tool match an independent count exactly on one session
-(31 requests, identical input, output, cache read, cache write). **Not yet reconciled with `/usage`** (needs the
-owner's figures for one session; target within 5%).
+(31 requests, identical input, output, cache read, cache write).
+
+**Correction and reconciliation (2026-10-19).** The first run counted a request once per file, but a resumed session
+copies earlier requests into its own transcript: 867 requests (331M cache-read, 17% of volume) were counted twice.
+Fixed with a cross-file dedupe (earliest session keeps a repeated request; tests added). Hark fell from 997 to 810
+main requests and DevFlow from 5 sessions to 1; the ctx project and the H1 conclusion did not change. Cross-check
+against `ccusage` 20.0.26 (a separate tool reading the same files; `/usage` itself cannot be read from a script):
+44 matched sessions, totals within 0.02% to 0.12% on input, output, cache read and cache write. Per session, a few
+differ because the two tools assign a request that a resumed session shares to different sessions; totals agree.
 
 | Project | Sessions | Main requests | Subagent requests | Main share of cache read | Mean main context / request | Mean subagent context / request |
 |---|---|---|---|---|---|---|
 | ctx | 2 | 207 | 340 | 82% | 226k | 35k |
-| Hark | 7 | 997 | 39 | 99% | 358k | 76k |
-| DevFlow | 5 | 242 | 9 | 99% | 150k | 36k |
+| Hark | 7 | 810 | 39 | 99% | 393k | 76k |
+| DevFlow | 1 | 46 | 0 | 100% | 120k | n/a |
 
 - **H1: confirmed on this data.** The main chat accounts for 82% to 99% of cache-read volume and its mean context per
   request is 4 to 6 times a subagent's. Even in the ctx project, which has 340 subagent requests, subagents are 18%.

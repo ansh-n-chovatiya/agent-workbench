@@ -134,5 +134,41 @@ class TestUnitsActiveSinceTheBaselineAreExcused(WaveFixture):
         self.assertEqual(violation_paths(self.review_first()), set())
 
 
+class TestFieldCaseReplay(WaveFixture):
+    """Case D from the work-machine evidence, replayed end to end.
+
+    A wave-2 unit is reviewed (round 2) after two wave-1 units ran concurrent fix
+    rounds, while a dev server wrote logs and a hook rebuilt ignored JSON. Of the
+    paths that changed, only the one nobody declared is the unit's to answer for.
+    """
+
+    def test_only_the_genuinely_undeclared_path_is_reported(self):
+        real_git_repo(self.root)
+        self.write(".gitignore", "*.log\ngraph/\n")
+        one = self.unit("01-one", owns=["src/one.py"], wave=1)
+        two = self.unit("02-two", owns=["src/two.py"], wave=1)
+        mine = self.unit("03-mine", owns=["src/mine.py"], wave=2)
+        for name in ("one", "two", "mine"):
+            self.write(f"src/{name}.py", f"{name} = 1\n")
+        review_mod.capture_before(self.layout, self.config, mine, self.slug, self.root)
+        time.sleep(0.02)
+        for unit in (one, two):  # concurrent round-1 fixes, snapshotted inside our window
+            review_mod.snapshot.capture(
+                self.layout, self.config, review_mod.after_key(self.slug, unit.name, 1),
+                self.root, content_paths=list(unit.owns), force=True)
+        self.write("src/mine.py", "mine = 2\n")
+        self.write("src/one.py", "one = 2\n")
+        self.write("src/two.py", "two = 2\n")
+        self.write("dev-server.log", "request\n")
+        self.write("graph/out.json", "{}\n")
+        self.write("NOTES.txt", "orchestrator scribble\n")  # real, undeclared, tracked-able
+        built, _stats, problem = review_mod.build(
+            self.layout, self.config, mine, self.slug, self.root)
+        self.assertEqual(problem, "")
+        text = built.read_text(encoding="utf-8")
+        self.assertEqual(violation_paths(text), {"NOTES.txt"})
+        self.assertIn("2 git-ignored path(s) changed", text)
+
+
 if __name__ == "__main__":
     unittest.main()

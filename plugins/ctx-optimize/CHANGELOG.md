@@ -9,3 +9,4 @@
 - `report --units`: tokens per ledger unit, stage and review round (spawn-order inference).
 - `statusline`: one-line status for the `statusLine` setting.
 - `/ctx-agents` pane (mod): this session's subagents with status, model, tokens, task label.
+- Fix: a request repeated by a resumed session is counted once across files (it was counted per file, overstating totals by about 17%).

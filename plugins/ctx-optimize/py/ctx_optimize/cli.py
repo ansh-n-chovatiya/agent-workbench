@@ -11,7 +11,7 @@ from .report import render_text, render_units
 from .status import render as render_status
 from .snapshot import build_summary, snapshot_dir, write_snapshot
 from .transcripts import find_sessions
-from .usage import load_session
+from .usage import dedupe_across, load_session
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -45,15 +45,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("--day must look like 2026-10-19", file=sys.stderr)
         return 2
     stats = {"skipped_lines": 0}
-    per_session = {}
+    loaded = {}
     for sf in find_sessions(Path(args.root), args.project):
-        if args.session and sf.session_id != args.session:
-            continue
         reqs = load_session(sf, stats)
+        if reqs:
+            loaded[sf.session_id] = reqs
+    # Dedupe over everything in scope first: a resumed session repeats earlier
+    # requests, and filtering before deduping would keep the copy.
+    per_session = {}
+    for sid, reqs in dedupe_across(loaded).items():
+        if not reqs or (args.session and sid != args.session):
+            continue
         if args.day and not any(r.ts.startswith(args.day) for r in reqs):
             continue
-        if reqs:
-            per_session[sf.session_id] = reqs
+        per_session[sid] = reqs
     summary = build_summary(per_session, stats)
     text = render_units(summary) if args.units else render_text(summary)
     print(json.dumps(summary, indent=2, sort_keys=True) if args.json else text, end="\n" if args.json else "")

@@ -68,3 +68,18 @@ def test_aggregate_totals_context_and_share(tmp_path):
 def test_aggregate_empty():
     agg = aggregate([])
     assert agg["by_seat_model"] == {} and agg["seat_share"] == {"main": 0.0, "subagent": 0.0}
+
+
+def test_requests_repeated_in_a_resumed_session_are_counted_once(tmp_path):
+    from ctx_optimize.usage import dedupe_across
+    early = tmp_path / "early.jsonl"
+    early.write_text(line("r1", "m1", 10, cr=100).replace("2026-10-19T10:00:00Z", "2026-10-19T09:00:00Z"))
+    late = tmp_path / "late.jsonl"
+    late.write_text("\n".join([  # a resumed session copies r1, then adds r2
+        line("r1", "m1", 10, cr=100).replace("2026-10-19T10:00:00Z", "2026-10-19T09:00:00Z"),
+        line("r2", "m2", 20, cr=200).replace("2026-10-19T10:00:00Z", "2026-10-19T11:00:00Z")]))
+    per = {"late": load_session(SessionFiles("p", "late", late, []), {}),
+           "early": load_session(SessionFiles("p", "early", early, []), {})}
+    out = dedupe_across(per)
+    assert [r.output for r in out["early"]] == [10]          # the earlier session keeps the request
+    assert [r.output for r in out["late"]] == [20]           # the copy is dropped from the later one

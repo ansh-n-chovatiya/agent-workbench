@@ -57,7 +57,7 @@ unit-runners ran on Opus) is answered first because it changes what the baseline
 
 ## Phase 1: measure (D11)
 
-**Status 2026-10-19: built and run** (`plugins/ctx-optimize`, plan 61, findings in 16). H1 confirmed, H2 not decidable until phase 2. Open: reconcile one session with `/usage` (needs the owner's figures).
+**Status 2026-10-19: built and run** (`plugins/ctx-optimize`, plan 61, findings in 16). H1 confirmed, H2 not decidable until phase 2. Reconciled 2026-10-19 against ccusage (totals within 0.12%); a cross-file dedupe bug found and fixed.
 
 Main-chat context and model first (D18), then subagents. Include a what-if table from real transcripts: how many
 main requests would have run on each model and at what context size.
