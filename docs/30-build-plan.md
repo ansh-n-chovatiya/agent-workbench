@@ -37,6 +37,7 @@ original premises did not hold (see D16, D17):
    reproduces it, then the fix, with a real out-of-scope edit still flagged (positive control).
 2. D17: D12 is now decided (two rounds, serious findings earn more, hard ceiling of four); implement the stop rule
    and the free "unchanged since last review" notice behind a default-off switch, flip after the quality gate.
+   **Status 2026-10-19: D17 is implemented** (`ad1929b`, `review.stop_rule`, default off, 14 tests; full ctx suite 2279 passed). "Serious" is approximated by severity `critical`, so false scope Criticals (D16) would earn extra rounds while it stays unfixed. Flip the default only after the quality gate. **D16 is still open**, waiting on the Q18 evidence sample from the work machine.
 
 ## Quality gate (applies to every phase, D18)
 
