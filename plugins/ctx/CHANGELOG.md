@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- Scope Criticals no longer fire on noise (D16). Field data: 19 disputed "outside the unit's owned list" Criticals,
+  431 stray paths, all copied from the mechanical `## Scope violations` section. Two causes covered about four paths
+  in five: (1) git-ignored paths (logs, caches, generated output, hook output) are no longer violations, and the
+  package notes how many it skipped; (2) the `owns` of a unit that recorded a snapshot after this unit's baseline
+  (a later wave in a batch review, or a concurrent fix round) now excuse its writes. An undeclared tracked file and
+  the `owns` of a unit that never ran are still violations. With no git repository nothing is treated as ignored.
+  Known limit: a write by this unit into such a unit's files is indistinguishable from that unit's own.
 - Hook commands in `hooks/hooks.json` quote `${CLAUDE_PLUGIN_ROOT}`, so an install path containing a space no longer
   splits the command (`claude plugin validate` warned about all seven).
 

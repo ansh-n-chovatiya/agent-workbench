@@ -74,7 +74,7 @@ def capture_before(layout, config, unit, slug, root, force=False):
     )
 
 
-def wave_scope(layout, slug, unit, record=True):
+def wave_scope(layout, slug, unit, record=True, since=None):
     """(patterns, siblings) — the paths this unit's review may treat as declared.
 
     `record=False` is for a caller asking this question about a unit that is
@@ -159,14 +159,14 @@ def wave_scope(layout, slug, unit, record=True):
     the pre-fix behaviour: noisy, but it fails towards reporting too much
     rather than towards silently excusing a stray write.
     """
-    siblings = _concurrent_siblings(layout, slug, unit, record=record)
+    siblings = _concurrent_siblings(layout, slug, unit, record=record, since=since)
     patterns = list(unit.owns)
     for _name, owns in siblings:
         patterns.extend(owns)
     return patterns, siblings
 
 
-def _concurrent_siblings(layout, slug, unit, record=True):
+def _concurrent_siblings(layout, slug, unit, record=True, since=None):
     """[(name, owns)] for the wave's other units that are still writing to this
     tree, sorted by name — "still writing" meaning not `done`, or `done` with
     its `owns` still uncommitted *and still holding what that unit itself
@@ -222,7 +222,70 @@ def _concurrent_siblings(layout, slug, unit, record=True):
         under = [path for path in dirty_paths() if snapshot.covers(path, u.owns)]
         if under and _still_its_own_work(layout, slug, u, under):
             out.append((u.name, list(u.owns)))
+    if since is not None:
+        wave_names = {u.name for u in members}
+        for u in sorted(units, key=lambda u: u.name):
+            if u.name == unit.name or u.name in wave_names or not u.owns:
+                continue
+            if _active_since(layout, slug, u.name, since):
+                out.append((u.name, list(u.owns)))
     return out
+
+
+# A unit rarely needs more review rounds than this; scanning past the ceiling
+# only costs a few failed manifest reads.
+_ROUND_SCAN = 6
+
+
+def _active_since(layout, slug, unit_name, since):
+    """Did this unit record a snapshot after `since` (a `taken_at` clock value)?
+
+    Reviews often run in one batch after the last wave, and a fix round of an
+    earlier wave can overlap another unit's, so the tree at review time holds
+    files that units outside this wave wrote *inside this unit's window*. Such a
+    unit left evidence of being active there: its pre-dispatch snapshot, or the
+    snapshot of one of its review rounds, was taken after this unit's baseline.
+    A unit that never ran, or whose last snapshot predates the baseline, leaves
+    none, so its `owns` still excuse nothing. The limit is the one a shared
+    working tree always has: a write into such a unit's files by *this* unit is
+    indistinguishable from the unit's own, and it is listed under Declared scope
+    so a reviewer can still see whose files were open to it.
+    """
+    keys = [before_key(slug, unit_name)] + [
+        after_key(slug, unit_name, n) for n in range(1, _ROUND_SCAN + 1)]
+    for key in keys:
+        manifest = snapshot.load(layout, key)
+        taken = manifest.get("taken_at") if manifest else None
+        if isinstance(taken, (int, float)) and not isinstance(taken, bool) and taken > since:
+            return True
+    return False
+
+
+def _split_ignored(layout, paths):
+    """(kept, ignored): `paths` split by what git ignores.
+
+    Logs, caches and generated output are not anyone's source, and the
+    snapshot's own ignore list is not `.gitignore`, so a dev server or a hook
+    writing one inside the window used to become a Critical. Fails closed: with
+    no repository, or any git error, nothing is treated as ignored and the old
+    behaviour stands. A tracked file is never "ignored" to git, so work that
+    matches a pattern but is committed still counts.
+    """
+    paths = list(paths)
+    if not paths:
+        return paths, []
+    root = layout.root.parent
+    try:
+        done = subprocess.run(
+            ["git", "check-ignore", "-z", "--stdin"], cwd=str(root),
+            input="\0".join(paths) + "\0", capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return paths, []
+    if done.returncode not in (0, 1):
+        return paths, []
+    ignored = {p for p in done.stdout.split("\0") if p}
+    return [p for p in paths if p not in ignored], [p for p in paths if p in ignored]
 
 
 # --------------------------------------------------------------------------- #
@@ -381,8 +444,8 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
     # Not `unit.owns`: a wave shares one working tree, so a sibling's write to
     # its own declared path is in this delta and is not this unit's violation.
     # See `wave_scope` for why that widening is the smallest one that works.
-    scope, siblings = wave_scope(layout, slug, unit)
-    stray = snapshot.out_of_scope(delta, scope)
+    scope, siblings = wave_scope(layout, slug, unit, since=base.get("taken_at"))
+    stray, ignored = _split_ignored(layout, snapshot.out_of_scope(delta, scope))
     # A path nobody declared has no captured "before", so its bytes were never
     # kept. Fill in the "after" side now that we know which paths those are —
     # otherwise the violation is named but never shown.
@@ -390,7 +453,7 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
         head = snapshot.store_extra(layout, config, head_key, root, stray) or head
 
     text = _render(layout, config, unit, slug, delta, stray, base_key, head_key,
-                   round_number, siblings)
+                   round_number, siblings, len(ignored))
     path = package_path(layout, slug, unit.name, round_number)
     path.parent.mkdir(parents=True, exist_ok=True)
     # `newline=""` writes the string's own "\n" through untranslated. On
@@ -459,8 +522,8 @@ def dispatch_stats(layout, slug, unit, round_number=1):
                 else before_key(slug, unit.name))
     base = snapshot.load(layout, base_key)
     delta = snapshot.compare(base, head)
-    scope, _siblings = wave_scope(layout, slug, unit)
-    stray = snapshot.out_of_scope(delta, scope)
+    scope, _siblings = wave_scope(layout, slug, unit, since=base.get("taken_at") if base else None)
+    stray, _ignored = _split_ignored(layout, snapshot.out_of_scope(delta, scope))
     return {
         "bytes": path.stat().st_size,
         "out_of_scope": len(stray),
@@ -468,7 +531,7 @@ def dispatch_stats(layout, slug, unit, round_number=1):
 
 
 def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
-            round_number, siblings=()):
+            round_number, siblings=(), ignored=0):
     patterns = config.get("redact") or []
     out = [
         f"# Review package — unit `{unit.name}` of plan `{slug}`, round {round_number}",
@@ -573,6 +636,9 @@ def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
         ]
     else:
         out.append("None — every changed path is within the declared `owns`.")
+    if ignored:
+        out += ["", f"Not scope-checked: {ignored} git-ignored path(s) changed (logs, caches, "
+                    "generated output). They are nobody's source and are not violations."]
 
     uncapped = []
     body = _diff_body(layout, delta, base_key, head_key, siblings, uncapped)
