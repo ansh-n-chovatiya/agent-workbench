@@ -7,6 +7,12 @@ on:
     branches: [main]
   pull_request:
 
+# A newer push to the same pull request replaces the older run; main is never cancelled, so every merged commit
+# still gets a complete result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Every `uses:` below is pinned to a full commit SHA rather than a mutable
 # tag, so what CI executes is a fixed artefact and not whatever the tag was
 # repointed at overnight. The trailing comment carries the human-readable
@@ -34,21 +40,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.9", "3.13"]
+        # A pull request runs Linux and macOS (about three minutes). Windows runs the whole suite in 11 to 16
+        # minutes, so it runs after the merge on main; the Windows wrapper job below still runs on every PR.
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest","macos-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
+        python: ["3.13"]
         include:
           # The README claims 3.8+, so 3.8 gets tested rather than assumed.
           # It is pinned to 22.04 because setup-python ships no 3.8 build for
           # 24.04 or for arm64 macOS.
           - os: ubuntu-22.04
             python: "3.8"
-          # The interior versions only need one platform to stay honest.
-          - os: ubuntu-latest
-            python: "3.10"
-          - os: ubuntu-latest
-            python: "3.11"
-          - os: ubuntu-latest
-            python: "3.12"
     steps:
       # Exactly one matrix entry takes a full-history checkout. The vendored
       # fixture guard in tests/test_findings_rounds.py corroborates a 399-line
@@ -476,7 +477,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # The macOS and Windows smoke runs are findings, not gates, so they run after the merge only.
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
     defaults:
       run:
         working-directory: plugins/showreel
