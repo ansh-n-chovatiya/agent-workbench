@@ -1,2 +1,2 @@
 import { h } from 'preact';
-export const Badge = props => <span className="ui-badge" {...props} />;
+export const Badge = ({class: klass, className, ...props}) => <span className={['ui-badge',klass,className].filter(Boolean).join(' ')} {...props} />;

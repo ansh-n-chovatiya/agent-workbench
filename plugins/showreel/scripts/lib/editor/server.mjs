@@ -14,10 +14,11 @@ import { safeFile, writeCompositionAtomic } from './files.mjs';
 import { readBody } from './body.mjs';
 import { createExportJob } from './export-job.mjs';
 import { openDefault } from './opener.mjs';
+import { createVoiceApi } from './voice-api.mjs';
 
 const root = fileURLToPath(new URL('../../../',import.meta.url));
 const types = { '.js':'text/javascript', '.css':'text/css', '.html':'text/html; charset=utf-8', '.woff2':'font/woff2', '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.svg':'image/svg+xml', '.gif':'image/gif', '.webp':'image/webp' };
-export async function startEditorServer({ name, runId, port = 0, host = '127.0.0.1', token = randomBytes(24).toString('hex'), onExport } = {}) {
+export async function startEditorServer({ name, runId, port = 0, host = '127.0.0.1', token = randomBytes(24).toString('hex'), onExport, uploadLimit } = {}) {
   if (!['127.0.0.1','localhost'].includes(host)) throw new Error('Editor host must be loopback');
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid editor port');
   if (!/^[a-f0-9]{48}$/.test(token)) throw new Error('Editor token must be 24 bytes of hex');
@@ -26,8 +27,11 @@ export async function startEditorServer({ name, runId, port = 0, host = '127.0.0
   const rawFile = await safeFile(project.dir, `runs/${encodeURIComponent(project.runId)}/raw.mp4`);
   let boundPort, lastEvent = { event:'idle', data:{} }, closing = false;
   const clients = new Set();
+  let lastExport = null;
+  const voiceApi = createVoiceApi({name,runId:project.runId,dir:project.dir,uploadLimit});
   const broadcast = (event,data) => {
     lastEvent = {event,data};
+    if (event === 'complete') lastExport = data.audio ?? null;
     for (const response of clients) {
       if (!response.write(formatSSE(event,data))) { clients.delete(response); response.end(); }
     }
@@ -87,8 +91,10 @@ export async function startEditorServer({ name, runId, port = 0, host = '127.0.0
       if (method === 'GET' && route === '/api/project') {
         const current = await loadRunComposition({name,runId:project.runId});
         const runs = (await readdir(path.join(project.dir,'runs'),{withFileTypes:true})).filter(e => e.isDirectory()).map(e => e.name).sort();
+        // A damaged voice index must not stop the editor from opening; the Voice tab reports it instead.
+        const {voice,clips} = await voiceApi.snapshot().catch(error => ({voice:{installed:false,error:error.message,voices:[],status:[],installCommand:'showreel voice install --yes'},clips:{version:1,clips:{},steps:{}}}));
         return send(200,{name,runId:project.runId,brief:current.brief,storyboard:current.storyboard,events:current.events,record:current.record,
-          composition:current.composition,runs,settings:SETTINGS,settingsSchemaVersion:SETTINGS_VERSION});
+          composition:current.composition,runs,settings:SETTINGS,settingsSchemaVersion:SETTINGS_VERSION,voice,clips,lastExport});
       }
       if (method === 'PUT' && route === '/api/composition') {
         const body = await readBody(request);
@@ -105,6 +111,7 @@ export async function startEditorServer({ name, runId, port = 0, host = '127.0.0
         await writeCompositionAtomic(project.dir,composition);
         return send(200,{ok:true});
       }
+      if (await voiceApi.handle({request,response,route,url,method,send})) return;
       if (method === 'GET' && route === '/api/export/events') {
         response.writeHead(200,{'content-type':'text/event-stream','connection':'keep-alive'});
         response.write(formatSSE(lastEvent.event,lastEvent.data)); clients.add(response);
@@ -131,6 +138,6 @@ export async function startEditorServer({ name, runId, port = 0, host = '127.0.0
       closing = true; exports.cancel();
       for (const response of clients) response.end(); clients.clear();
       const stopped = new Promise((resolve,reject) => server.close(error => error ? reject(error) : resolve()));
-      server.closeAllConnections(); await Promise.all([stopped,exports.close()]);
+      server.closeAllConnections(); await Promise.all([stopped,exports.close(),voiceApi.close()]);
     }};
 }

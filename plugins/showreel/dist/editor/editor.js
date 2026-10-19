@@ -1,4 +1,4 @@
-// showreel editor sources sha256: adac748512d714f563c1509e6069570011cf9f070a23a8b3a409e3b8a8cc482c
+// showreel editor sources sha256: 99b68fc06bcb9aae873df15f736ccfc921eea3d50e2aa74ce43a6709c5b0c995
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -581,11 +581,23 @@
   function outputAt(map, tSrc) {
     if (!Number.isFinite(tSrc) || tSrc < 0 || tSrc > map.duration) return null;
     if (map.trims.some(({ start, end }) => tSrc >= start && tSrc < end)) return null;
+    const held = map.segments.find((s4) => s4.rate === 0 && s4.start === tSrc);
+    if (held) return held.outputStart;
     const s3 = map.segments.find((s4) => tSrc >= s4.start && tSrc < s4.end) ?? (tSrc === map.duration && map.segments.at(-1)?.end === tSrc ? map.segments.at(-1) : null);
     return s3 ? s3.outputStart + (tSrc - s3.start) / s3.rate : null;
   }
-  function buildTimeMap({ duration, trims = [], speeds = [], lead = 0, tail = 0, fade = 0 }) {
-    for (const [key, value] of Object.entries({ duration, lead, tail, fade })) {
+  var MAX_HOLD_SEC = 30;
+  function validateHolds(holds, trims, sourceDuration) {
+    if (!Array.isArray(holds)) throw new Error("holds must be an array");
+    holds.forEach((h3, i3) => {
+      if (!h3 || !Number.isFinite(h3.t) || !Number.isFinite(h3.duration) || h3.t < 0 || h3.t > sourceDuration || h3.duration <= 0 || h3.duration > MAX_HOLD_SEC || i3 > 0 && h3.t <= holds[i3 - 1].t) {
+        throw new Error(`holds[${i3}] is invalid, out of range or overlaps the preceding hold`);
+      }
+      if (trims.some((r4) => h3.t >= r4.start && h3.t < r4.end)) throw new Error(`holds[${i3}] is inside a removed range`);
+    });
+  }
+  function buildTimeMap({ duration, trims = [], speeds = [], holds = [], lead = 0, tail = 0, fade: fade2 = 0 }) {
+    for (const [key, value] of Object.entries({ duration, lead, tail, fade: fade2 })) {
       if (!Number.isFinite(value) || value < 0) throw new Error(`${key} must be finite and nonnegative`);
     }
     validateRanges(trims, "trims", duration);
@@ -593,22 +605,32 @@
     speeds.forEach((s3, i3) => {
       if (trims.some((r4) => s3.start < r4.end && s3.end > r4.start)) throw new Error(`speeds[${i3}] intersects a trim`);
     });
-    const mainStart = Math.max(0, lead - fade);
-    const points = [.../* @__PURE__ */ new Set([0, duration, ...trims.flatMap((r4) => [r4.start, r4.end]), ...speeds.flatMap((r4) => [r4.start, r4.end])])].sort((a3, b3) => a3 - b3);
+    validateHolds(holds, trims, duration);
+    const mainStart = Math.max(0, lead - fade2);
+    const points = [.../* @__PURE__ */ new Set([0, duration, ...trims.flatMap((r4) => [r4.start, r4.end]), ...speeds.flatMap((r4) => [r4.start, r4.end]), ...holds.map((h3) => h3.t)])].sort((a3, b3) => a3 - b3);
     const segments = [];
     let output = mainStart;
+    const hold = (t3) => {
+      const h3 = holds.find((x4) => x4.t === t3);
+      if (!h3) return;
+      segments.push({ start: t3, end: t3, rate: 0, hold: true, outputStart: output, outputEnd: output + h3.duration });
+      output += h3.duration;
+    };
     for (let i3 = 0; i3 < points.length - 1; i3++) {
       const start = points[i3], end = points[i3 + 1];
       if (trims.some((r4) => start >= r4.start && start < r4.end)) continue;
+      hold(start);
       const rate = speeds.find((r4) => start >= r4.start && start < r4.end)?.rate ?? 1;
       const outputEnd = output + (end - start) / rate;
       segments.push({ start, end, rate, outputStart: output, outputEnd });
       output = outputEnd;
     }
-    const outroStart = tail > 0 ? output - Math.min(fade, tail, output - mainStart) : null;
+    hold(duration);
+    const outroStart = tail > 0 ? output - Math.min(fade2, tail, output - mainStart) : null;
     const map = {
       duration,
       trims: trims.map((r4) => ({ ...r4 })),
+      holds: holds.map((h3) => ({ ...h3 })),
       segments,
       mainStart,
       mainEnd: output,
@@ -730,7 +752,7 @@
       fade: 0.4,
       transition: "crossfade"
     },
-    edits: { trims: [], speeds: [] },
+    edits: { trims: [], speeds: [], holds: [] },
     audio: {
       voice: { enabled: null, voiceId: "af_heart", speed: 1, gainDb: 0 },
       music: {
@@ -985,7 +1007,7 @@
     const regions = validateRegions(c3.zoom?.regions);
     errors.push(...regions.errors);
     warnings.push(...regions.warnings);
-    for (const [k4, model] of [["trims", { start: 0, end: 0 }], ["speeds", { start: 0, end: 0, rate: 1 }]]) if (Array.isArray(c3.edits?.[k4])) c3.edits[k4].forEach((v3, i3) => {
+    for (const [k4, model] of [["trims", { start: 0, end: 0 }], ["speeds", { start: 0, end: 0, rate: 1 }], ["holds", { t: 0, duration: 0 }]]) if (Array.isArray(c3.edits?.[k4])) c3.edits[k4].forEach((v3, i3) => {
       walk(v3, model, `edits.${k4}.${i3}`);
       try {
         buildTimeMap({ duration: Number.MAX_VALUE, [k4]: [v3] });
@@ -994,7 +1016,7 @@
       }
     });
     try {
-      buildTimeMap({ duration: Number.MAX_VALUE, trims: c3.edits?.trims, speeds: c3.edits?.speeds });
+      buildTimeMap({ duration: Number.MAX_VALUE, trims: c3.edits?.trims, speeds: c3.edits?.speeds, holds: c3.edits?.holds });
     } catch (e3) {
       fail("edits", e3.message);
     }
@@ -1260,18 +1282,18 @@
     function opacity(t3) {
       const entrance = o3.entrance ? clamp4((t3 - firstMove + 0.4) / 0.3, 0, 1) : 1;
       if (!o3.hideWhenIdleSec) return entrance;
-      let idle = 1, previousEnd = 0;
+      let idle2 = 1, previousEnd = 0;
       for (const interval of [...busy, { start: Infinity, end: Infinity, wake: 0.15 }]) {
         if (t3 < interval.start + 0.25 - interval.wake) {
           const faded = 1 - clamp4((t3 - previousEnd - o3.hideWhenIdleSec) / 0.4, 0, 1);
           const wake = clamp4((t3 - interval.start + interval.wake) / 0.25, 0, 1);
-          idle = Math.max(faded, wake);
+          idle2 = Math.max(faded, wake);
           break;
         }
         if (t3 <= interval.end) break;
         previousEnd = interval.end;
       }
-      return Math.min(entrance, idle);
+      return Math.min(entrance, idle2);
     }
     const disabled = !o3.autoShape && !follow.enabled && !o3.microCorrection && !o3.entrance && !o3.hideWhenIdleSec;
     if (disabled) return { samples: original.map((s3) => ({ ...s3 })), shapes: [{ t: 0, shape: "arrow" }], alpha: [{ t: 0, a: 1 }] };
@@ -1377,6 +1399,10 @@
   function keptParts(timemap, start, end) {
     const parts = [];
     for (const s3 of timemap.segments ?? []) {
+      if (s3.rate === 0) {
+        if (s3.start >= start && s3.start < end) parts.push({ srcStart: s3.start, srcEnd: s3.start, rate: 0, outStart: s3.outputStart, outEnd: s3.outputEnd, hold: true });
+        continue;
+      }
       const a3 = Math.max(s3.start, start), b3 = Math.min(s3.end, end);
       if (b3 <= a3) continue;
       parts.push({ srcStart: a3, srcEnd: b3, rate: s3.rate, outStart: s3.outputStart + (a3 - s3.start) / s3.rate, outEnd: s3.outputStart + (b3 - s3.start) / s3.rate });
@@ -1570,6 +1596,10 @@
   }
 
   // editor/state.js
+  var editorAudioUrls = {
+    clip: (key) => `/media/voice/${key}.wav`,
+    music: (file) => `/media/music/${file.split("/").map(encodeURIComponent).join("/")}`
+  };
   var initialState = () => ({
     project: null,
     composition: null,
@@ -1630,6 +1660,16 @@
     if (!response.ok) throw Object.assign(new Error(data.error ?? data.errors?.join("\n") ?? `Request failed (${response.status})`), { errors: data.errors ?? [] });
     return data;
   }
+  async function upload(url, body, type = "application/octet-stream", options = {}) {
+    const response = await fetch(url, { credentials: "same-origin", method: "POST", body, headers: { "content-type": type }, ...options });
+    let data = {};
+    try {
+      data = await response.json();
+    } catch {
+    }
+    if (!response.ok) throw Object.assign(new Error(data.error ?? data.errors?.join("\n") ?? `Upload failed (${response.status})`), { errors: data.errors ?? [], status: response.status });
+    return data;
+  }
   function createEditorStore({ api = request, debounce = 800 } = {}) {
     let state = initialState(), sourceSize2, timer, pending, disposed = false;
     const listeners = /* @__PURE__ */ new Set();
@@ -1642,7 +1682,7 @@
     function rebuild() {
       if (!state.project || !sourceSize2) return;
       try {
-        publish({ plan: planRender({ ...state.project, composition: state.composition, sourceSize: sourceSize2 }), error: null, errors: [] });
+        publish({ plan: planRender({ ...state.project, composition: state.composition, sourceSize: sourceSize2, voiceClips: state.project.clips ?? null, audioUrls: editorAudioUrls }), error: null, errors: [] });
       } catch (error) {
         publish({ plan: null, error: error.message, errors: error.message.split("\n") });
       }
@@ -1703,6 +1743,12 @@
         sourceSize2 = size4;
         rebuild();
       },
+      // Server-side facts that are not part of the composition (voice clips, engine state, last export). Not undoable.
+      setProject(patch) {
+        if (!state.project) return;
+        publish({ project: { ...state.project, ...patch } });
+        rebuild();
+      },
       setComposition(composition, path = null) {
         dispatch({ type: "change", composition, path, now: Date.now() });
       },
@@ -1715,6 +1761,264 @@
       dispose() {
         disposed = true;
         clearTimeout(timer);
+        listeners.clear();
+      }
+    };
+  }
+
+  // editor/helpers.mjs
+  function timecode(seconds2, fps = 30) {
+    const frames = Math.max(0, Math.floor((Number.isFinite(seconds2) ? seconds2 : 0) * fps + 1e-7));
+    return [
+      Math.floor(frames / fps / 3600),
+      Math.floor(frames / fps / 60) % 60,
+      Math.floor(frames / fps) % 60,
+      frames % fps
+    ].map((n2) => String(n2).padStart(2, "0")).join(":");
+  }
+  function groupSettings(settings, query = "") {
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const groups = {};
+    for (const setting of settings) {
+      if (words.every((word) => setting.label.toLowerCase().includes(word))) (groups[setting.group] ??= []).push(setting);
+    }
+    return groups;
+  }
+  function errorsForPath(errors, path) {
+    return errors.filter((error) => {
+      const setting = /"([^"]+)"/.exec(error)?.[1];
+      return setting && (setting === path || setting.startsWith(`${path}.`) || path.startsWith(`${setting}.`));
+    });
+  }
+  function parseSSE(block) {
+    let event = "message";
+    const data = [];
+    for (const line of block.split(/\r?\n/)) {
+      if (line.startsWith(":")) continue;
+      const colon = line.indexOf(":");
+      const field = colon < 0 ? line : line.slice(0, colon);
+      const value = colon < 0 ? "" : line.slice(colon + 1).replace(/^ /, "");
+      if (field === "event") event = value;
+      if (field === "data") data.push(value);
+    }
+    if (!data.length) return null;
+    return { event, data: JSON.parse(data.join("\n")) };
+  }
+  function createSSEParser(onEvent) {
+    let buffer = "";
+    return (chunk) => {
+      buffer += chunk;
+      let match;
+      while (match = /\r?\n\r?\n/.exec(buffer)) {
+        const parsed = parseSSE(buffer.slice(0, match.index));
+        buffer = buffer.slice(match.index + match[0].length);
+        if (parsed) onEvent(parsed);
+      }
+    };
+  }
+  var isTyping = (target) => !!target?.closest?.('input, textarea, select, [contenteditable="true"], [role="slider"], [role="combobox"], [role="tab"], [role="switch"], [role="checkbox"]');
+
+  // editor/voice-controller.js
+  var idle = () => ({ running: false, cancelling: false, total: 0, index: 0, done: 0, failed: 0, current: null, errors: {}, result: null });
+  var sampleUrl = (voice) => `/media/voice-sample/${encodeURIComponent(voice)}.wav`;
+  var clipUrl = (key) => `/media/voice/${encodeURIComponent(key)}.wav`;
+  function createVoiceController({ store, api = request, send = upload, fetchImpl = (...args) => fetch(...args), createAudio = () => new Audio() }) {
+    let state = { job: idle(), samples: /* @__PURE__ */ new Set(), sampleBusy: null, playing: null, error: "", cancelled: false };
+    const listeners = /* @__PURE__ */ new Set();
+    let stream = null, disposed = false, retry = null, audio = null, announced = false;
+    const publish = (patch) => {
+      state = { ...state, ...patch };
+      listeners.forEach((fn2) => fn2(state));
+    };
+    const fail = (error) => {
+      publish({ error: error?.message ?? String(error) });
+      return null;
+    };
+    async function refresh() {
+      try {
+        const { voice, clips } = await api("/api/voice/status");
+        store.setProject({ voice, clips });
+        publish({ error: "" });
+        return voice;
+      } catch (error) {
+        return fail(error);
+      }
+    }
+    async function loadSamples() {
+      try {
+        publish({ samples: new Set((await api("/api/voice/samples")).samples) });
+      } catch (error) {
+        fail(error);
+      }
+    }
+    function onEvent({ event, data }, first) {
+      if (event === "idle") return;
+      if (first && ["complete", "cancelled", "error"].includes(event) && !announced) return;
+      const job = state.job;
+      if (event === "started") {
+        announced = true;
+        publish({ job: { ...idle(), running: true, total: data.total } });
+      } else if (event === "step") {
+        const next = { ...job, running: true, current: data.stepId, index: data.index ?? job.index, total: data.total ?? job.total };
+        if (data.state === "done") {
+          next.done = job.done + 1;
+          next.current = null;
+          refresh();
+        }
+        if (data.state === "error") {
+          next.failed = job.failed + 1;
+          next.errors = { ...job.errors, [data.stepId]: data.message };
+          next.current = null;
+        }
+        publish({ job: next });
+      } else if (["complete", "cancelled", "error"].includes(event)) {
+        announced = true;
+        publish({ job: { ...job, running: false, cancelling: false, current: null, result: event === "error" ? { error: data.message } : { kind: event, ...data, clips: void 0 } } });
+        refresh();
+      }
+    }
+    async function watch() {
+      if (disposed || stream) return;
+      const controller = new AbortController();
+      stream = controller;
+      let first = true;
+      try {
+        const response = await fetchImpl("/api/voice/events", { credentials: "same-origin", signal: controller.signal });
+        if (!response.ok || !response.body) throw new Error("Cannot connect to voice progress");
+        const reader = response.body.getReader(), decoder = new TextDecoder();
+        const parse2 = createSSEParser((message) => {
+          onEvent(message, first);
+          first = false;
+        });
+        for (; ; ) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          parse2(decoder.decode(value, { stream: true }));
+        }
+      } catch (error) {
+        if (!controller.signal.aborted && !disposed) fail(error);
+      }
+      stream = null;
+      if (!disposed) retry = setTimeout(watch, 2e3);
+    }
+    function player() {
+      return audio ??= createAudio();
+    }
+    function stopPlayback() {
+      if (audio) {
+        audio.pause();
+        audio.removeAttribute?.("src");
+      }
+      publish({ playing: null });
+    }
+    async function play(kind, id, url) {
+      if (state.playing?.kind === kind && state.playing.id === id) {
+        stopPlayback();
+        return;
+      }
+      const element = player();
+      element.pause();
+      element.src = url;
+      element.onended = () => publish({ playing: null });
+      element.onerror = () => {
+        publish({ playing: null, error: "This audio could not be played." });
+      };
+      publish({ playing: { kind, id } });
+      try {
+        await element.play();
+      } catch (error) {
+        if (error?.name !== "AbortError") {
+          publish({ playing: null });
+          fail(error);
+        }
+      }
+    }
+    return {
+      getState: () => state,
+      subscribe(fn2) {
+        listeners.add(fn2);
+        return () => listeners.delete(fn2);
+      },
+      start() {
+        watch();
+        loadSamples();
+      },
+      refresh,
+      async generate(options = {}) {
+        publish({ error: "" });
+        try {
+          await store.save();
+          await api("/api/voice/generate", { method: "POST", body: JSON.stringify(options) });
+          announced = true;
+          publish({ job: { ...idle(), running: true, total: options.stepIds?.length ?? 0 } });
+          watch();
+          return true;
+        } catch (error) {
+          fail(error);
+          return false;
+        }
+      },
+      async cancel() {
+        publish({ job: { ...state.job, cancelling: true } });
+        try {
+          await api("/api/voice/cancel", { method: "POST" });
+        } catch (error) {
+          fail(error);
+        }
+      },
+      async playSample(voice) {
+        if (state.playing?.kind === "sample" && state.playing.id === voice) {
+          stopPlayback();
+          return;
+        }
+        if (!state.samples.has(voice)) {
+          publish({ sampleBusy: voice, error: "" });
+          try {
+            await api("/api/voice/sample", { method: "POST", body: JSON.stringify({ voice }) });
+            publish({ samples: /* @__PURE__ */ new Set([...state.samples, voice]) });
+          } catch (error) {
+            publish({ sampleBusy: null });
+            return fail(error);
+          }
+          publish({ sampleBusy: null });
+        }
+        await play("sample", voice, sampleUrl(voice));
+      },
+      playClip: (stepId, key) => play("clip", stepId, clipUrl(key)),
+      playMusic: (url) => play("music", "music", url),
+      stopPlayback,
+      async saveClip(stepId, wav, source) {
+        publish({ error: "" });
+        try {
+          const result = await send(`/api/voice/clip?step=${encodeURIComponent(stepId)}&source=${source}`, wav, "audio/wav");
+          store.setProject({ clips: result.clips });
+          await refresh();
+          return result;
+        } catch (error) {
+          fail(error);
+          throw error;
+        }
+      },
+      async removeClip(stepId) {
+        try {
+          const result = await api(`/api/voice/clip?step=${encodeURIComponent(stepId)}`, { method: "DELETE" });
+          store.setProject({ clips: result.clips });
+          await refresh();
+        } catch (error) {
+          fail(error);
+        }
+      },
+      async saveMusic(file) {
+        return send(`/api/music?filename=${encodeURIComponent(file.name)}`, file, file.type || "application/octet-stream");
+      },
+      clearError() {
+        publish({ error: "" });
+      },
+      dispose() {
+        disposed = true;
+        clearTimeout(retry);
+        stream?.abort();
+        audio?.pause();
         listeners.clear();
       }
     };
@@ -15112,58 +15416,6 @@
     return canvas;
   }
 
-  // editor/helpers.mjs
-  function timecode(seconds2, fps = 30) {
-    const frames = Math.max(0, Math.floor((Number.isFinite(seconds2) ? seconds2 : 0) * fps + 1e-7));
-    return [
-      Math.floor(frames / fps / 3600),
-      Math.floor(frames / fps / 60) % 60,
-      Math.floor(frames / fps) % 60,
-      frames % fps
-    ].map((n2) => String(n2).padStart(2, "0")).join(":");
-  }
-  function groupSettings(settings, query = "") {
-    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const groups = {};
-    for (const setting of settings) {
-      if (words.every((word) => setting.label.toLowerCase().includes(word))) (groups[setting.group] ??= []).push(setting);
-    }
-    return groups;
-  }
-  function errorsForPath(errors, path) {
-    return errors.filter((error) => {
-      const setting = /"([^"]+)"/.exec(error)?.[1];
-      return setting && (setting === path || setting.startsWith(`${path}.`) || path.startsWith(`${setting}.`));
-    });
-  }
-  function parseSSE(block) {
-    let event = "message";
-    const data = [];
-    for (const line of block.split(/\r?\n/)) {
-      if (line.startsWith(":")) continue;
-      const colon = line.indexOf(":");
-      const field = colon < 0 ? line : line.slice(0, colon);
-      const value = colon < 0 ? "" : line.slice(colon + 1).replace(/^ /, "");
-      if (field === "event") event = value;
-      if (field === "data") data.push(value);
-    }
-    if (!data.length) return null;
-    return { event, data: JSON.parse(data.join("\n")) };
-  }
-  function createSSEParser(onEvent) {
-    let buffer = "";
-    return (chunk) => {
-      buffer += chunk;
-      let match;
-      while (match = /\r?\n\r?\n/.exec(buffer)) {
-        const parsed = parseSSE(buffer.slice(0, match.index));
-        buffer = buffer.slice(match.index + match[0].length);
-        if (parsed) onEvent(parsed);
-      }
-    };
-  }
-  var isTyping = (target) => !!target?.closest?.('input, textarea, select, [contenteditable="true"], [role="slider"], [role="combobox"], [role="tab"], [role="switch"], [role="checkbox"]');
-
   // node_modules/preact/compat/dist/compat.module.js
   var compat_module_exports = {};
   __export(compat_module_exports, {
@@ -20166,8 +20418,20 @@
   __iconData4.node;
   var Clapperboard = createLucideIcon(__iconData4);
 
-  // node_modules/lucide-preact/dist/esm/icons/download.mjs
+  // node_modules/lucide-preact/dist/esm/icons/copy.mjs
   var __iconData5 = {
+    name: "copy",
+    size: 24,
+    node: [
+      ["rect", { width: "14", height: "14", x: "8", y: "8", rx: "2", ry: "2", key: "17jyea" }],
+      ["path", { d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2", key: "zix9uf" }]
+    ]
+  };
+  __iconData5.node;
+  var Copy = createLucideIcon(__iconData5);
+
+  // node_modules/lucide-preact/dist/esm/icons/download.mjs
+  var __iconData6 = {
     name: "download",
     size: 24,
     node: [
@@ -20176,11 +20440,11 @@
       ["path", { d: "m7 10 5 5 5-5", key: "brsn70" }]
     ]
   };
-  __iconData5.node;
-  var Download = createLucideIcon(__iconData5);
+  __iconData6.node;
+  var Download = createLucideIcon(__iconData6);
 
   // node_modules/lucide-preact/dist/esm/icons/info.mjs
-  var __iconData6 = {
+  var __iconData7 = {
     name: "info",
     size: 24,
     node: [
@@ -20189,11 +20453,11 @@
       ["path", { d: "M12 8h.01", key: "e9boi3" }]
     ]
   };
-  __iconData6.node;
-  var Info = createLucideIcon(__iconData6);
+  __iconData7.node;
+  var Info = createLucideIcon(__iconData7);
 
   // node_modules/lucide-preact/dist/esm/icons/keyboard.mjs
-  var __iconData7 = {
+  var __iconData8 = {
     name: "keyboard",
     size: 24,
     node: [
@@ -20208,11 +20472,34 @@
       ["rect", { width: "20", height: "16", x: "2", y: "4", rx: "2", key: "18n3k1" }]
     ]
   };
-  __iconData7.node;
-  var Keyboard = createLucideIcon(__iconData7);
+  __iconData8.node;
+  var Keyboard = createLucideIcon(__iconData8);
+
+  // node_modules/lucide-preact/dist/esm/icons/loader-circle.mjs
+  var __iconData9 = {
+    name: "loader-circle",
+    size: 24,
+    node: [["path", { d: "M21 12a9 9 0 1 1-6.219-8.56", key: "13zald" }]],
+    aliases: ["loader-2"]
+  };
+  __iconData9.node;
+  var LoaderCircle = createLucideIcon(__iconData9);
+
+  // node_modules/lucide-preact/dist/esm/icons/mic.mjs
+  var __iconData10 = {
+    name: "mic",
+    size: 24,
+    node: [
+      ["path", { d: "M12 19v3", key: "npa21l" }],
+      ["path", { d: "M19 10v2a7 7 0 0 1-14 0v-2", key: "1vc78b" }],
+      ["rect", { x: "9", y: "2", width: "6", height: "13", rx: "3", key: "s6n7sd" }]
+    ]
+  };
+  __iconData10.node;
+  var Mic = createLucideIcon(__iconData10);
 
   // node_modules/lucide-preact/dist/esm/icons/moon.mjs
-  var __iconData8 = {
+  var __iconData11 = {
     name: "moon",
     size: 24,
     node: [
@@ -20225,11 +20512,11 @@
       ]
     ]
   };
-  __iconData8.node;
-  var Moon = createLucideIcon(__iconData8);
+  __iconData11.node;
+  var Moon = createLucideIcon(__iconData11);
 
   // node_modules/lucide-preact/dist/esm/icons/pause.mjs
-  var __iconData9 = {
+  var __iconData12 = {
     name: "pause",
     size: 24,
     node: [
@@ -20237,11 +20524,11 @@
       ["rect", { x: "5", y: "3", width: "5", height: "18", rx: "1", key: "1wsw3u" }]
     ]
   };
-  __iconData9.node;
-  var Pause = createLucideIcon(__iconData9);
+  __iconData12.node;
+  var Pause = createLucideIcon(__iconData12);
 
   // node_modules/lucide-preact/dist/esm/icons/play.mjs
-  var __iconData10 = {
+  var __iconData13 = {
     name: "play",
     size: 24,
     node: [
@@ -20254,11 +20541,11 @@
       ]
     ]
   };
-  __iconData10.node;
-  var Play = createLucideIcon(__iconData10);
+  __iconData13.node;
+  var Play = createLucideIcon(__iconData13);
 
   // node_modules/lucide-preact/dist/esm/icons/redo-2.mjs
-  var __iconData11 = {
+  var __iconData14 = {
     name: "redo-2",
     size: 24,
     node: [
@@ -20266,11 +20553,25 @@
       ["path", { d: "M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13", key: "6uklza" }]
     ]
   };
-  __iconData11.node;
-  var Redo2 = createLucideIcon(__iconData11);
+  __iconData14.node;
+  var Redo2 = createLucideIcon(__iconData14);
+
+  // node_modules/lucide-preact/dist/esm/icons/refresh-cw.mjs
+  var __iconData15 = {
+    name: "refresh-cw",
+    size: 24,
+    node: [
+      ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
+      ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
+      ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
+      ["path", { d: "M8 16H3v5", key: "1cv678" }]
+    ]
+  };
+  __iconData15.node;
+  var RefreshCw = createLucideIcon(__iconData15);
 
   // node_modules/lucide-preact/dist/esm/icons/rotate-ccw.mjs
-  var __iconData12 = {
+  var __iconData16 = {
     name: "rotate-ccw",
     size: 24,
     node: [
@@ -20278,11 +20579,11 @@
       ["path", { d: "M3 3v5h5", key: "1xhq8a" }]
     ]
   };
-  __iconData12.node;
-  var RotateCcw = createLucideIcon(__iconData12);
+  __iconData16.node;
+  var RotateCcw = createLucideIcon(__iconData16);
 
   // node_modules/lucide-preact/dist/esm/icons/settings-2.mjs
-  var __iconData13 = {
+  var __iconData17 = {
     name: "settings-2",
     size: 24,
     node: [
@@ -20292,11 +20593,11 @@
       ["circle", { cx: "7", cy: "7", r: "3", key: "dfmy0x" }]
     ]
   };
-  __iconData13.node;
-  var Settings2 = createLucideIcon(__iconData13);
+  __iconData17.node;
+  var Settings2 = createLucideIcon(__iconData17);
 
   // node_modules/lucide-preact/dist/esm/icons/skip-back.mjs
-  var __iconData14 = {
+  var __iconData18 = {
     name: "skip-back",
     size: 24,
     node: [
@@ -20310,11 +20611,11 @@
       ["path", { d: "M3 20V4", key: "1ptbpl" }]
     ]
   };
-  __iconData14.node;
-  var SkipBack = createLucideIcon(__iconData14);
+  __iconData18.node;
+  var SkipBack = createLucideIcon(__iconData18);
 
   // node_modules/lucide-preact/dist/esm/icons/skip-forward.mjs
-  var __iconData15 = {
+  var __iconData19 = {
     name: "skip-forward",
     size: 24,
     node: [
@@ -20328,11 +20629,41 @@
       ]
     ]
   };
-  __iconData15.node;
-  var SkipForward = createLucideIcon(__iconData15);
+  __iconData19.node;
+  var SkipForward = createLucideIcon(__iconData19);
+
+  // node_modules/lucide-preact/dist/esm/icons/sparkles.mjs
+  var __iconData20 = {
+    name: "sparkles",
+    size: 24,
+    node: [
+      [
+        "path",
+        {
+          d: "M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z",
+          key: "1s2grr"
+        }
+      ],
+      ["path", { d: "M20 2v4", key: "1rf3ol" }],
+      ["path", { d: "M22 4h-4", key: "gwowj6" }],
+      ["circle", { cx: "4", cy: "20", r: "2", key: "6kqj1y" }]
+    ],
+    aliases: ["stars"]
+  };
+  __iconData20.node;
+  var Sparkles = createLucideIcon(__iconData20);
+
+  // node_modules/lucide-preact/dist/esm/icons/square.mjs
+  var __iconData21 = {
+    name: "square",
+    size: 24,
+    node: [["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" }]]
+  };
+  __iconData21.node;
+  var Square = createLucideIcon(__iconData21);
 
   // node_modules/lucide-preact/dist/esm/icons/sun.mjs
-  var __iconData16 = {
+  var __iconData22 = {
     name: "sun",
     size: 24,
     node: [
@@ -20347,11 +20678,47 @@
       ["path", { d: "m19.07 4.93-1.41 1.41", key: "1shlcs" }]
     ]
   };
-  __iconData16.node;
-  var Sun = createLucideIcon(__iconData16);
+  __iconData22.node;
+  var Sun = createLucideIcon(__iconData22);
+
+  // node_modules/lucide-preact/dist/esm/icons/trash.mjs
+  var __iconData23 = {
+    name: "trash",
+    size: 24,
+    node: [
+      ["path", { d: "M10 11v6", key: "nco0om" }],
+      ["path", { d: "M14 11v6", key: "outv1u" }],
+      ["path", { d: "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", key: "miytrc" }],
+      ["path", { d: "M3 6h18", key: "d0wm0j" }],
+      ["path", { d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2", key: "e791ji" }]
+    ],
+    aliases: ["trash-2"]
+  };
+  __iconData23.node;
+  var Trash = createLucideIcon(__iconData23);
+
+  // node_modules/lucide-preact/dist/esm/icons/triangle-alert.mjs
+  var __iconData24 = {
+    name: "triangle-alert",
+    size: 24,
+    node: [
+      [
+        "path",
+        {
+          d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3",
+          key: "wmoenq"
+        }
+      ],
+      ["path", { d: "M12 9v4", key: "juzpu7" }],
+      ["path", { d: "M12 17h.01", key: "p32p05" }]
+    ],
+    aliases: ["alert-triangle"]
+  };
+  __iconData24.node;
+  var TriangleAlert = createLucideIcon(__iconData24);
 
   // node_modules/lucide-preact/dist/esm/icons/undo-2.mjs
-  var __iconData17 = {
+  var __iconData25 = {
     name: "undo-2",
     size: 24,
     node: [
@@ -20359,11 +20726,62 @@
       ["path", { d: "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11", key: "f3b9sd" }]
     ]
   };
-  __iconData17.node;
-  var Undo2 = createLucideIcon(__iconData17);
+  __iconData25.node;
+  var Undo2 = createLucideIcon(__iconData25);
+
+  // node_modules/lucide-preact/dist/esm/icons/upload.mjs
+  var __iconData26 = {
+    name: "upload",
+    size: 24,
+    node: [
+      ["path", { d: "M12 3v12", key: "1x0j5s" }],
+      ["path", { d: "m17 8-5-5-5 5", key: "7q97r8" }],
+      ["path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", key: "ih7n3h" }]
+    ]
+  };
+  __iconData26.node;
+  var Upload = createLucideIcon(__iconData26);
+
+  // node_modules/lucide-preact/dist/esm/icons/volume-2.mjs
+  var __iconData27 = {
+    name: "volume-2",
+    size: 24,
+    node: [
+      [
+        "path",
+        {
+          d: "M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z",
+          key: "uqj9uw"
+        }
+      ],
+      ["path", { d: "M16 9a5 5 0 0 1 0 6", key: "1q6k2b" }],
+      ["path", { d: "M19.364 18.364a9 9 0 0 0 0-12.728", key: "ijwkga" }]
+    ]
+  };
+  __iconData27.node;
+  var Volume2 = createLucideIcon(__iconData27);
+
+  // node_modules/lucide-preact/dist/esm/icons/volume-x.mjs
+  var __iconData28 = {
+    name: "volume-x",
+    size: 24,
+    node: [
+      [
+        "path",
+        {
+          d: "M11 4.702a.7.7 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.7.7 0 0 0 11 19.298z",
+          key: "1p7khw"
+        }
+      ],
+      ["path", { d: "m16.5 14.5 5-5", key: "cul3yw" }],
+      ["path", { d: "m16.5 9.5 5 5", key: "1akey5" }]
+    ]
+  };
+  __iconData28.node;
+  var VolumeX = createLucideIcon(__iconData28);
 
   // node_modules/lucide-preact/dist/esm/icons/x.mjs
-  var __iconData18 = {
+  var __iconData29 = {
     name: "x",
     size: 24,
     node: [
@@ -20371,8 +20789,8 @@
       ["path", { d: "m6 6 12 12", key: "d8bk6v" }]
     ]
   };
-  __iconData18.node;
-  var X3 = createLucideIcon(__iconData18);
+  __iconData29.node;
+  var X3 = createLucideIcon(__iconData29);
 
   // editor/ui/checkbox.jsx
   var Checkbox3 = (props) => /* @__PURE__ */ k(Checkbox, { className: "ui-checkbox", ...props }, /* @__PURE__ */ k(CheckboxIndicator, null, /* @__PURE__ */ k(Check, { size: 14, "aria-hidden": "true" })));
@@ -26354,6 +26772,21 @@
   );
   var GROUP_NAME = "SelectGroup";
   var [SelectGroupContextProvider, useSelectGroupContext] = createSelectContext(GROUP_NAME);
+  var SelectGroup = /* @__PURE__ */ D3(
+    /* @__PURE__ */ __name24(function SelectGroup2(props, forwardedRef) {
+      const { __scopeSelect, ...groupProps } = props;
+      const groupId = useId();
+      return /* @__PURE__ */ u3(SelectGroupContextProvider, { scope: __scopeSelect, id: groupId, children: /* @__PURE__ */ u3(Primitive.div, { role: "group", "aria-labelledby": groupId, ...groupProps, ref: forwardedRef }) });
+    }, "SelectGroup")
+  );
+  var LABEL_NAME = "SelectLabel";
+  var SelectLabel = /* @__PURE__ */ D3(
+    /* @__PURE__ */ __name24(function SelectLabel2(props, forwardedRef) {
+      const { __scopeSelect, ...labelProps } = props;
+      const groupContext = useSelectGroupContext(LABEL_NAME, __scopeSelect);
+      return /* @__PURE__ */ u3(Primitive.div, { id: groupContext.id, ...labelProps, ref: forwardedRef });
+    }, "SelectLabel")
+  );
   var ITEM_NAME = "SelectItem";
   var [SelectItemContextProvider, useSelectItemContext] = createSelectContext(ITEM_NAME);
   var SelectItem = /* @__PURE__ */ D3(
@@ -26758,8 +27191,9 @@
   var SelectTrigger3 = ({ children, ...props }) => /* @__PURE__ */ k(SelectTrigger, { className: "ui-select ui-input", ...props }, children, /* @__PURE__ */ k(SelectIcon, null, /* @__PURE__ */ k(ChevronDown, { size: 16, "aria-hidden": "true" })));
   var SelectItem3 = ({ children, ...props }) => /* @__PURE__ */ k(SelectItem, { className: "ui-select-item", ...props }, /* @__PURE__ */ k(SelectItemText, null, children), /* @__PURE__ */ k(SelectItemIndicator, null, /* @__PURE__ */ k(Check, { size: 16, "aria-hidden": "true" })));
   var SelectContent3 = ({ children }) => /* @__PURE__ */ k(SelectPortal, null, /* @__PURE__ */ k(SelectContent, { position: "popper", sideOffset: 5, className: "ui-popover ui-select-content" }, /* @__PURE__ */ k(SelectScrollUpButton, { className: "select-scroll" }, /* @__PURE__ */ k(ChevronUp, { size: 16, "aria-hidden": "true" })), /* @__PURE__ */ k(SelectViewport, null, children), /* @__PURE__ */ k(SelectScrollDownButton, { className: "select-scroll" }, /* @__PURE__ */ k(ChevronDown, { size: 16, "aria-hidden": "true" }))));
-  function Select2({ value, onValueChange, options, disabled, ...props }) {
-    return /* @__PURE__ */ k(Select, { value: String(value ?? ""), onValueChange, disabled }, /* @__PURE__ */ k(SelectTrigger3, { ...props }, /* @__PURE__ */ k(SelectValue, null)), /* @__PURE__ */ k(SelectContent3, null, options.map((option) => /* @__PURE__ */ k(SelectItem3, { key: String(option.value ?? option), value: String(option.value ?? option) }, option.label ?? String(option)))));
+  function Select2({ value, onValueChange, options = [], groups, disabled, ...props }) {
+    const item = (option) => /* @__PURE__ */ k(SelectItem3, { key: String(option.value ?? option), value: String(option.value ?? option) }, option.label ?? String(option));
+    return /* @__PURE__ */ k(Select, { value: String(value ?? ""), onValueChange, disabled }, /* @__PURE__ */ k(SelectTrigger3, { ...props }, /* @__PURE__ */ k(SelectValue, null)), /* @__PURE__ */ k(SelectContent3, null, groups ? groups.map((group) => /* @__PURE__ */ k(SelectGroup, { key: group.label }, /* @__PURE__ */ k(SelectLabel, { className: "ui-select-label" }, group.label), group.options.map(item))) : options.map(item)));
   }
 
   // node_modules/@radix-ui/react-tooltip/dist/index.mjs
@@ -27325,6 +27759,438 @@
     const presented = samples.slice(1).reduce((sum, s3) => sum + s3.presented, 0);
     return seconds2 >= 1.8 && expected > 0 && presented / seconds2 < 24 && presented < expected * 0.7;
   }
+  function outputLatencySec(context) {
+    const total = (Number.isFinite(context?.baseLatency) ? context.baseLatency : 0) + (Number.isFinite(context?.outputLatency) ? context.outputLatency : 0);
+    return Math.max(0, Math.min(1, total));
+  }
+  function audioClock({ contextTime, startContextTime, offsetSec, latencySec = 0, duration = 0, loop = false }) {
+    const elapsed = Math.max(0, contextTime - startContextTime - latencySec), t3 = Math.max(0, offsetSec) + elapsed;
+    if (!(duration > 0)) return t3;
+    return loop ? t3 % duration : Math.min(t3, duration);
+  }
+  function audioSignature(audio) {
+    if (!audio?.enabled) return "";
+    return JSON.stringify({
+      d: audio.durationSec,
+      r: audio.sampleRate,
+      n: audio.narration.map((n2) => [n2.clipUrl, n2.outStart, n2.durationSec, n2.gainDb]),
+      m: audio.music && [audio.music.url, audio.music.gainDb, audio.music.loop, audio.music.fadeInSec, audio.music.fadeOutSec, audio.music.startSec, audio.music.endSec],
+      k: audio.duck,
+      l: audio.loudness
+    });
+  }
+
+  // scripts/lib/audio/loudness.mjs
+  var SAMPLE_RATE = 48e3;
+  var SHELF = { b: [1.53512485958697, -2.69169618940638, 1.19839281085285], a: [1, -1.69065929318241, 0.73248077421585] };
+  var HIPASS = { b: [1, -2, 1], a: [1, -1.99004745483398, 0.99007225036621] };
+  var toDb = (linear) => linear > 0 ? 20 * Math.log10(linear) : -Infinity;
+  function biquad(x4, { b: b3, a: a3 }) {
+    const y3 = new Float64Array(x4.length);
+    let x1 = 0, x22 = 0, y1 = 0, y22 = 0;
+    for (let i3 = 0; i3 < x4.length; i3++) {
+      const v3 = b3[0] * x4[i3] + b3[1] * x1 + b3[2] * x22 - a3[1] * y1 - a3[2] * y22;
+      x22 = x1;
+      x1 = x4[i3];
+      y22 = y1;
+      y1 = v3;
+      y3[i3] = v3;
+    }
+    return y3;
+  }
+  function checkChannels(channels) {
+    if (!Array.isArray(channels) || !channels.length || channels.length > 2) throw new Error("Audio must have one or two channels");
+    const length = channels[0].length;
+    if (channels.some((c3) => !(c3 instanceof Float32Array) || c3.length !== length)) throw new Error("Audio channels must be Float32Arrays of equal length");
+    return length;
+  }
+  function integratedLufs(channels) {
+    checkChannels(channels);
+    const block = Math.round(0.4 * SAMPLE_RATE), hop = Math.round(0.1 * SAMPLE_RATE);
+    const sums = channels.map((c3) => {
+      const w4 = biquad(biquad(c3, SHELF), HIPASS), s3 = new Float64Array(w4.length + 1);
+      for (let i3 = 0; i3 < w4.length; i3++) s3[i3 + 1] = s3[i3] + w4[i3] * w4[i3];
+      return s3;
+    });
+    const lufs = (z4) => -0.691 + 10 * Math.log10(z4);
+    const energies = [];
+    for (let start = 0; start + block <= channels[0].length; start += hop) {
+      let z4 = 0;
+      for (const s3 of sums) z4 += (s3[start + block] - s3[start]) / block;
+      if (z4 > 0 && lufs(z4) > -70) energies.push(z4);
+    }
+    if (!energies.length) return -Infinity;
+    const mean = (list) => list.reduce((p3, c3) => p3 + c3, 0) / list.length;
+    const relativeGate = lufs(mean(energies)) - 10;
+    const kept = energies.filter((z4) => lufs(z4) > relativeGate);
+    return kept.length ? lufs(mean(kept)) : -Infinity;
+  }
+  var PHASES = [1, 2, 3].map((p3) => {
+    const f4 = p3 / 4, taps = [];
+    for (let m3 = -5; m3 <= 6; m3++) {
+      const x4 = m3 - f4, sinc = x4 === 0 ? 1 : Math.sin(Math.PI * x4) / (Math.PI * x4);
+      taps.push(sinc * (0.5 + 0.5 * Math.cos(Math.PI * x4 / 6.5)));
+    }
+    const total = taps.reduce((p4, c3) => p4 + c3, 0);
+    return taps.map((t3) => t3 / total);
+  });
+  function intervalPeaks(channels) {
+    const n2 = channels[0].length, out = new Float32Array(n2);
+    for (const c3 of channels) {
+      for (let i3 = 0; i3 < n2; i3++) {
+        let peak = Math.abs(c3[i3]);
+        const next = i3 + 1 < n2 ? Math.abs(c3[i3 + 1]) : 0;
+        if (next > peak) peak = next;
+        for (let p3 = 0; p3 < 3; p3++) {
+          const taps = PHASES[p3];
+          let y3 = 0;
+          for (let k4 = 0; k4 < 12; k4++) {
+            const j4 = i3 - 5 + k4;
+            if (j4 >= 0 && j4 < n2) y3 += taps[k4] * c3[j4];
+          }
+          y3 = Math.abs(y3);
+          if (y3 > peak) peak = y3;
+        }
+        if (peak > out[i3]) out[i3] = peak;
+      }
+    }
+    return out;
+  }
+  function truePeakLinear(channels) {
+    checkChannels(channels);
+    let peak = 0;
+    for (const v3 of intervalPeaks(channels)) if (v3 > peak) peak = v3;
+    return peak;
+  }
+  function gainToTarget(measured, target) {
+    const lufs = typeof measured === "number" ? measured : measured?.integratedLufs;
+    return Number.isFinite(lufs) && Number.isFinite(target) ? target - lufs : 0;
+  }
+  function applyGainDb(channels, gainDb) {
+    const g4 = 10 ** (gainDb / 20);
+    return channels.map((c3) => {
+      const out = new Float32Array(c3.length);
+      for (let i3 = 0; i3 < c3.length; i3++) out[i3] = c3[i3] * g4;
+      return out;
+    });
+  }
+  function truePeakLimiter(channels, { ceilingDb = -1, lookaheadMs = 5, releaseMs = 80 } = {}) {
+    const n2 = checkChannels(channels), ceiling = 10 ** (ceilingDb / 20);
+    const L3 = Math.max(1, Math.round(lookaheadMs / 1e3 * SAMPLE_RATE));
+    const peaks = intervalPeaks(channels);
+    const need = new Float32Array(n2).fill(1);
+    let any = false;
+    for (let i3 = 0; i3 < n2; i3++) if (peaks[i3] > ceiling) {
+      any = true;
+      const g4 = ceiling / peaks[i3];
+      if (g4 < need[i3]) need[i3] = g4;
+      if (i3 + 1 < n2 && g4 < need[i3 + 1]) need[i3 + 1] = g4;
+    }
+    if (!any) return { channels: channels.map((c3) => Float32Array.from(c3)), reductionDb: 0 };
+    const d3 = need;
+    const m3 = new Float64Array(n2), queue = new Int32Array(n2);
+    let head = 0, tail = 0;
+    for (let i3 = n2 - 1; i3 >= 0; i3--) {
+      while (tail > head && d3[queue[tail - 1]] >= d3[i3]) tail--;
+      queue[tail++] = i3;
+      while (queue[head] > i3 + L3 - 1) head++;
+      m3[i3] = d3[queue[head]];
+    }
+    const gain = new Float64Array(n2);
+    let acc = L3 * m3[0];
+    for (let i3 = 0; i3 < n2; i3++) {
+      acc += m3[i3] - (i3 - L3 >= 0 ? m3[i3 - L3] : m3[0]);
+      gain[i3] = acc / L3;
+    }
+    const release = 1 - Math.exp(-1 / (releaseMs / 1e3 * SAMPLE_RATE));
+    let r4 = 1, minGain = 1;
+    const out = channels.map(() => new Float32Array(n2));
+    for (let i3 = 0; i3 < n2; i3++) {
+      const target = Math.min(1, gain[i3]);
+      r4 = Math.min(target, r4 + (1 - r4) * release);
+      if (r4 < minGain) minGain = r4;
+      for (let c3 = 0; c3 < channels.length; c3++) out[c3][i3] = channels[c3][i3] * r4;
+    }
+    return { channels: out, reductionDb: -toDb(minGain) };
+  }
+  function resample48k(channels, fromRate) {
+    if (!Number.isFinite(fromRate) || fromRate <= 0) throw new Error("Invalid sample rate");
+    if (fromRate === SAMPLE_RATE) return channels.map((c3) => Float32Array.from(c3));
+    const ratio = SAMPLE_RATE / fromRate, cutoff = Math.min(1, ratio) * 0.97, half = 16 / cutoff, table = 2048;
+    const size4 = Math.ceil(half * table) + 2, kernel = new Float64Array(size4);
+    for (let k4 = 0; k4 < size4; k4++) {
+      const x4 = k4 / table;
+      if (x4 >= half) continue;
+      const s3 = x4 === 0 ? cutoff : Math.sin(Math.PI * cutoff * x4) / (Math.PI * x4), u4 = x4 / half;
+      kernel[k4] = s3 * (0.42 + 0.5 * Math.cos(Math.PI * u4) + 0.08 * Math.cos(2 * Math.PI * u4));
+    }
+    const at2 = (x4) => {
+      const p3 = Math.abs(x4) * table, i3 = Math.floor(p3);
+      return i3 + 1 >= size4 ? 0 : kernel[i3] + (kernel[i3 + 1] - kernel[i3]) * (p3 - i3);
+    };
+    return channels.map((c3) => {
+      const outLength = Math.round(c3.length * ratio), out = new Float32Array(outLength);
+      for (let n2 = 0; n2 < outLength; n2++) {
+        const t3 = n2 / ratio, lo = Math.max(0, Math.ceil(t3 - half)), hi = Math.min(c3.length - 1, Math.floor(t3 + half));
+        let sum = 0;
+        for (let j4 = lo; j4 <= hi; j4++) sum += c3[j4] * at2(j4 - t3);
+        out[n2] = sum;
+      }
+      return out;
+    });
+  }
+
+  // scripts/lib/audio/decode.js
+  async function decodeAudio(arrayBuffer) {
+    const context = new OfflineAudioContext(1, 1, 48e3);
+    const decoded = await context.decodeAudioData(arrayBuffer);
+    const channels = [];
+    for (let i3 = 0; i3 < Math.min(2, decoded.numberOfChannels); i3++) channels.push(Float32Array.from(decoded.getChannelData(i3)));
+    return decoded.sampleRate === 48e3 ? channels : resample48k(channels, decoded.sampleRate);
+  }
+  async function loadAudio(url) {
+    const response = await fetch(new URL(url, location.href));
+    if (!response.ok) throw new Error(`Cannot load audio ${url} (${response.status})`);
+    return decodeAudio(await response.arrayBuffer());
+  }
+
+  // scripts/lib/audio/duck.mjs
+  var ramp = (x4) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, x4)));
+  function mergeIntervals(intervals, gapSec = 0) {
+    const sorted = intervals.filter((i3) => Number.isFinite(i3?.start) && Number.isFinite(i3?.end) && i3.end > i3.start).map((i3) => ({ start: i3.start, end: i3.end })).sort((a3, b3) => a3.start - b3.start);
+    const merged = [];
+    for (const i3 of sorted) {
+      const last2 = merged.at(-1);
+      if (last2 && i3.start - last2.end < gapSec) last2.end = Math.max(last2.end, i3.end);
+      else merged.push(i3);
+    }
+    return merged;
+  }
+  function duckEnvelope({ intervals, length, sampleRate, depthDb = 12, attackMs = 150, releaseMs = 400 }) {
+    const out = new Float32Array(length).fill(1);
+    const low = 10 ** (-depthDb / 20), attack = Math.max(1, Math.round(attackMs / 1e3 * sampleRate)), release = Math.max(1, Math.round(releaseMs / 1e3 * sampleRate));
+    for (const { start, end } of mergeIntervals(intervals, releaseMs / 1e3)) {
+      const s3 = Math.round(start * sampleRate), e3 = Math.round(end * sampleRate);
+      const from = Math.max(0, s3 - attack), to = Math.min(length, e3 + release);
+      for (let i3 = from; i3 < to; i3++) {
+        const g4 = i3 < s3 ? 1 - (1 - low) * ramp((i3 - (s3 - attack)) / attack) : i3 < e3 ? low : 1 - (1 - low) * (1 - ramp((i3 - e3) / release));
+        if (g4 < out[i3]) out[i3] = g4;
+      }
+    }
+    return out;
+  }
+
+  // scripts/lib/audio/mix.mjs
+  var toDb2 = (linear) => linear > 0 ? 20 * Math.log10(linear) : -Infinity;
+  var stereo = (channels, rate) => {
+    if (!Array.isArray(channels) || !channels.length || channels.length > 2 || channels.some((c3) => !(c3 instanceof Float32Array))) throw new Error("Audio must be one or two Float32Array channels");
+    const fixed = rate !== void 0 && rate !== SAMPLE_RATE ? resample48k(channels, rate) : channels;
+    return [fixed[0], fixed[1] ?? fixed[0]];
+  };
+  var fade = (x4) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, x4)));
+  function placeClips(clips, length, sampleRate) {
+    const bus = [new Float32Array(length), new Float32Array(length)], intervals = [];
+    for (const clip of clips) {
+      const [l3, r4] = stereo(clip.channels, clip.sampleRate), gain = 10 ** ((clip.gainDb ?? 0) / 20);
+      const at2 = Math.round(clip.start * sampleRate), from = Math.max(0, at2), to = Math.min(length, at2 + l3.length);
+      if (to <= from) continue;
+      for (let i3 = from; i3 < to; i3++) {
+        bus[0][i3] += l3[i3 - at2] * gain;
+        bus[1][i3] += r4[i3 - at2] * gain;
+      }
+      intervals.push({ start: from / sampleRate, end: to / sampleRate });
+    }
+    return { bus, intervals };
+  }
+  function renderMusic(music, length, durationSec, sampleRate) {
+    const out = [new Float32Array(length), new Float32Array(length)];
+    const [l3, r4] = stereo(music.channels, music.sampleRate), n2 = l3.length;
+    if (!n2) return out;
+    const s0 = Math.max(0, Math.round((music.startSec ?? 0) * sampleRate)), s1 = Math.min(length, Math.round((music.endSec ?? durationSec) * sampleRate));
+    if (s1 <= s0) return out;
+    const gain = 10 ** ((music.gainDb ?? 0) / 20), span = s1 - s0;
+    const inN = Math.round((music.fadeInSec ?? 0) * sampleRate), outN = Math.round((music.fadeOutSec ?? 0) * sampleRate);
+    const seam = Math.min(Math.round(3e-3 * sampleRate), n2 >> 2);
+    const jump = music.loop && Math.max(Math.abs(l3[n2 - 1] - l3[0]), Math.abs(r4[n2 - 1] - r4[0])) > 0.01;
+    for (let i3 = 0; i3 < span; i3++) {
+      let j4 = i3;
+      if (j4 >= n2) {
+        if (!music.loop) break;
+        j4 %= n2;
+      }
+      let g4 = gain;
+      if (inN > 0 && i3 < inN) g4 *= fade(i3 / inN);
+      if (outN > 0 && span - i3 <= outN) g4 *= fade((span - 1 - i3) / outN);
+      if (jump && seam > 0) {
+        if (j4 < seam) g4 *= fade((j4 + 0.5) / seam);
+        if (n2 - j4 <= seam) g4 *= fade((n2 - j4 - 0.5) / seam);
+      }
+      out[0][s0 + i3] = l3[j4] * g4;
+      out[1][s0 + i3] = r4[j4] * g4;
+    }
+    return out;
+  }
+  function mixAudio({ durationSec, sampleRate = SAMPLE_RATE, clips = [], music = null, duck = {}, loudness = {} }) {
+    if (sampleRate !== SAMPLE_RATE) throw new Error("mixAudio supports 48 kHz only");
+    if (!Number.isFinite(durationSec) || durationSec <= 0) throw new Error("durationSec must be positive");
+    const length = Math.round(durationSec * sampleRate);
+    const { bus, intervals } = placeClips(clips, length, sampleRate);
+    let mixed = bus;
+    if (music) {
+      const m3 = renderMusic(music, length, durationSec, sampleRate);
+      if (duck.enabled && intervals.length) {
+        const env = duckEnvelope({ intervals, length, sampleRate, depthDb: duck.depthDb ?? 12, attackMs: duck.attackMs ?? 150, releaseMs: duck.releaseMs ?? 400 });
+        for (const c3 of m3) for (let i3 = 0; i3 < length; i3++) c3[i3] *= env[i3];
+      }
+      mixed = bus.map((c3, k4) => {
+        for (let i3 = 0; i3 < length; i3++) c3[i3] += m3[k4][i3];
+        return c3;
+      });
+    }
+    const ceilingDb = loudness.truePeakDb ?? -1, preGainLufs = integratedLufs(mixed);
+    let gainDb = loudness.enabled ? gainToTarget(preGainLufs, loudness.targetLufs ?? -16) : 0;
+    let result;
+    for (let pass = 0; pass < 4; pass++) {
+      const limited = truePeakLimiter(applyGainDb(mixed, gainDb), { ceilingDb });
+      result = { ...limited, integrated: integratedLufs(limited.channels) };
+      const error = loudness.enabled && Number.isFinite(result.integrated) ? (loudness.targetLufs ?? -16) - result.integrated : 0;
+      if (Math.abs(error) <= 0.05 || result.reductionDb === 0 && pass > 0) break;
+      gainDb += error;
+    }
+    return {
+      channels: result.channels,
+      measured: { integratedLufs: result.integrated, truePeakDb: toDb2(truePeakLinear(result.channels)), preGainLufs },
+      appliedGainDb: gainDb,
+      limiterReductionDb: result.reductionDb
+    };
+  }
+
+  // editor/audio-preview.js
+  var CACHE_LIMIT = 24;
+  function createAudioPreview({ load = loadAudio, ContextClass = globalThis.AudioContext ?? globalThis.webkitAudioContext } = {}) {
+    const decoded = /* @__PURE__ */ new Map();
+    let context = null, gain = null, buffer = null, signature = "", source = null, started = null, volume = 1, muted = false, disposed = false, ticket = 0;
+    const decode = (url) => {
+      let entry = decoded.get(url);
+      if (!entry) {
+        entry = load(url);
+        decoded.set(url, entry);
+        entry.catch(() => decoded.delete(url));
+        while (decoded.size > CACHE_LIMIT) decoded.delete(decoded.keys().next().value);
+      }
+      return entry;
+    };
+    function ensureContext() {
+      if (!ContextClass) throw new Error("This browser cannot play audio.");
+      if (!context) {
+        context = new ContextClass();
+        gain = context.createGain();
+        gain.gain.value = muted ? 0 : volume;
+        gain.connect(context.destination);
+      }
+      return context;
+    }
+    const api = {
+      // True when the mix currently held was built from exactly this audio plan.
+      has: (audio) => !!buffer && signature === audioSignature(audio),
+      get signature() {
+        return signature;
+      },
+      // Decodes clips and music (cached by URL) and mixes the whole timeline. Resolves 'none' when the plan has no audio.
+      async prepare(audio) {
+        const next = audioSignature(audio), mine = ++ticket;
+        if (!next) {
+          buffer = null;
+          signature = "";
+          return "none";
+        }
+        if (buffer && next === signature) return "ready";
+        const clips = await Promise.all(audio.narration.map(async (n2) => ({ channels: await decode(n2.clipUrl), start: n2.outStart, gainDb: n2.gainDb })));
+        const music = audio.music ? { ...audio.music, channels: await decode(audio.music.url) } : null;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (disposed) return "none";
+        if (mine !== ticket) return "stale";
+        const mix2 = mixAudio({ durationSec: audio.durationSec, sampleRate: audio.sampleRate, clips, music, duck: audio.duck, loudness: audio.loudness });
+        const made = new AudioBuffer({ length: mix2.channels[0].length, numberOfChannels: 2, sampleRate: audio.sampleRate });
+        made.copyToChannel(mix2.channels[0], 0);
+        made.copyToChannel(mix2.channels[1], 1);
+        buffer = made;
+        signature = next;
+        return "ready";
+      },
+      // Creates the context from a user gesture so the browser lets it run; harmless to call again.
+      unlock() {
+        try {
+          const ctx = ensureContext();
+          if (ctx.state === "suspended") ctx.resume().catch(() => {
+          });
+        } catch {
+        }
+      },
+      // Starts the mix at the output time returned by getOffset() at the moment sound really starts. Resolves false when it cannot play.
+      async start(getOffset2, { loop = false } = {}) {
+        if (!buffer || disposed) return false;
+        try {
+          const ctx = ensureContext();
+          if (ctx.state !== "running") await ctx.resume();
+          if (ctx.state !== "running" || disposed) return false;
+          api.stop();
+          const node = ctx.createBufferSource();
+          node.buffer = buffer;
+          node.loop = loop;
+          node.connect(gain);
+          const duration = buffer.duration, offset4 = Math.min(Math.max(0, getOffset2()), Math.max(0, duration - 1e-3)), when = ctx.currentTime;
+          node.start(when, offset4);
+          source = node;
+          started = { contextTime: when, offsetSec: offset4, loop, duration };
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      // Output time heard right now (accounts for device latency), or null when nothing is playing.
+      position() {
+        if (!source || !context) return null;
+        return audioClock({
+          contextTime: context.currentTime,
+          startContextTime: started.contextTime,
+          offsetSec: started.offsetSec,
+          latencySec: outputLatencySec(context),
+          duration: started.duration,
+          loop: started.loop
+        });
+      },
+      stop() {
+        if (source) {
+          try {
+            source.stop();
+          } catch {
+          }
+          source.disconnect();
+          source = null;
+          started = null;
+        }
+      },
+      setVolume(value) {
+        volume = Math.min(1, Math.max(0, value));
+        if (gain) gain.gain.value = muted ? 0 : volume;
+      },
+      setMuted(value) {
+        muted = !!value;
+        if (gain) gain.gain.value = muted ? 0 : volume;
+      },
+      dispose() {
+        disposed = true;
+        api.stop();
+        context?.close?.().catch(() => {
+        });
+        context = null;
+        decoded.clear();
+        buffer = null;
+      }
+    };
+    return api;
+  }
 
   // editor/Preview.jsx
   function Preview({ plan, provider, time, setTime, playing, setPlaying, onPick, focus: focus2 }) {
@@ -27343,6 +28209,48 @@
     const [assets, setAssets] = d2(null), [error, setError] = d2(""), [dropped, setDropped] = d2(false);
     current.current = time;
     const duration = plan?.timemap.outputDuration ?? 0, fps = plan?.output.fps ?? 30;
+    const audio = A2(null);
+    audio.current ??= createAudioPreview();
+    const [audioStatus, setAudioStatus] = d2("none"), [audioError, setAudioError] = d2("");
+    const [volume, setVolume] = d2(() => {
+      const v3 = Number(readPreference("volume", "0.8"));
+      return Number.isFinite(v3) ? Math.min(1, Math.max(0, v3)) : 0.8;
+    });
+    const [muted, setMuted] = d2(() => readPreference("muted", "") === "yes");
+    const signature = audioSignature(plan?.audio), hasAudio = !!signature;
+    const audioReady = audioStatus === "ready" && !!plan && audio.current.has(plan.audio);
+    h2(() => () => audio.current.dispose(), []);
+    h2(() => {
+      audio.current.setVolume(volume);
+      audio.current.setMuted(muted);
+    }, [volume, muted]);
+    h2(() => {
+      setAudioError("");
+      if (!signature) {
+        setAudioStatus("none");
+        return void 0;
+      }
+      if (audio.current.has(plan.audio)) {
+        setAudioStatus("ready");
+        return void 0;
+      }
+      setAudioStatus("preparing");
+      let active = true;
+      const timer = setTimeout(() => {
+        audio.current.prepare(plan.audio).then((result) => {
+          if (active && result !== "stale") setAudioStatus(result === "ready" ? "ready" : "none");
+        }).catch((e3) => {
+          if (active) {
+            setAudioStatus("error");
+            setAudioError(e3.message);
+          }
+        });
+      }, 400);
+      return () => {
+        active = false;
+        clearTimeout(timer);
+      };
+    }, [signature]);
     h2(() => {
       let active = true;
       setAssets(null);
@@ -27369,6 +28277,17 @@
       let active = true, raf, busy = false, lastTime = -1, last2 = performance.now();
       let main = false, starting = false, seeking = false, frameCallback;
       let serial = 0, drawnSerial = 0, expected = 0, previousFrame = null;
+      let audioMode = "off";
+      if (playing && audioReady && rate === 1) {
+        audioMode = "starting";
+        audio.current.start(() => current.current, { loop }).then((ok) => {
+          if (!active) {
+            audio.current.stop();
+            return;
+          }
+          audioMode = ok ? "running" : "off";
+        });
+      }
       let native = media.canPlayType('video/mp4; codecs="avc1.640033"') !== "" && !media.error;
       let nativeStart = 0;
       const unsupported = () => {
@@ -27427,7 +28346,7 @@
         if (!active) return;
         raf = requestAnimationFrame(tick);
         if (playing) {
-          let next = current.current + (now - last2) / 1e3 * rate;
+          let next = audioMode === "starting" ? current.current : audioMode === "running" ? audio.current.position() ?? current.current : current.current + (now - last2) / 1e3 * rate;
           if (next >= duration) {
             next = loop ? next % duration : duration;
             if (!loop) {
@@ -27459,6 +28378,16 @@
               return;
             }
             if (media.readyState >= 2) nativeStart = 0;
+            if (state.rate === 0) {
+              if (!media.paused) media.pause();
+              if (!seeking && !media.seeking && media.readyState >= 1 && Math.abs(media.currentTime - state.sourceT) > 0.05) {
+                seeking = true;
+                resetFrames();
+                media.currentTime = state.sourceT;
+              }
+              if (!seeking && !media.seeking && media.readyState >= 2) paint(t3, state, media);
+              return;
+            }
             const sync = playbackSync(state.sourceT, media.currentTime, state.rate, rate);
             if (media.playbackRate !== sync.playbackRate) media.playbackRate = sync.playbackRate;
             if (!seeking && !media.seeking && media.readyState >= 1 && sync.action === "seek") {
@@ -27510,11 +28439,12 @@
         cancelAnimationFrame(raf);
         media.pause();
         provider.pause();
+        audio.current.stop();
         media.removeEventListener("seeked", seeked);
         media.removeEventListener("error", unsupported);
         if (frameCallback !== void 0) media.cancelVideoFrameCallback(frameCallback);
       };
-    }, [plan, provider, assets, playing, duration, rate, loop]);
+    }, [plan, provider, assets, playing, duration, rate, loop, audioReady]);
     function pick2(event) {
       if (!onPick || !drawn.current) return;
       const { plan: p3, state } = drawn.current;
@@ -27540,6 +28470,7 @@
       }
     }
     const togglePlay = () => {
+      audio.current.unlock();
       if (!playing && duration > 0 && current.current >= duration - 0.05) {
         current.current = 0;
         setTime(0);
@@ -27550,10 +28481,20 @@
       setPlaying(false);
       setTime(Math.max(0, Math.min(duration, time + direction / fps)));
     };
-    return /* @__PURE__ */ k("section", { class: "preview", "aria-label": "Video preview" }, /* @__PURE__ */ k("video", { ref: video, src: "/media/raw.mp4", muted: true, playsInline: true, preload: "auto", hidden: true }), /* @__PURE__ */ k("div", { class: "preview-stage", ref: stage }, /* @__PURE__ */ k("div", { class: "preview-canvas-wrap", style: { width: size4.width, height: size4.height } }, /* @__PURE__ */ k("canvas", { ref: canvas, onClick: pick2, "aria-label": "Composition preview; click to pick zoom focus", style: { aspectRatio: plan ? `${plan.output.width}/${plan.output.height}` : "16/9" } }), crosshair && /* @__PURE__ */ k("span", { class: "focus-crosshair", style: crosshair, "aria-label": "Selected zoom focus" }, "+"))), error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, error), dropped && /* @__PURE__ */ k("p", { class: "warning", role: "status" }, "Preview below 24 fps \u2014 frames are being dropped."), /* @__PURE__ */ k("div", { class: "transport", role: "toolbar", "aria-label": "Preview transport" }, /* @__PURE__ */ k(Tooltip2, { text: plan ? "Previous frame (,)" : "Load a recording to step frames" }, /* @__PURE__ */ k(Button, { size: "icon", onClick: () => step(-1), "aria-label": "Previous frame", disabled: !plan }, /* @__PURE__ */ k(SkipBack, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: plan && assets ? `${playing ? "Pause" : "Play"} (Space)` : "Waiting for the preview to load" }, /* @__PURE__ */ k(Button, { size: "icon", onClick: togglePlay, disabled: !plan || !assets, "aria-label": playing ? "Pause" : "Play" }, playing ? /* @__PURE__ */ k(Pause, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: plan ? "Next frame (.)" : "Load a recording to step frames" }, /* @__PURE__ */ k(Button, { size: "icon", onClick: () => step(1), "aria-label": "Next frame", disabled: !plan }, /* @__PURE__ */ k(SkipForward, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k("output", { class: "timecode" }, timecode(time, fps), " / ", timecode(duration, fps)), /* @__PURE__ */ k("div", { class: "seek" }, /* @__PURE__ */ k(Slider3, { "aria-label": "Seek output time", min: 0, max: duration || 1, step: 1 / fps, value: [time], disabled: !plan, onValueChange: ([next]) => {
+    return /* @__PURE__ */ k("section", { class: "preview", "aria-label": "Video preview" }, /* @__PURE__ */ k("video", { ref: video, src: "/media/raw.mp4", muted: true, playsInline: true, preload: "auto", hidden: true }), /* @__PURE__ */ k("div", { class: "preview-stage", ref: stage }, /* @__PURE__ */ k("div", { class: "preview-canvas-wrap", style: { width: size4.width, height: size4.height } }, /* @__PURE__ */ k("canvas", { ref: canvas, onClick: pick2, "aria-label": "Composition preview; click to pick zoom focus", style: { aspectRatio: plan ? `${plan.output.width}/${plan.output.height}` : "16/9" } }), crosshair && /* @__PURE__ */ k("span", { class: "focus-crosshair", style: crosshair, "aria-label": "Selected zoom focus" }, "+"))), error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, error), dropped && /* @__PURE__ */ k("p", { class: "warning", role: "status" }, "Preview below 24 fps \u2014 frames are being dropped."), hasAudio && audioStatus === "preparing" && /* @__PURE__ */ k("p", { class: "audio-status", role: "status" }, "Preparing audio\u2026"), hasAudio && rate !== 1 && /* @__PURE__ */ k("p", { class: "audio-status", role: "status" }, "Audio muted at this speed"), audioStatus === "error" && /* @__PURE__ */ k("p", { class: "warning", role: "status" }, "Preview audio is unavailable: ", audioError), /* @__PURE__ */ k("div", { class: "transport", role: "toolbar", "aria-label": "Preview transport" }, /* @__PURE__ */ k(Tooltip2, { text: plan ? "Previous frame (,)" : "Load a recording to step frames" }, /* @__PURE__ */ k(Button, { size: "icon", onClick: () => step(-1), "aria-label": "Previous frame", disabled: !plan }, /* @__PURE__ */ k(SkipBack, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: plan && assets ? `${playing ? "Pause" : "Play"} (Space)` : "Waiting for the preview to load" }, /* @__PURE__ */ k(Button, { size: "icon", onClick: togglePlay, disabled: !plan || !assets, "aria-label": playing ? "Pause" : "Play" }, playing ? /* @__PURE__ */ k(Pause, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: plan ? "Next frame (.)" : "Load a recording to step frames" }, /* @__PURE__ */ k(Button, { size: "icon", onClick: () => step(1), "aria-label": "Next frame", disabled: !plan }, /* @__PURE__ */ k(SkipForward, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k("output", { class: "timecode" }, timecode(time, fps), " / ", timecode(duration, fps)), /* @__PURE__ */ k("div", { class: "seek" }, /* @__PURE__ */ k(Slider3, { "aria-label": "Seek output time", min: 0, max: duration || 1, step: 1 / fps, value: [time], disabled: !plan, onValueChange: ([next]) => {
       setPlaying(false);
       setTime(next);
-    } })), /* @__PURE__ */ k(Label3, { className: "loop-control" }, /* @__PURE__ */ k(Checkbox3, { "aria-label": "Loop", checked: loop, onCheckedChange: setLoop }), "Loop"), /* @__PURE__ */ k(Tooltip2, { text: "Preview playback speed" }, /* @__PURE__ */ k("span", null, /* @__PURE__ */ k(Select2, { "aria-label": "Playback rate", value: rate, onValueChange: (next) => setRate(+next), options: [0.5, 1, 2].map((n2) => ({ value: n2, label: `${n2}\xD7` })) })))));
+    } })), hasAudio && /* @__PURE__ */ k(Fragment, null, /* @__PURE__ */ k(Tooltip2, { text: muted ? "Turn preview audio on" : "Mute preview audio" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": muted ? "Unmute audio" : "Mute audio", "aria-pressed": muted, onClick: () => {
+      setMuted(!muted);
+      writePreference("muted", muted ? "" : "yes");
+    } }, muted ? /* @__PURE__ */ k(VolumeX, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Volume2, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k("div", { class: "volume" }, /* @__PURE__ */ k(Slider3, { "aria-label": "Volume", min: 0, max: 1, step: 0.05, value: [muted ? 0 : volume], onValueChange: ([next]) => {
+      setVolume(next);
+      writePreference("volume", String(next));
+      if (muted && next > 0) {
+        setMuted(false);
+        writePreference("muted", "");
+      }
+    } }))), /* @__PURE__ */ k(Label3, { className: "loop-control" }, /* @__PURE__ */ k(Checkbox3, { "aria-label": "Loop", checked: loop, onCheckedChange: setLoop }), "Loop"), /* @__PURE__ */ k(Tooltip2, { text: "Preview playback speed" }, /* @__PURE__ */ k("span", null, /* @__PURE__ */ k(Select2, { "aria-label": "Playback rate", value: rate, onValueChange: (next) => setRate(+next), options: [0.5, 1, 2].map((n2) => ({ value: n2, label: `${n2}\xD7` })) })))));
   }
 
   // scripts/lib/compose/settings-schema.mjs
@@ -27562,6 +28503,7 @@
     { path: "run.id", reason: "Recording identity; selected when opening the project." },
     { path: "edits.trims", reason: "Edited on the timeline." },
     { path: "edits.speeds", reason: "Edited on the timeline." },
+    { path: "edits.holds", reason: "Frozen frames are added from the narration fixes in the Voice tab." },
     { path: "zoom.regions", reason: "Edited on the timeline and preview." },
     { path: "audio.narration.steps", reason: "Per-step narration text and mute are edited in the narration list." },
     { path: "captions.cues", reason: "Source-time caption overrides edited on the timeline." },
@@ -27733,13 +28675,471 @@
     };
   });
   var byPath = new Map(SETTINGS.map((s3) => [s3.path, s3]));
+  var settingFor = (path) => byPath.get(path);
 
   // editor/ui/input.jsx
   var Input2 = D3(({ class: klass, className, ...props }, ref) => /* @__PURE__ */ k("input", { ref, className: cn2("ui-input h-8 w-full rounded-md border border-input bg-transparent px-2 text-[13px]", klass, className), ...props }));
 
-  // node_modules/@radix-ui/react-switch/dist/index.mjs
+  // node_modules/@radix-ui/react-use-is-hydrated/dist/index.mjs
   var __defProp28 = Object.defineProperty;
   var __name27 = (target, value) => __defProp28(target, "name", { value, configurable: true });
+  var _isHydrated = false;
+  function useIsHydrated() {
+    const [isHydrated, setIsHydrated] = d2(_isHydrated);
+    h2(() => {
+      if (!_isHydrated) {
+        _isHydrated = true;
+        setIsHydrated(true);
+      }
+    }, []);
+    return isHydrated;
+  }
+  __name27(useIsHydrated, "useIsHydrated");
+  var useReactSyncExternalStore = compat_module_exports[" useSyncExternalStore ".trim().toString()];
+  function subscribe() {
+    return () => {
+    };
+  }
+  __name27(subscribe, "subscribe");
+  function useIsHydratedModern() {
+    return useReactSyncExternalStore(
+      subscribe,
+      () => true,
+      () => false
+    );
+  }
+  __name27(useIsHydratedModern, "useIsHydratedModern");
+  var useIsHydrated2 = typeof useReactSyncExternalStore === "function" ? useIsHydratedModern : useIsHydrated;
+
+  // node_modules/@radix-ui/react-roving-focus/dist/index.mjs
+  var __defProp29 = Object.defineProperty;
+  var __name28 = (target, value) => __defProp29(target, "name", { value, configurable: true });
+  var ENTRY_FOCUS = "rovingFocusGroup.onEntryFocus";
+  var EVENT_OPTIONS2 = { bubbles: false, cancelable: true };
+  var GROUP_NAME2 = "RovingFocusGroup";
+  var [Collection3, useCollection3, createCollectionScope3] = createCollection(GROUP_NAME2);
+  var [createRovingFocusGroupContext, createRovingFocusGroupScope] = createContextScope(
+    GROUP_NAME2,
+    [createCollectionScope3]
+  );
+  var Orientation2 = {
+    Vertical: "vertical",
+    Horizontal: "horizontal"
+  };
+  var Direction4 = {
+    LTR: "ltr",
+    RTL: "rtl"
+  };
+  var [RovingFocusProvider, useRovingFocusContext] = createRovingFocusGroupContext(GROUP_NAME2);
+  var RovingFocusGroup = /* @__PURE__ */ D3(
+    // blank line to reduce diff noise
+    /* @__PURE__ */ __name28(function RovingFocusGroup2(props, forwardedRef) {
+      return /* @__PURE__ */ u3(Collection3.Provider, { scope: props.__scopeRovingFocusGroup, children: /* @__PURE__ */ u3(Collection3.Slot, { scope: props.__scopeRovingFocusGroup, children: /* @__PURE__ */ u3(RovingFocusGroupImpl, { ...props, ref: forwardedRef }) }) });
+    }, "RovingFocusGroup")
+  );
+  var RovingFocusGroupImpl = /* @__PURE__ */ D3(/* @__PURE__ */ __name28(function RovingFocusGroupImpl2(props, forwardedRef) {
+    const {
+      __scopeRovingFocusGroup,
+      orientation,
+      loop = false,
+      dir,
+      currentTabStopId: currentTabStopIdProp,
+      defaultCurrentTabStopId,
+      onCurrentTabStopIdChange,
+      onEntryFocus,
+      preventScrollOnEntryFocus = false,
+      ...groupProps
+    } = props;
+    const ref = A2(null);
+    const composedRefs = useComposedRefs(forwardedRef, ref);
+    const direction = useDirection(dir);
+    const [currentTabStopId, setCurrentTabStopId] = useControllableState({
+      prop: currentTabStopIdProp,
+      defaultProp: defaultCurrentTabStopId ?? null,
+      onChange: onCurrentTabStopIdChange,
+      caller: GROUP_NAME2
+    });
+    const [isTabbingBackOut, setIsTabbingBackOut] = d2(false);
+    const handleEntryFocus = useCallbackRef(onEntryFocus);
+    const getItems = useCollection3(__scopeRovingFocusGroup);
+    const isClickFocusRef = A2(false);
+    const [focusableItemsCount, setFocusableItemsCount] = d2(0);
+    h2(() => {
+      const node = ref.current;
+      if (node) {
+        node.addEventListener(ENTRY_FOCUS, handleEntryFocus);
+        return () => node.removeEventListener(ENTRY_FOCUS, handleEntryFocus);
+      }
+    }, [handleEntryFocus]);
+    return /* @__PURE__ */ u3(
+      RovingFocusProvider,
+      {
+        scope: __scopeRovingFocusGroup,
+        orientation,
+        dir: direction,
+        loop,
+        currentTabStopId,
+        onItemFocus: q2(
+          (tabStopId) => setCurrentTabStopId(tabStopId),
+          [setCurrentTabStopId]
+        ),
+        onItemShiftTab: q2(() => setIsTabbingBackOut(true), []),
+        onFocusableItemAdd: q2(
+          () => setFocusableItemsCount((prevCount) => prevCount + 1),
+          []
+        ),
+        onFocusableItemRemove: q2(
+          () => setFocusableItemsCount((prevCount) => prevCount - 1),
+          []
+        ),
+        children: /* @__PURE__ */ u3(
+          Primitive.div,
+          {
+            tabIndex: isTabbingBackOut || focusableItemsCount === 0 ? -1 : 0,
+            "data-orientation": orientation,
+            ...groupProps,
+            ref: composedRefs,
+            style: { outline: "none", ...props.style },
+            onMouseDown: composeEventHandlers(props.onMouseDown, () => {
+              isClickFocusRef.current = true;
+            }),
+            onFocus: composeEventHandlers(props.onFocus, (event) => {
+              const isKeyboardFocus = !isClickFocusRef.current;
+              if (event.target === event.currentTarget && isKeyboardFocus && !isTabbingBackOut) {
+                const entryFocusEvent = new CustomEvent(ENTRY_FOCUS, EVENT_OPTIONS2);
+                event.currentTarget.dispatchEvent(entryFocusEvent);
+                if (!entryFocusEvent.defaultPrevented) {
+                  const items = getItems().filter((item) => item.focusable);
+                  const activeItem = items.find((item) => item.active);
+                  const currentItem = items.find((item) => item.id === currentTabStopId);
+                  const candidateItems = [activeItem, currentItem, ...items].filter(
+                    Boolean
+                  );
+                  const candidateNodes = candidateItems.map((item) => item.ref.current);
+                  focusFirst2(candidateNodes, preventScrollOnEntryFocus);
+                }
+              }
+              isClickFocusRef.current = false;
+            }),
+            onBlur: composeEventHandlers(props.onBlur, () => setIsTabbingBackOut(false))
+          }
+        )
+      }
+    );
+  }, "RovingFocusGroupImpl"));
+  var ITEM_NAME2 = "RovingFocusGroupItem";
+  var RovingFocusGroupItem = /* @__PURE__ */ D3(
+    // blank line to reduce diff noise
+    /* @__PURE__ */ __name28(function RovingFocusGroupItem2(props, forwardedRef) {
+      const {
+        __scopeRovingFocusGroup,
+        focusable = true,
+        active = false,
+        tabStopId,
+        children,
+        ...itemProps
+      } = props;
+      const autoId = useId();
+      const id = tabStopId || autoId;
+      const context = useRovingFocusContext(ITEM_NAME2, __scopeRovingFocusGroup);
+      const isCurrentTabStop = context.currentTabStopId === id;
+      const getItems = useCollection3(__scopeRovingFocusGroup);
+      const { onFocusableItemAdd, onFocusableItemRemove, currentTabStopId } = context;
+      const isHydrated = useIsHydrated2();
+      useLayoutEffect2(() => {
+        if (!isHydrated || !focusable) {
+          return;
+        }
+        onFocusableItemAdd();
+        return () => onFocusableItemRemove();
+      }, [isHydrated, focusable, onFocusableItemAdd, onFocusableItemRemove]);
+      h2(() => {
+        if (isHydrated || !focusable) {
+          return;
+        }
+        onFocusableItemAdd();
+        return () => onFocusableItemRemove();
+      }, [isHydrated, focusable, onFocusableItemAdd, onFocusableItemRemove]);
+      return /* @__PURE__ */ u3(
+        Collection3.ItemSlot,
+        {
+          scope: __scopeRovingFocusGroup,
+          id,
+          focusable,
+          active,
+          children: /* @__PURE__ */ u3(
+            Primitive.span,
+            {
+              tabIndex: isCurrentTabStop ? 0 : -1,
+              "data-orientation": context.orientation,
+              ...itemProps,
+              ref: forwardedRef,
+              onMouseDown: composeEventHandlers(props.onMouseDown, (event) => {
+                if (!focusable) event.preventDefault();
+                else context.onItemFocus(id);
+              }),
+              onFocus: composeEventHandlers(props.onFocus, () => context.onItemFocus(id)),
+              onKeyDown: composeEventHandlers(props.onKeyDown, (event) => {
+                if (event.key === "Tab" && event.shiftKey) {
+                  context.onItemShiftTab();
+                  return;
+                }
+                if (event.target !== event.currentTarget) return;
+                const focusIntent = getFocusIntent(event, context.orientation, context.dir);
+                if (focusIntent !== void 0) {
+                  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+                  event.preventDefault();
+                  const items = getItems().filter((item) => item.focusable);
+                  let candidateNodes = items.map((item) => item.ref.current);
+                  if (focusIntent === "last") candidateNodes.reverse();
+                  else if (focusIntent === "prev" || focusIntent === "next") {
+                    if (focusIntent === "prev") candidateNodes.reverse();
+                    const currentIndex = candidateNodes.indexOf(event.currentTarget);
+                    candidateNodes = context.loop ? wrapArray2(candidateNodes, currentIndex + 1) : candidateNodes.slice(currentIndex + 1);
+                  }
+                  setTimeout(() => focusFirst2(candidateNodes));
+                }
+              }),
+              children: typeof children === "function" ? children({ isCurrentTabStop, hasTabStop: currentTabStopId != null }) : children
+            }
+          )
+        }
+      );
+    }, "RovingFocusGroupItem")
+  );
+  var MAP_KEY_TO_FOCUS_INTENT = {
+    ArrowLeft: "prev",
+    ArrowUp: "prev",
+    ArrowRight: "next",
+    ArrowDown: "next",
+    PageUp: "first",
+    Home: "first",
+    PageDown: "last",
+    End: "last"
+  };
+  function getDirectionAwareKey(key, dir) {
+    if (dir !== Direction4.RTL) return key;
+    return key === "ArrowLeft" ? "ArrowRight" : key === "ArrowRight" ? "ArrowLeft" : key;
+  }
+  __name28(getDirectionAwareKey, "getDirectionAwareKey");
+  function getFocusIntent(event, orientation, dir) {
+    const key = getDirectionAwareKey(event.key, dir);
+    if (orientation === Orientation2.Vertical && ["ArrowLeft", "ArrowRight"].includes(key)) {
+      return void 0;
+    }
+    if (orientation === Orientation2.Horizontal && ["ArrowUp", "ArrowDown"].includes(key)) {
+      return void 0;
+    }
+    return MAP_KEY_TO_FOCUS_INTENT[key];
+  }
+  __name28(getFocusIntent, "getFocusIntent");
+  function focusFirst2(candidates, preventScroll = false) {
+    const PREVIOUSLY_FOCUSED_ELEMENT = document.activeElement;
+    for (const candidate of candidates) {
+      if (candidate === PREVIOUSLY_FOCUSED_ELEMENT) return;
+      candidate.focus({ preventScroll });
+      if (document.activeElement !== PREVIOUSLY_FOCUSED_ELEMENT) return;
+    }
+  }
+  __name28(focusFirst2, "focusFirst");
+  function wrapArray2(array, startIndex) {
+    return array.map((_3, index2) => array[(startIndex + index2) % array.length]);
+  }
+  __name28(wrapArray2, "wrapArray");
+
+  // node_modules/@radix-ui/react-tabs/dist/index.mjs
+  var __defProp30 = Object.defineProperty;
+  var __name29 = (target, value) => __defProp30(target, "name", { value, configurable: true });
+  var ActivationMode = {
+    Automatic: "automatic",
+    Manual: "manual"
+  };
+  var TABS_NAME = "Tabs";
+  var [createTabsContext, createTabsScope] = createContextScope(TABS_NAME, [
+    createRovingFocusGroupScope
+  ]);
+  var useRovingFocusGroupScope = createRovingFocusGroupScope();
+  var [TabsProvider, useTabsContext] = createTabsContext(TABS_NAME);
+  var Tabs = /* @__PURE__ */ D3(
+    // blank line to reduce diff noise
+    /* @__PURE__ */ __name29(function Tabs2(props, forwardedRef) {
+      const {
+        __scopeTabs,
+        value: valueProp,
+        onValueChange,
+        defaultValue,
+        orientation = "horizontal",
+        dir,
+        activationMode = ActivationMode.Automatic,
+        ...tabsProps
+      } = props;
+      const direction = useDirection(dir);
+      const [value, setValue] = useControllableState({
+        prop: valueProp,
+        onChange: onValueChange,
+        defaultProp: defaultValue ?? "",
+        caller: TABS_NAME
+      });
+      return /* @__PURE__ */ u3(
+        TabsProvider,
+        {
+          scope: __scopeTabs,
+          baseId: useId(),
+          value,
+          onValueChange: setValue,
+          orientation,
+          dir: direction,
+          activationMode,
+          children: /* @__PURE__ */ u3(
+            Primitive.div,
+            {
+              dir: direction,
+              "data-orientation": orientation,
+              ...tabsProps,
+              ref: forwardedRef
+            }
+          )
+        }
+      );
+    }, "Tabs")
+  );
+  var TAB_LIST_NAME = "TabsList";
+  var TabsList = /* @__PURE__ */ D3(
+    // blank line to reduce diff noise
+    /* @__PURE__ */ __name29(function TabsList2(props, forwardedRef) {
+      const { __scopeTabs, loop = true, ...listProps } = props;
+      const context = useTabsContext(TAB_LIST_NAME, __scopeTabs);
+      const rovingFocusGroupScope = useRovingFocusGroupScope(__scopeTabs);
+      return /* @__PURE__ */ u3(
+        RovingFocusGroup,
+        {
+          asChild: true,
+          ...rovingFocusGroupScope,
+          orientation: context.orientation,
+          dir: context.dir,
+          loop,
+          children: /* @__PURE__ */ u3(
+            Primitive.div,
+            {
+              role: "tablist",
+              "aria-orientation": context.orientation,
+              ...listProps,
+              ref: forwardedRef
+            }
+          )
+        }
+      );
+    }, "TabsList")
+  );
+  var TRIGGER_NAME4 = "TabsTrigger";
+  var TabsTrigger = /* @__PURE__ */ D3(
+    /* @__PURE__ */ __name29(function TabsTrigger2(props, forwardedRef) {
+      const { __scopeTabs, value, disabled = false, ...triggerProps } = props;
+      const context = useTabsContext(TRIGGER_NAME4, __scopeTabs);
+      const rovingFocusGroupScope = useRovingFocusGroupScope(__scopeTabs);
+      const triggerId = makeTriggerId(context.baseId, value);
+      const contentId = makeContentId(context.baseId, value);
+      const isSelected = value === context.value;
+      return /* @__PURE__ */ u3(
+        RovingFocusGroupItem,
+        {
+          asChild: true,
+          ...rovingFocusGroupScope,
+          focusable: !disabled,
+          active: isSelected,
+          children: /* @__PURE__ */ u3(
+            Primitive.button,
+            {
+              type: "button",
+              role: "tab",
+              "aria-selected": isSelected,
+              "aria-controls": contentId,
+              "data-state": isSelected ? "active" : "inactive",
+              "data-disabled": disabled ? "" : void 0,
+              disabled,
+              id: triggerId,
+              ...triggerProps,
+              ref: forwardedRef,
+              onMouseDown: composeEventHandlers(props.onMouseDown, (event) => {
+                if (!disabled && event.button === 0 && event.ctrlKey === false) {
+                  event.currentTarget.focus();
+                  context.onValueChange(value);
+                } else {
+                  event.preventDefault();
+                }
+              }),
+              onKeyDown: composeEventHandlers(props.onKeyDown, (event) => {
+                if (disabled || event.target !== event.currentTarget) {
+                  return;
+                }
+                if ([" ", "Enter"].includes(event.key)) {
+                  context.onValueChange(value);
+                }
+              }),
+              onFocus: composeEventHandlers(props.onFocus, () => {
+                const isAutomaticActivation = context.activationMode !== ActivationMode.Manual;
+                if (!isSelected && !disabled && isAutomaticActivation) {
+                  context.onValueChange(value);
+                }
+              })
+            }
+          )
+        }
+      );
+    }, "TabsTrigger")
+  );
+  var CONTENT_NAME4 = "TabsContent";
+  var TabsContent = /* @__PURE__ */ D3(
+    /* @__PURE__ */ __name29(function TabsContent2(props, forwardedRef) {
+      const { __scopeTabs, value, forceMount, children, ...contentProps } = props;
+      const context = useTabsContext(CONTENT_NAME4, __scopeTabs);
+      const triggerId = makeTriggerId(context.baseId, value);
+      const contentId = makeContentId(context.baseId, value);
+      const isSelected = value === context.value;
+      const isMountAnimationPreventedRef = A2(isSelected);
+      h2(() => {
+        const rAF = requestAnimationFrame(() => isMountAnimationPreventedRef.current = false);
+        return () => cancelAnimationFrame(rAF);
+      }, []);
+      return /* @__PURE__ */ u3(Presence, { present: forceMount || isSelected, children: ({ present }) => /* @__PURE__ */ u3(
+        Primitive.div,
+        {
+          "data-state": isSelected ? "active" : "inactive",
+          "data-orientation": context.orientation,
+          role: "tabpanel",
+          "aria-labelledby": triggerId,
+          hidden: !present,
+          id: contentId,
+          tabIndex: 0,
+          ...contentProps,
+          ref: forwardedRef,
+          style: {
+            ...props.style,
+            animationDuration: isMountAnimationPreventedRef.current ? "0s" : void 0
+          },
+          children: present && children
+        }
+      ) });
+    }, "TabsContent")
+  );
+  function makeTriggerId(baseId, value) {
+    return `${baseId}-trigger-${value}`;
+  }
+  __name29(makeTriggerId, "makeTriggerId");
+  function makeContentId(baseId, value) {
+    return `${baseId}-content-${value}`;
+  }
+  __name29(makeContentId, "makeContentId");
+
+  // editor/ui/tabs.jsx
+  var Tabs3 = Tabs;
+  var TabsList3 = (props) => /* @__PURE__ */ k(TabsList, { className: "ui-tabs-list", ...props });
+  var TabsTrigger3 = (props) => /* @__PURE__ */ k(TabsTrigger, { className: "ui-tabs-trigger", ...props });
+  var TabsContent3 = (props) => /* @__PURE__ */ k(TabsContent, { className: "settings-body", ...props });
+
+  // node_modules/@radix-ui/react-switch/dist/index.mjs
+  var __defProp31 = Object.defineProperty;
+  var __name30 = (target, value) => __defProp31(target, "name", { value, configurable: true });
   var SWITCH_NAME = "Switch";
   var [createSwitchContext, createSwitchScope] = createContextScope(SWITCH_NAME);
   var [SwitchProviderImpl, useSwitchContext] = createSwitchContext(SWITCH_NAME);
@@ -27790,10 +29190,10 @@
     };
     return /* @__PURE__ */ u3(SwitchProviderImpl, { scope: __scopeSwitch, ...context, children: isFunction5(internal_do_not_use_render) ? internal_do_not_use_render(context) : children });
   }
-  __name27(SwitchProvider, "SwitchProvider");
-  var TRIGGER_NAME4 = "SwitchTrigger";
+  __name30(SwitchProvider, "SwitchProvider");
+  var TRIGGER_NAME5 = "SwitchTrigger";
   var SwitchTrigger = /* @__PURE__ */ D3(
-    /* @__PURE__ */ __name27(function SwitchTrigger2({ __scopeSwitch, onClick, ...switchProps }, forwardedRef) {
+    /* @__PURE__ */ __name30(function SwitchTrigger2({ __scopeSwitch, onClick, ...switchProps }, forwardedRef) {
       const {
         control,
         form,
@@ -27806,13 +29206,13 @@
         onUserClick,
         isFormControl,
         bubbleInput
-      } = useSwitchContext(TRIGGER_NAME4, __scopeSwitch);
+      } = useSwitchContext(TRIGGER_NAME5, __scopeSwitch);
       const composedRefs = useComposedRefs(forwardedRef, setControl);
       const initialCheckedStateRef = A2(checked);
       h2(() => {
         const associatedForm = form ? control?.ownerDocument.getElementById(form) : control?.form;
         if (associatedForm instanceof HTMLFormElement) {
-          const reset = /* @__PURE__ */ __name27(() => setChecked(initialCheckedStateRef.current), "reset");
+          const reset = /* @__PURE__ */ __name30(() => setChecked(initialCheckedStateRef.current), "reset");
           associatedForm.addEventListener("reset", reset);
           return () => associatedForm.removeEventListener("reset", reset);
         }
@@ -27846,7 +29246,7 @@
   );
   var Switch = /* @__PURE__ */ D3(
     // blank line to reduce diff noise
-    /* @__PURE__ */ __name27(function Switch2(props, forwardedRef) {
+    /* @__PURE__ */ __name30(function Switch2(props, forwardedRef) {
       const {
         __scopeSwitch,
         name,
@@ -27893,7 +29293,7 @@
   );
   var THUMB_NAME2 = "SwitchThumb";
   var SwitchThumb = /* @__PURE__ */ D3(
-    /* @__PURE__ */ __name27(function SwitchThumb2(props, forwardedRef) {
+    /* @__PURE__ */ __name30(function SwitchThumb2(props, forwardedRef) {
       const { __scopeSwitch, ...thumbProps } = props;
       const context = useSwitchContext(THUMB_NAME2, __scopeSwitch);
       return /* @__PURE__ */ u3(
@@ -27910,7 +29310,7 @@
   var BUBBLE_INPUT_NAME4 = "SwitchBubbleInput";
   var SwitchBubbleInput = /* @__PURE__ */ D3(
     // blank line to reduce diff noise
-    /* @__PURE__ */ __name27(function SwitchBubbleInput2({ __scopeSwitch, onClick, ...props }, forwardedRef) {
+    /* @__PURE__ */ __name30(function SwitchBubbleInput2({ __scopeSwitch, onClick, ...props }, forwardedRef) {
       const {
         control,
         userClick,
@@ -28007,25 +29407,25 @@
   function isFunction5(value) {
     return typeof value === "function";
   }
-  __name27(isFunction5, "isFunction");
+  __name30(isFunction5, "isFunction");
   function getState2(checked) {
     return checked ? "checked" : "unchecked";
   }
-  __name27(getState2, "getState");
+  __name30(getState2, "getState");
 
   // editor/ui/switch.jsx
   var Switch3 = (props) => /* @__PURE__ */ k(Switch, { className: "ui-switch", ...props }, /* @__PURE__ */ k(SwitchThumb, { className: "ui-switch-thumb" }));
 
   // node_modules/@radix-ui/react-popover/dist/index.mjs
-  var __defProp29 = Object.defineProperty;
-  var __name28 = (target, value) => __defProp29(target, "name", { value, configurable: true });
+  var __defProp32 = Object.defineProperty;
+  var __name31 = (target, value) => __defProp32(target, "name", { value, configurable: true });
   var POPOVER_NAME = "Popover";
   var [createPopoverContext, createPopoverScope] = createContextScope(POPOVER_NAME, [
     createPopperScope
   ]);
   var usePopperScope3 = createPopperScope();
   var [PopoverProvider, usePopoverContext] = createPopoverContext(POPOVER_NAME);
-  var Popover = /* @__PURE__ */ __name28((props) => {
+  var Popover = /* @__PURE__ */ __name31((props) => {
     const {
       __scopePopover,
       children,
@@ -28068,11 +29468,11 @@
       }
     ) });
   }, "Popover");
-  var TRIGGER_NAME5 = "PopoverTrigger";
+  var TRIGGER_NAME6 = "PopoverTrigger";
   var PopoverTrigger = /* @__PURE__ */ D3(
-    /* @__PURE__ */ __name28(function PopoverTrigger2(props, forwardedRef) {
+    /* @__PURE__ */ __name31(function PopoverTrigger2(props, forwardedRef) {
       const { __scopePopover, ...triggerProps } = props;
-      const context = usePopoverContext(TRIGGER_NAME5, __scopePopover);
+      const context = usePopoverContext(TRIGGER_NAME6, __scopePopover);
       const popperScope = usePopperScope3(__scopePopover);
       const composedTriggerRef = useComposedRefs(forwardedRef, context.triggerRef);
       const trigger = /* @__PURE__ */ u3(
@@ -28095,26 +29495,26 @@
   var [PortalProvider3, usePortalContext3] = createPopoverContext(PORTAL_NAME3, {
     forceMount: void 0
   });
-  var PopoverPortal = /* @__PURE__ */ __name28((props) => {
+  var PopoverPortal = /* @__PURE__ */ __name31((props) => {
     const { __scopePopover, forceMount, children, container } = props;
     const context = usePopoverContext(PORTAL_NAME3, __scopePopover);
     return /* @__PURE__ */ u3(PortalProvider3, { scope: __scopePopover, forceMount, children: /* @__PURE__ */ u3(Presence, { present: forceMount || context.open, children: /* @__PURE__ */ u3(Portal, { asChild: true, container, children }) }) });
   }, "PopoverPortal");
-  var CONTENT_NAME4 = "PopoverContent";
+  var CONTENT_NAME5 = "PopoverContent";
   var PopoverContent = /* @__PURE__ */ D3(
     // blank line to reduce diff noise
-    /* @__PURE__ */ __name28(function PopoverContent2(props, forwardedRef) {
-      const portalContext = usePortalContext3(CONTENT_NAME4, props.__scopePopover);
+    /* @__PURE__ */ __name31(function PopoverContent2(props, forwardedRef) {
+      const portalContext = usePortalContext3(CONTENT_NAME5, props.__scopePopover);
       const { forceMount = portalContext.forceMount, ...contentProps } = props;
-      const context = usePopoverContext(CONTENT_NAME4, props.__scopePopover);
+      const context = usePopoverContext(CONTENT_NAME5, props.__scopePopover);
       return /* @__PURE__ */ u3(Presence, { present: forceMount || context.open, children: context.modal ? /* @__PURE__ */ u3(PopoverContentModal, { ...contentProps, ref: forwardedRef }) : /* @__PURE__ */ u3(PopoverContentNonModal, { ...contentProps, ref: forwardedRef }) });
     }, "PopoverContent")
   );
   var Slot3 = createSlot("PopoverContent.RemoveScroll");
   var PopoverContentModal = /* @__PURE__ */ D3(
     // blank line to reduce diff noise
-    /* @__PURE__ */ __name28(function PopoverContentModal2(props, forwardedRef) {
-      const context = usePopoverContext(CONTENT_NAME4, props.__scopePopover);
+    /* @__PURE__ */ __name31(function PopoverContentModal2(props, forwardedRef) {
+      const context = usePopoverContext(CONTENT_NAME5, props.__scopePopover);
       const contentRef = A2(null);
       const composedRefs = useComposedRefs(forwardedRef, contentRef);
       const isRightClickOutsideRef = A2(false);
@@ -28168,8 +29568,8 @@
   );
   var PopoverContentNonModal = /* @__PURE__ */ D3(
     // blank line to reduce diff noise
-    /* @__PURE__ */ __name28(function PopoverContentNonModal2(props, forwardedRef) {
-      const context = usePopoverContext(CONTENT_NAME4, props.__scopePopover);
+    /* @__PURE__ */ __name31(function PopoverContentNonModal2(props, forwardedRef) {
+      const context = usePopoverContext(CONTENT_NAME5, props.__scopePopover);
       const hasInteractedOutsideRef = A2(false);
       const hasPointerDownOutsideRef = A2(false);
       return /* @__PURE__ */ u3(
@@ -28209,7 +29609,7 @@
   );
   var PopoverContentImpl = /* @__PURE__ */ D3(
     // blank line to reduce diff noise
-    /* @__PURE__ */ __name28(function PopoverContentImpl2(props, forwardedRef) {
+    /* @__PURE__ */ __name31(function PopoverContentImpl2(props, forwardedRef) {
       const {
         __scopePopover,
         trapFocus,
@@ -28225,7 +29625,7 @@
         branchRegistry,
         ...contentProps
       } = props;
-      const context = usePopoverContext(CONTENT_NAME4, __scopePopover);
+      const context = usePopoverContext(CONTENT_NAME5, __scopePopover);
       const popperScope = usePopperScope3(__scopePopover);
       const [contentNode, setContentNode] = d2(null);
       const composedRefs = useComposedRefs(forwardedRef, setContentNode);
@@ -28282,7 +29682,7 @@
     }, "PopoverContentImpl")
   );
   var PopoverArrow = /* @__PURE__ */ D3(
-    /* @__PURE__ */ __name28(function PopoverArrow2(props, forwardedRef) {
+    /* @__PURE__ */ __name31(function PopoverArrow2(props, forwardedRef) {
       const { __scopePopover, ...arrowProps } = props;
       const popperScope = usePopperScope3(__scopePopover);
       return /* @__PURE__ */ u3(PopperArrow, { ...popperScope, ...arrowProps, ref: forwardedRef });
@@ -28291,7 +29691,7 @@
   function getState3(open) {
     return open ? "open" : "closed";
   }
-  __name28(getState3, "getState");
+  __name31(getState3, "getState");
   function concatAriaDescribedby3(...values) {
     const ids = /* @__PURE__ */ new Set();
     for (const value of values) {
@@ -28302,7 +29702,7 @@
     }
     return ids.size > 0 ? Array.from(ids).join(" ") : void 0;
   }
-  __name28(concatAriaDescribedby3, "concatAriaDescribedby");
+  __name31(concatAriaDescribedby3, "concatAriaDescribedby");
 
   // editor/ui/popover.jsx
   function Popover2({ trigger, children, open, onOpenChange, label }) {
@@ -28321,464 +29721,7 @@
     } }, options.map((o3) => /* @__PURE__ */ k(Button, { key: String(o3.value ?? o3), size: "sm", "aria-pressed": String(value) === String(o3.value ?? o3), onClick: () => onValueChange(o3.value ?? o3) }, o3.label ?? String(o3))));
   }
 
-  // node_modules/@radix-ui/react-use-is-hydrated/dist/index.mjs
-  var __defProp30 = Object.defineProperty;
-  var __name29 = (target, value) => __defProp30(target, "name", { value, configurable: true });
-  var _isHydrated = false;
-  function useIsHydrated() {
-    const [isHydrated, setIsHydrated] = d2(_isHydrated);
-    h2(() => {
-      if (!_isHydrated) {
-        _isHydrated = true;
-        setIsHydrated(true);
-      }
-    }, []);
-    return isHydrated;
-  }
-  __name29(useIsHydrated, "useIsHydrated");
-  var useReactSyncExternalStore = compat_module_exports[" useSyncExternalStore ".trim().toString()];
-  function subscribe() {
-    return () => {
-    };
-  }
-  __name29(subscribe, "subscribe");
-  function useIsHydratedModern() {
-    return useReactSyncExternalStore(
-      subscribe,
-      () => true,
-      () => false
-    );
-  }
-  __name29(useIsHydratedModern, "useIsHydratedModern");
-  var useIsHydrated2 = typeof useReactSyncExternalStore === "function" ? useIsHydratedModern : useIsHydrated;
-
-  // node_modules/@radix-ui/react-roving-focus/dist/index.mjs
-  var __defProp31 = Object.defineProperty;
-  var __name30 = (target, value) => __defProp31(target, "name", { value, configurable: true });
-  var ENTRY_FOCUS = "rovingFocusGroup.onEntryFocus";
-  var EVENT_OPTIONS2 = { bubbles: false, cancelable: true };
-  var GROUP_NAME2 = "RovingFocusGroup";
-  var [Collection3, useCollection3, createCollectionScope3] = createCollection(GROUP_NAME2);
-  var [createRovingFocusGroupContext, createRovingFocusGroupScope] = createContextScope(
-    GROUP_NAME2,
-    [createCollectionScope3]
-  );
-  var Orientation2 = {
-    Vertical: "vertical",
-    Horizontal: "horizontal"
-  };
-  var Direction4 = {
-    LTR: "ltr",
-    RTL: "rtl"
-  };
-  var [RovingFocusProvider, useRovingFocusContext] = createRovingFocusGroupContext(GROUP_NAME2);
-  var RovingFocusGroup = /* @__PURE__ */ D3(
-    // blank line to reduce diff noise
-    /* @__PURE__ */ __name30(function RovingFocusGroup2(props, forwardedRef) {
-      return /* @__PURE__ */ u3(Collection3.Provider, { scope: props.__scopeRovingFocusGroup, children: /* @__PURE__ */ u3(Collection3.Slot, { scope: props.__scopeRovingFocusGroup, children: /* @__PURE__ */ u3(RovingFocusGroupImpl, { ...props, ref: forwardedRef }) }) });
-    }, "RovingFocusGroup")
-  );
-  var RovingFocusGroupImpl = /* @__PURE__ */ D3(/* @__PURE__ */ __name30(function RovingFocusGroupImpl2(props, forwardedRef) {
-    const {
-      __scopeRovingFocusGroup,
-      orientation,
-      loop = false,
-      dir,
-      currentTabStopId: currentTabStopIdProp,
-      defaultCurrentTabStopId,
-      onCurrentTabStopIdChange,
-      onEntryFocus,
-      preventScrollOnEntryFocus = false,
-      ...groupProps
-    } = props;
-    const ref = A2(null);
-    const composedRefs = useComposedRefs(forwardedRef, ref);
-    const direction = useDirection(dir);
-    const [currentTabStopId, setCurrentTabStopId] = useControllableState({
-      prop: currentTabStopIdProp,
-      defaultProp: defaultCurrentTabStopId ?? null,
-      onChange: onCurrentTabStopIdChange,
-      caller: GROUP_NAME2
-    });
-    const [isTabbingBackOut, setIsTabbingBackOut] = d2(false);
-    const handleEntryFocus = useCallbackRef(onEntryFocus);
-    const getItems = useCollection3(__scopeRovingFocusGroup);
-    const isClickFocusRef = A2(false);
-    const [focusableItemsCount, setFocusableItemsCount] = d2(0);
-    h2(() => {
-      const node = ref.current;
-      if (node) {
-        node.addEventListener(ENTRY_FOCUS, handleEntryFocus);
-        return () => node.removeEventListener(ENTRY_FOCUS, handleEntryFocus);
-      }
-    }, [handleEntryFocus]);
-    return /* @__PURE__ */ u3(
-      RovingFocusProvider,
-      {
-        scope: __scopeRovingFocusGroup,
-        orientation,
-        dir: direction,
-        loop,
-        currentTabStopId,
-        onItemFocus: q2(
-          (tabStopId) => setCurrentTabStopId(tabStopId),
-          [setCurrentTabStopId]
-        ),
-        onItemShiftTab: q2(() => setIsTabbingBackOut(true), []),
-        onFocusableItemAdd: q2(
-          () => setFocusableItemsCount((prevCount) => prevCount + 1),
-          []
-        ),
-        onFocusableItemRemove: q2(
-          () => setFocusableItemsCount((prevCount) => prevCount - 1),
-          []
-        ),
-        children: /* @__PURE__ */ u3(
-          Primitive.div,
-          {
-            tabIndex: isTabbingBackOut || focusableItemsCount === 0 ? -1 : 0,
-            "data-orientation": orientation,
-            ...groupProps,
-            ref: composedRefs,
-            style: { outline: "none", ...props.style },
-            onMouseDown: composeEventHandlers(props.onMouseDown, () => {
-              isClickFocusRef.current = true;
-            }),
-            onFocus: composeEventHandlers(props.onFocus, (event) => {
-              const isKeyboardFocus = !isClickFocusRef.current;
-              if (event.target === event.currentTarget && isKeyboardFocus && !isTabbingBackOut) {
-                const entryFocusEvent = new CustomEvent(ENTRY_FOCUS, EVENT_OPTIONS2);
-                event.currentTarget.dispatchEvent(entryFocusEvent);
-                if (!entryFocusEvent.defaultPrevented) {
-                  const items = getItems().filter((item) => item.focusable);
-                  const activeItem = items.find((item) => item.active);
-                  const currentItem = items.find((item) => item.id === currentTabStopId);
-                  const candidateItems = [activeItem, currentItem, ...items].filter(
-                    Boolean
-                  );
-                  const candidateNodes = candidateItems.map((item) => item.ref.current);
-                  focusFirst2(candidateNodes, preventScrollOnEntryFocus);
-                }
-              }
-              isClickFocusRef.current = false;
-            }),
-            onBlur: composeEventHandlers(props.onBlur, () => setIsTabbingBackOut(false))
-          }
-        )
-      }
-    );
-  }, "RovingFocusGroupImpl"));
-  var ITEM_NAME2 = "RovingFocusGroupItem";
-  var RovingFocusGroupItem = /* @__PURE__ */ D3(
-    // blank line to reduce diff noise
-    /* @__PURE__ */ __name30(function RovingFocusGroupItem2(props, forwardedRef) {
-      const {
-        __scopeRovingFocusGroup,
-        focusable = true,
-        active = false,
-        tabStopId,
-        children,
-        ...itemProps
-      } = props;
-      const autoId = useId();
-      const id = tabStopId || autoId;
-      const context = useRovingFocusContext(ITEM_NAME2, __scopeRovingFocusGroup);
-      const isCurrentTabStop = context.currentTabStopId === id;
-      const getItems = useCollection3(__scopeRovingFocusGroup);
-      const { onFocusableItemAdd, onFocusableItemRemove, currentTabStopId } = context;
-      const isHydrated = useIsHydrated2();
-      useLayoutEffect2(() => {
-        if (!isHydrated || !focusable) {
-          return;
-        }
-        onFocusableItemAdd();
-        return () => onFocusableItemRemove();
-      }, [isHydrated, focusable, onFocusableItemAdd, onFocusableItemRemove]);
-      h2(() => {
-        if (isHydrated || !focusable) {
-          return;
-        }
-        onFocusableItemAdd();
-        return () => onFocusableItemRemove();
-      }, [isHydrated, focusable, onFocusableItemAdd, onFocusableItemRemove]);
-      return /* @__PURE__ */ u3(
-        Collection3.ItemSlot,
-        {
-          scope: __scopeRovingFocusGroup,
-          id,
-          focusable,
-          active,
-          children: /* @__PURE__ */ u3(
-            Primitive.span,
-            {
-              tabIndex: isCurrentTabStop ? 0 : -1,
-              "data-orientation": context.orientation,
-              ...itemProps,
-              ref: forwardedRef,
-              onMouseDown: composeEventHandlers(props.onMouseDown, (event) => {
-                if (!focusable) event.preventDefault();
-                else context.onItemFocus(id);
-              }),
-              onFocus: composeEventHandlers(props.onFocus, () => context.onItemFocus(id)),
-              onKeyDown: composeEventHandlers(props.onKeyDown, (event) => {
-                if (event.key === "Tab" && event.shiftKey) {
-                  context.onItemShiftTab();
-                  return;
-                }
-                if (event.target !== event.currentTarget) return;
-                const focusIntent = getFocusIntent(event, context.orientation, context.dir);
-                if (focusIntent !== void 0) {
-                  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-                  event.preventDefault();
-                  const items = getItems().filter((item) => item.focusable);
-                  let candidateNodes = items.map((item) => item.ref.current);
-                  if (focusIntent === "last") candidateNodes.reverse();
-                  else if (focusIntent === "prev" || focusIntent === "next") {
-                    if (focusIntent === "prev") candidateNodes.reverse();
-                    const currentIndex = candidateNodes.indexOf(event.currentTarget);
-                    candidateNodes = context.loop ? wrapArray2(candidateNodes, currentIndex + 1) : candidateNodes.slice(currentIndex + 1);
-                  }
-                  setTimeout(() => focusFirst2(candidateNodes));
-                }
-              }),
-              children: typeof children === "function" ? children({ isCurrentTabStop, hasTabStop: currentTabStopId != null }) : children
-            }
-          )
-        }
-      );
-    }, "RovingFocusGroupItem")
-  );
-  var MAP_KEY_TO_FOCUS_INTENT = {
-    ArrowLeft: "prev",
-    ArrowUp: "prev",
-    ArrowRight: "next",
-    ArrowDown: "next",
-    PageUp: "first",
-    Home: "first",
-    PageDown: "last",
-    End: "last"
-  };
-  function getDirectionAwareKey(key, dir) {
-    if (dir !== Direction4.RTL) return key;
-    return key === "ArrowLeft" ? "ArrowRight" : key === "ArrowRight" ? "ArrowLeft" : key;
-  }
-  __name30(getDirectionAwareKey, "getDirectionAwareKey");
-  function getFocusIntent(event, orientation, dir) {
-    const key = getDirectionAwareKey(event.key, dir);
-    if (orientation === Orientation2.Vertical && ["ArrowLeft", "ArrowRight"].includes(key)) {
-      return void 0;
-    }
-    if (orientation === Orientation2.Horizontal && ["ArrowUp", "ArrowDown"].includes(key)) {
-      return void 0;
-    }
-    return MAP_KEY_TO_FOCUS_INTENT[key];
-  }
-  __name30(getFocusIntent, "getFocusIntent");
-  function focusFirst2(candidates, preventScroll = false) {
-    const PREVIOUSLY_FOCUSED_ELEMENT = document.activeElement;
-    for (const candidate of candidates) {
-      if (candidate === PREVIOUSLY_FOCUSED_ELEMENT) return;
-      candidate.focus({ preventScroll });
-      if (document.activeElement !== PREVIOUSLY_FOCUSED_ELEMENT) return;
-    }
-  }
-  __name30(focusFirst2, "focusFirst");
-  function wrapArray2(array, startIndex) {
-    return array.map((_3, index2) => array[(startIndex + index2) % array.length]);
-  }
-  __name30(wrapArray2, "wrapArray");
-
-  // node_modules/@radix-ui/react-tabs/dist/index.mjs
-  var __defProp32 = Object.defineProperty;
-  var __name31 = (target, value) => __defProp32(target, "name", { value, configurable: true });
-  var ActivationMode = {
-    Automatic: "automatic",
-    Manual: "manual"
-  };
-  var TABS_NAME = "Tabs";
-  var [createTabsContext, createTabsScope] = createContextScope(TABS_NAME, [
-    createRovingFocusGroupScope
-  ]);
-  var useRovingFocusGroupScope = createRovingFocusGroupScope();
-  var [TabsProvider, useTabsContext] = createTabsContext(TABS_NAME);
-  var Tabs = /* @__PURE__ */ D3(
-    // blank line to reduce diff noise
-    /* @__PURE__ */ __name31(function Tabs2(props, forwardedRef) {
-      const {
-        __scopeTabs,
-        value: valueProp,
-        onValueChange,
-        defaultValue,
-        orientation = "horizontal",
-        dir,
-        activationMode = ActivationMode.Automatic,
-        ...tabsProps
-      } = props;
-      const direction = useDirection(dir);
-      const [value, setValue] = useControllableState({
-        prop: valueProp,
-        onChange: onValueChange,
-        defaultProp: defaultValue ?? "",
-        caller: TABS_NAME
-      });
-      return /* @__PURE__ */ u3(
-        TabsProvider,
-        {
-          scope: __scopeTabs,
-          baseId: useId(),
-          value,
-          onValueChange: setValue,
-          orientation,
-          dir: direction,
-          activationMode,
-          children: /* @__PURE__ */ u3(
-            Primitive.div,
-            {
-              dir: direction,
-              "data-orientation": orientation,
-              ...tabsProps,
-              ref: forwardedRef
-            }
-          )
-        }
-      );
-    }, "Tabs")
-  );
-  var TAB_LIST_NAME = "TabsList";
-  var TabsList = /* @__PURE__ */ D3(
-    // blank line to reduce diff noise
-    /* @__PURE__ */ __name31(function TabsList2(props, forwardedRef) {
-      const { __scopeTabs, loop = true, ...listProps } = props;
-      const context = useTabsContext(TAB_LIST_NAME, __scopeTabs);
-      const rovingFocusGroupScope = useRovingFocusGroupScope(__scopeTabs);
-      return /* @__PURE__ */ u3(
-        RovingFocusGroup,
-        {
-          asChild: true,
-          ...rovingFocusGroupScope,
-          orientation: context.orientation,
-          dir: context.dir,
-          loop,
-          children: /* @__PURE__ */ u3(
-            Primitive.div,
-            {
-              role: "tablist",
-              "aria-orientation": context.orientation,
-              ...listProps,
-              ref: forwardedRef
-            }
-          )
-        }
-      );
-    }, "TabsList")
-  );
-  var TRIGGER_NAME6 = "TabsTrigger";
-  var TabsTrigger = /* @__PURE__ */ D3(
-    /* @__PURE__ */ __name31(function TabsTrigger2(props, forwardedRef) {
-      const { __scopeTabs, value, disabled = false, ...triggerProps } = props;
-      const context = useTabsContext(TRIGGER_NAME6, __scopeTabs);
-      const rovingFocusGroupScope = useRovingFocusGroupScope(__scopeTabs);
-      const triggerId = makeTriggerId(context.baseId, value);
-      const contentId = makeContentId(context.baseId, value);
-      const isSelected = value === context.value;
-      return /* @__PURE__ */ u3(
-        RovingFocusGroupItem,
-        {
-          asChild: true,
-          ...rovingFocusGroupScope,
-          focusable: !disabled,
-          active: isSelected,
-          children: /* @__PURE__ */ u3(
-            Primitive.button,
-            {
-              type: "button",
-              role: "tab",
-              "aria-selected": isSelected,
-              "aria-controls": contentId,
-              "data-state": isSelected ? "active" : "inactive",
-              "data-disabled": disabled ? "" : void 0,
-              disabled,
-              id: triggerId,
-              ...triggerProps,
-              ref: forwardedRef,
-              onMouseDown: composeEventHandlers(props.onMouseDown, (event) => {
-                if (!disabled && event.button === 0 && event.ctrlKey === false) {
-                  event.currentTarget.focus();
-                  context.onValueChange(value);
-                } else {
-                  event.preventDefault();
-                }
-              }),
-              onKeyDown: composeEventHandlers(props.onKeyDown, (event) => {
-                if (disabled || event.target !== event.currentTarget) {
-                  return;
-                }
-                if ([" ", "Enter"].includes(event.key)) {
-                  context.onValueChange(value);
-                }
-              }),
-              onFocus: composeEventHandlers(props.onFocus, () => {
-                const isAutomaticActivation = context.activationMode !== ActivationMode.Manual;
-                if (!isSelected && !disabled && isAutomaticActivation) {
-                  context.onValueChange(value);
-                }
-              })
-            }
-          )
-        }
-      );
-    }, "TabsTrigger")
-  );
-  var CONTENT_NAME5 = "TabsContent";
-  var TabsContent = /* @__PURE__ */ D3(
-    /* @__PURE__ */ __name31(function TabsContent2(props, forwardedRef) {
-      const { __scopeTabs, value, forceMount, children, ...contentProps } = props;
-      const context = useTabsContext(CONTENT_NAME5, __scopeTabs);
-      const triggerId = makeTriggerId(context.baseId, value);
-      const contentId = makeContentId(context.baseId, value);
-      const isSelected = value === context.value;
-      const isMountAnimationPreventedRef = A2(isSelected);
-      h2(() => {
-        const rAF = requestAnimationFrame(() => isMountAnimationPreventedRef.current = false);
-        return () => cancelAnimationFrame(rAF);
-      }, []);
-      return /* @__PURE__ */ u3(Presence, { present: forceMount || isSelected, children: ({ present }) => /* @__PURE__ */ u3(
-        Primitive.div,
-        {
-          "data-state": isSelected ? "active" : "inactive",
-          "data-orientation": context.orientation,
-          role: "tabpanel",
-          "aria-labelledby": triggerId,
-          hidden: !present,
-          id: contentId,
-          tabIndex: 0,
-          ...contentProps,
-          ref: forwardedRef,
-          style: {
-            ...props.style,
-            animationDuration: isMountAnimationPreventedRef.current ? "0s" : void 0
-          },
-          children: present && children
-        }
-      ) });
-    }, "TabsContent")
-  );
-  function makeTriggerId(baseId, value) {
-    return `${baseId}-trigger-${value}`;
-  }
-  __name31(makeTriggerId, "makeTriggerId");
-  function makeContentId(baseId, value) {
-    return `${baseId}-content-${value}`;
-  }
-  __name31(makeContentId, "makeContentId");
-
-  // editor/ui/tabs.jsx
-  var Tabs3 = Tabs;
-  var TabsList3 = (props) => /* @__PURE__ */ k(TabsList, { className: "ui-tabs-list", ...props });
-  var TabsTrigger3 = (props) => /* @__PURE__ */ k(TabsTrigger, { className: "ui-tabs-trigger", ...props });
-  var TabsContent3 = (props) => /* @__PURE__ */ k(TabsContent, { className: "settings-body", ...props });
-
-  // editor/Settings.jsx
+  // editor/SettingField.jsx
   function Color({ value, onChange, label, id, invalid }) {
     return /* @__PURE__ */ k(Popover2, { label: `${label} colour`, trigger: /* @__PURE__ */ k(Button, { class: "colour-swatch", id, "aria-label": label }, /* @__PURE__ */ k("span", { style: { background: value ?? "transparent" } }), value ?? "None") }, /* @__PURE__ */ k("div", { class: "colour-editor" }, /* @__PURE__ */ k(Input2, { type: "color", "aria-label": `${label} picker`, value: /^#[\da-f]{6}$/i.test(value) ? value : "#000000", onInput: (e3) => onChange(e3.currentTarget.value) }), /* @__PURE__ */ k(Input2, { "aria-label": `${label} hex`, "aria-invalid": invalid || void 0, type: "text", value: value ?? "", onInput: (e3) => onChange(e3.currentTarget.value || null) })));
   }
@@ -28820,23 +29763,737 @@
       }
     );
   }
-  function Settings({ state, store }) {
-    const [query, setQuery] = d2(""), [tab, setTab] = d2("look");
-    const groups = groupSettings(SETTINGS, query), names = Object.keys(groups), active = groups[tab] ? tab : names[0];
-    const values = compositionPaths(state.composition), defaults = compositionPaths({});
-    const tabNames = { look: "Look", cursor: "Cursor", zoom: "Zoom", captions: "Captions", cards: "Intro & outro", output: "Size & quality" };
-    const ordered = ["look", "cursor", "zoom", "captions", "cards", "output"].filter((name) => names.includes(name));
-    const change = (path, value) => store.change(path, value);
-    function field(s3) {
-      const errors = errorsForPath(state.errors, s3.path), id = `setting-${s3.path}`;
-      return /* @__PURE__ */ k("div", { class: "setting", key: s3.path }, /* @__PURE__ */ k("div", { class: "setting-label" }, /* @__PURE__ */ k(Label3, { for: id, title: s3.help }, s3.label), JSON.stringify(values[s3.path]) !== JSON.stringify(defaults[s3.path]) && /* @__PURE__ */ k(Tooltip2, { text: "Reset to default" }, /* @__PURE__ */ k(Button, { size: "icon", class: "reset", "aria-label": `Reset ${s3.label}`, onClick: () => store.change(s3.path, void 0, { reset: true }) }, /* @__PURE__ */ k(RotateCcw, { size: 14, "aria-hidden": "true" })))), /* @__PURE__ */ k(Control, { setting: s3, value: values[s3.path], onChange: (value) => change(s3.path, value), values, change, invalid: !!errors.length }), /* @__PURE__ */ k("p", { class: "setting-help" }, s3.help), !!errors.length && /* @__PURE__ */ k("p", { class: "error", id: `${id}-error` }, errors.join("\n")));
+  function SettingField({ setting: s3, values, defaults, state, store, render, extra, help = s3.help }) {
+    const errors = errorsForPath(state.errors, s3.path), id = `setting-${s3.path}`, change = (path, value) => store.change(path, value);
+    return /* @__PURE__ */ k("div", { class: "setting", key: s3.path }, /* @__PURE__ */ k("div", { class: "setting-label" }, /* @__PURE__ */ k(Label3, { for: id, title: s3.help }, s3.label), JSON.stringify(values[s3.path]) !== JSON.stringify(defaults[s3.path]) && /* @__PURE__ */ k(Tooltip2, { text: "Reset to default" }, /* @__PURE__ */ k(Button, { size: "icon", class: "reset", "aria-label": `Reset ${s3.label}`, onClick: () => store.change(s3.path, void 0, { reset: true }) }, /* @__PURE__ */ k(RotateCcw, { size: 14, "aria-hidden": "true" })))), render ? render({ id, value: values[s3.path], onChange: (value) => change(s3.path, value), invalid: !!errors.length }) : /* @__PURE__ */ k(Control, { setting: s3, value: values[s3.path], onChange: (value) => change(s3.path, value), values, change, invalid: !!errors.length }), /* @__PURE__ */ k("p", { class: "setting-help" }, help), extra, !!errors.length && /* @__PURE__ */ k("p", { class: "error", id: `${id}-error` }, errors.join("\n")));
+  }
+
+  // editor/ui/badge.jsx
+  var Badge = ({ class: klass, className, ...props }) => /* @__PURE__ */ k("span", { className: ["ui-badge", klass, className].filter(Boolean).join(" "), ...props });
+
+  // editor/audio-wav.js
+  var WAV_RATE = 48e3;
+  var MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
+  function encodeWav16(channels, sampleRate = WAV_RATE) {
+    const list = channels instanceof Float32Array ? [channels] : channels;
+    if (!list?.length || list.length > 2 || !list.every((c3) => c3 instanceof Float32Array && c3.length === list[0].length)) throw new Error("Audio must be one or two Float32Array channels of equal length.");
+    if (!Number.isInteger(sampleRate) || sampleRate < 1e3 || sampleRate > 384e3) throw new Error("The sample rate must be a whole number from 1000 to 384000.");
+    const frames = list[0].length, count3 = list.length, dataBytes = frames * count3 * 2;
+    if (!frames) throw new Error("There is no audio to save.");
+    if (dataBytes + 44 > 4294967295) throw new Error("The audio is too long for a WAV file.");
+    const bytes = new Uint8Array(44 + dataBytes), view = new DataView(bytes.buffer);
+    const tag = (offset5, text) => {
+      for (let i3 = 0; i3 < 4; i3++) view.setUint8(offset5 + i3, text.charCodeAt(i3));
+    };
+    tag(0, "RIFF");
+    view.setUint32(4, 36 + dataBytes, true);
+    tag(8, "WAVE");
+    tag(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, count3, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * count3 * 2, true);
+    view.setUint16(32, count3 * 2, true);
+    view.setUint16(34, 16, true);
+    tag(36, "data");
+    view.setUint32(40, dataBytes, true);
+    let offset4 = 44;
+    for (let i3 = 0; i3 < frames; i3++) for (let c3 = 0; c3 < count3; c3++) {
+      const x4 = list[c3][i3];
+      view.setInt16(offset4, Number.isFinite(x4) ? Math.max(-32768, Math.min(32767, Math.round(x4 * 32768))) : 0, true);
+      offset4 += 2;
     }
+    return bytes;
+  }
+  async function convertToWav(arrayBuffer, { sampleRate = WAV_RATE } = {}) {
+    if (!arrayBuffer?.byteLength) throw new Error("The recording is empty.");
+    let decoded;
+    try {
+      decoded = await new OfflineAudioContext(1, 1, sampleRate).decodeAudioData(arrayBuffer.slice(0));
+    } catch {
+      throw new Error("This browser cannot read that audio. Try a WAV or MP3 file.");
+    }
+    if (!(decoded.duration > 0)) throw new Error("The audio file contains no sound.");
+    const frames = Math.max(1, Math.ceil(decoded.duration * sampleRate)), context = new OfflineAudioContext(1, frames, sampleRate), source = context.createBufferSource();
+    source.buffer = decoded;
+    source.connect(context.destination);
+    source.start();
+    const rendered = await context.startRendering();
+    return { wav: encodeWav16([Float32Array.from(rendered.getChannelData(0))], sampleRate), durationSec: rendered.duration };
+  }
+  function levelFromBytes(bytes) {
+    if (!bytes?.length) return 0;
+    let peak = 0;
+    for (let i3 = 0; i3 < bytes.length; i3++) peak = Math.max(peak, Math.abs(bytes[i3] - 128));
+    return Math.min(1, peak / 128);
+  }
+
+  // scripts/lib/voice/narration.mjs
+  var SPEED_MIN = 0.7;
+  var SPEED_MAX = 1.3;
+  var MAX_NARRATION_CHARS = 280;
+  var clampVoiceSpeed = (speed) => Number.isFinite(speed) ? Math.min(SPEED_MAX, Math.max(SPEED_MIN, speed)) : 1;
+  var stepName = (step) => step?.name ?? step?.title ?? step?.caption ?? step?.id ?? "Step";
+  function effectiveNarration(step, composition) {
+    const own = composition?.audio?.narration?.steps?.[step?.id]?.text;
+    const text = typeof own === "string" && own.trim() ? own : step?.narration;
+    return typeof text === "string" && text.trim() ? text : null;
+  }
+
+  // editor/voice-status.mjs
+  var firstWords = (text, count3 = 4) => {
+    const words = String(text ?? "").trim().split(/\s+/).filter(Boolean);
+    return words.length > count3 ? `${words.slice(0, count3).join(" ")}\u2026` : words.join(" ");
+  };
+  function voiceStatus({ text, entry, muted = false, voice, speed }) {
+    if (muted) return "muted";
+    if (entry && (entry.source === "own" || entry.source === "file")) return entry.source;
+    if (!text) return "none";
+    if (!entry) return "missing";
+    return entry.text === text && entry.voice === voice && Number(entry.speed) === clampVoiceSpeed(speed) ? "fresh" : "stale";
+  }
+  var STATUS_LABELS = { fresh: "Ready", stale: "Needs update", missing: "Not generated", own: "Your recording", file: "Imported file", muted: "Muted", none: "No narration" };
+  var STATUS_HELP = {
+    fresh: "The voice-over matches the words, voice and speed.",
+    stale: "The words, voice or speed changed since this voice-over was made.",
+    missing: "No voice-over has been made for this step yet.",
+    own: "Your own recording is used for this step.",
+    file: "An imported audio file is used for this step.",
+    muted: "This step is silent.",
+    none: "Write narration for this step to give it a voice-over."
+  };
+  function scriptRows({ storyboard, composition, clips, voice, speed }) {
+    return (storyboard?.steps ?? []).map((step) => {
+      const text = effectiveNarration(step, composition), key = clips?.steps?.[step.id], entry = key ? clips?.clips?.[key] ?? null : null;
+      const muted = composition?.audio?.narration?.steps?.[step.id]?.muted === true;
+      const status = voiceStatus({ text, entry, muted, voice, speed });
+      return {
+        id: step.id,
+        name: stepName(step),
+        text,
+        written: step.narration ?? null,
+        edited: typeof composition?.audio?.narration?.steps?.[step.id]?.text === "string",
+        status,
+        label: STATUS_LABELS[status],
+        clipKey: entry ? key : null,
+        durationSec: entry?.durationSec ?? null,
+        source: entry?.source ?? null,
+        muted
+      };
+    });
+  }
+  var needsGenerating = (rows) => rows.filter((row) => row.status === "missing" || row.status === "stale");
+  function voiceSummary(rows) {
+    const wanted = rows.filter((row) => row.status !== "none" && row.status !== "muted");
+    const ready = wanted.filter((row) => ["fresh", "own", "file"].includes(row.status));
+    return { ready: ready.length, total: wanted.length, missing: needsGenerating(rows).length };
+  }
+  var LANGUAGES = { "en-us": "English (US)", "en-gb": "English (UK)", ja: "Japanese", zh: "Chinese", es: "Spanish", fr: "French", hi: "Hindi", it: "Italian", "pt-br": "Portuguese (Brazil)" };
+  var languageLabel = (code) => LANGUAGES[String(code).toLowerCase()] ?? (code && code !== "unknown" ? String(code).toUpperCase() : "Other");
+  var voiceLabel = (voice) => `${voice.name}${voice.gender && voice.gender !== "unknown" ? ` \xB7 ${voice.gender}` : ""}${voice.grade ? ` \xB7 quality ${voice.grade}` : ""}`;
+  function groupVoices(voices) {
+    const groups = [];
+    for (const voice of voices ?? []) {
+      const label = languageLabel(voice.language);
+      let group = groups.find((g4) => g4.label === label);
+      if (!group) groups.push(group = { label, voices: [] });
+      group.voices.push({ id: voice.id, label: voiceLabel(voice) });
+    }
+    return groups;
+  }
+  var INSTALL_COMMAND = "showreel voice install --yes";
+  function formatDuration(seconds2) {
+    if (!Number.isFinite(seconds2)) return "";
+    return seconds2 < 60 ? `${seconds2.toFixed(1)} s` : `${Math.floor(seconds2 / 60)}:${String(Math.round(seconds2 % 60)).padStart(2, "0")}`;
+  }
+  var loudnessText = (measured) => Number.isFinite(measured?.integratedLufs) ? `${measured.integratedLufs.toFixed(1)} LUFS, true peak ${Number.isFinite(measured.truePeakDb) ? measured.truePeakDb.toFixed(1) : "?"} dBTP` : null;
+  var baseName = (file) => String(file ?? "").split("/").pop();
+  function narrationSteps(composition, stepId, patch) {
+    const steps = { ...composition?.audio?.narration?.steps ?? {} }, entry = { ...steps[stepId] ?? {} };
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === void 0 || value === false || key === "text" && !String(value).trim()) delete entry[key];
+      else entry[key] = key === "text" ? String(value).slice(0, MAX_NARRATION_CHARS) : value;
+    }
+    if (Object.keys(entry).length) steps[stepId] = entry;
+    else delete steps[stepId];
+    return steps;
+  }
+  var MUSIC_PANEL_PATHS = {
+    music: ["audio.music.enabled", "audio.music.file", "audio.music.gainDb", "audio.music.loop", "audio.music.fadeInSec", "audio.music.fadeOutSec"],
+    ducking: ["audio.music.duck.enabled", "audio.music.duck.depthDb"],
+    advanced: ["audio.music.duck.attackMs", "audio.music.duck.releaseMs"],
+    loudness: ["audio.loudness.enabled", "audio.loudness.targetLufs", "audio.loudness.truePeakDb"]
+  };
+
+  // editor/Recorder.jsx
+  var MAX_SECONDS = 600;
+  function microphoneMessage(error) {
+    const name = error?.name;
+    if (name === "NotAllowedError" || name === "SecurityError") return "Microphone access is blocked. Allow the microphone for this page in your browser\u2019s site settings, then try again.";
+    if (name === "NotFoundError" || name === "OverconstrainedError") return "No microphone was found. Connect one and try again.";
+    if (name === "NotReadableError" || name === "AbortError") return "The microphone could not be opened. Another app may be using it.";
+    return error?.message || "The microphone could not be started.";
+  }
+  var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  function Recorder({ stepName: stepName2, onSave, onClose }) {
+    const [phase, setPhase] = d2("idle"), [countdown, setCountdown] = d2(true), [count3, setCount] = d2(0);
+    const [level, setLevel] = d2(0), [seconds2, setSeconds] = d2(0), [error, setError] = d2(""), [url, setUrl] = d2("");
+    const live = A2({ token: 0 }), blob = A2(null);
+    function release() {
+      const l3 = live.current;
+      l3.token++;
+      cancelAnimationFrame(l3.raf);
+      clearInterval(l3.timer);
+      if (l3.recorder && l3.recorder.state !== "inactive") {
+        l3.recorder.onstop = null;
+        try {
+          l3.recorder.stop();
+        } catch {
+        }
+      }
+      l3.stream?.getTracks().forEach((track) => track.stop());
+      l3.context?.close?.().catch(() => {
+      });
+      live.current = { token: l3.token };
+    }
+    h2(() => () => {
+      release();
+    }, []);
+    h2(() => () => {
+      if (url) URL.revokeObjectURL(url);
+    }, [url]);
+    async function begin() {
+      setError("");
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+        setError("This browser cannot record audio here. Import an audio file instead.");
+        return;
+      }
+      release();
+      const l3 = live.current, token = l3.token;
+      setPhase("requesting");
+      try {
+        l3.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      } catch (e3) {
+        if (live.current === l3) {
+          setError(microphoneMessage(e3));
+          setPhase("idle");
+        }
+        return;
+      }
+      if (live.current !== l3 || l3.token !== token) {
+        l3.stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      try {
+        l3.context = new AudioContext();
+        const analyser = l3.context.createAnalyser();
+        analyser.fftSize = 512;
+        l3.context.createMediaStreamSource(l3.stream).connect(analyser);
+        const data = new Uint8Array(analyser.fftSize);
+        const meter = () => {
+          analyser.getByteTimeDomainData(data);
+          setLevel(levelFromBytes(data));
+          l3.raf = requestAnimationFrame(meter);
+        };
+        meter();
+      } catch {
+      }
+      if (countdown) {
+        setPhase("countdown");
+        for (const n2 of [3, 2, 1]) {
+          setCount(n2);
+          await sleep(1e3);
+          if (live.current !== l3) return;
+        }
+      }
+      const chunks = [];
+      try {
+        l3.recorder = new MediaRecorder(l3.stream);
+      } catch (e3) {
+        setError(microphoneMessage(e3));
+        setPhase("idle");
+        release();
+        return;
+      }
+      l3.recorder.ondataavailable = (e3) => {
+        if (e3.data?.size) chunks.push(e3.data);
+      };
+      l3.recorder.onstop = () => {
+        blob.current = new Blob(chunks, { type: l3.recorder.mimeType || "audio/webm" });
+        setUrl(URL.createObjectURL(blob.current));
+        setPhase("review");
+        setLevel(0);
+        l3.stream?.getTracks().forEach((track) => track.stop());
+        cancelAnimationFrame(l3.raf);
+        l3.context?.close?.().catch(() => {
+        });
+      };
+      l3.recorder.onerror = (e3) => {
+        setError(e3.error?.message ?? "Recording failed.");
+        setPhase("idle");
+        release();
+      };
+      l3.recorder.start(250);
+      setSeconds(0);
+      setPhase("recording");
+      const startedAt = performance.now();
+      l3.timer = setInterval(() => {
+        const elapsed = (performance.now() - startedAt) / 1e3;
+        setSeconds(elapsed);
+        if (elapsed >= MAX_SECONDS) stop();
+      }, 200);
+    }
+    function stop() {
+      clearInterval(live.current.timer);
+      if (live.current.recorder?.state === "recording") live.current.recorder.stop();
+    }
+    function again() {
+      release();
+      blob.current = null;
+      setUrl("");
+      setSeconds(0);
+      setPhase("idle");
+      setError("");
+    }
+    async function keep() {
+      setPhase("saving");
+      setError("");
+      try {
+        const { wav } = await convertToWav(await blob.current.arrayBuffer());
+        await onSave(wav);
+        onClose();
+      } catch (e3) {
+        setError(e3.message);
+        setPhase("review");
+      }
+    }
+    const busy = ["requesting", "countdown"].includes(phase);
+    return /* @__PURE__ */ k("div", { class: "recorder", role: "group", "aria-label": `Record your voice for ${stepName2}` }, phase === "idle" && /* @__PURE__ */ k(Fragment, null, /* @__PURE__ */ k("p", { class: "setting-help" }, "Record yourself reading this step. You can listen back before you keep it."), /* @__PURE__ */ k(Label3, { class: "check-row" }, /* @__PURE__ */ k(Checkbox3, { "aria-label": "3-2-1 countdown", checked: countdown, onCheckedChange: setCountdown }), "3-2-1 countdown first")), phase === "requesting" && /* @__PURE__ */ k("p", { class: "setting-help", role: "status" }, "Waiting for microphone permission\u2026"), phase === "countdown" && /* @__PURE__ */ k("p", { class: "recorder-count", role: "status", "aria-live": "assertive" }, count3), ["countdown", "recording"].includes(phase) && /* @__PURE__ */ k("div", { class: "level-meter", role: "meter", "aria-label": "Microphone level", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": Math.round(level * 100) }, /* @__PURE__ */ k("span", { style: { width: `${Math.round(level * 100)}%` } })), phase === "recording" && /* @__PURE__ */ k("p", { class: "setting-help", role: "status" }, /* @__PURE__ */ k("span", { class: "rec-dot", "aria-hidden": "true" }), "Recording ", formatDuration(seconds2)), phase === "review" && /* @__PURE__ */ k("audio", { controls: true, src: url, "aria-label": "Listen to your recording" }), phase === "saving" && /* @__PURE__ */ k("p", { class: "setting-help", role: "status" }, "Saving your recording\u2026"), !!error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, error), /* @__PURE__ */ k("div", { class: "row-actions" }, phase === "idle" && /* @__PURE__ */ k(Button, { variant: "outline", size: "sm", onClick: begin }, /* @__PURE__ */ k(Mic, { size: 14, "aria-hidden": "true" }), "Start recording"), phase === "recording" && /* @__PURE__ */ k(Button, { variant: "outline", size: "sm", onClick: stop }, /* @__PURE__ */ k(Square, { size: 14, "aria-hidden": "true" }), "Stop"), phase === "review" && /* @__PURE__ */ k(Fragment, null, /* @__PURE__ */ k(Button, { variant: "outline", size: "sm", onClick: keep }, /* @__PURE__ */ k(Check, { size: 14, "aria-hidden": "true" }), "Keep recording"), /* @__PURE__ */ k(Button, { size: "sm", onClick: again }, /* @__PURE__ */ k(RotateCcw, { size: 14, "aria-hidden": "true" }), "Re-record")), /* @__PURE__ */ k(Button, { size: "sm", disabled: phase === "saving", onClick: () => {
+      release();
+      onClose();
+    } }, /* @__PURE__ */ k(X3, { size: 14, "aria-hidden": "true" }), busy || phase === "recording" ? "Cancel" : "Close")));
+  }
+
+  // editor/use-controller.js
+  function useController(controller) {
+    const [snapshot, setSnapshot] = d2(controller.getState());
+    h2(() => {
+      setSnapshot(controller.getState());
+      return controller.subscribe(setSnapshot);
+    }, [controller]);
+    return snapshot;
+  }
+
+  // editor/edit-ops.mjs
+  var snapFrame = (t3) => Math.round(t3 * 60) / 60;
+  var clone2 = (c3) => structuredClone(c3);
+  var overlap = (a3, b3) => a3.start < b3.end && b3.start < a3.end;
+  function range(start, end, { duration = Infinity } = {}) {
+    start = snapFrame(start);
+    end = Math.min(duration, snapFrame(end));
+    if (!Number.isFinite(start + end) || start < 0 || end > duration || end - start < 1 / 60 - 1e-9) throw new Error("Choose a valid range inside the recording.");
+    return { start, end };
+  }
+  function finish(c3, { duration } = {}) {
+    const result = validateComposition(c3, duration === void 0 ? {} : { duration });
+    if (!result.ok) throw new Error(result.errors.join("\n"));
+    return c3;
+  }
+  function merge2(ranges, speed = false) {
+    return ranges.sort((a3, b3) => a3.start - b3.start).reduce((out, r4) => {
+      const last2 = out.at(-1);
+      if (last2 && r4.start <= last2.end + 1e-9 && (!speed || last2.rate === r4.rate)) last2.end = Math.max(last2.end, r4.end);
+      else out.push({ ...r4 });
+      return out;
+    }, []);
+  }
+  var subtract = (ranges, cut) => ranges.flatMap((r4) => !overlap(r4, cut) ? [r4] : [
+    ...r4.start < cut.start ? [{ ...r4, end: cut.start }] : [],
+    ...r4.end > cut.end ? [{ ...r4, start: cut.end }] : []
+  ]);
+  var splitAt = (c3) => c3;
+  function cutRange(c3, start, end, context = {}) {
+    const r4 = range(start, end, context), next = clone2(c3);
+    if (r4.end - r4.start < 0.1 - 1e-9) throw new Error("A cut must be at least 0.1 seconds.");
+    next.edits.trims = merge2([...next.edits.trims, r4]);
+    if (next.edits.trims.some((t3) => t3.start === 0 && t3.end >= context.duration)) throw new Error("Keep at least one frame of the recording.");
+    next.edits.speeds = subtract(next.edits.speeds, r4);
+    if (next.edits.holds) next.edits.holds = next.edits.holds.filter((h3) => !(h3.t >= r4.start && h3.t < r4.end));
+    return finish(next, context);
+  }
+  function restoreRange(c3, index2, context) {
+    if (!c3.edits.trims[index2]) throw new Error("Removed range no longer exists.");
+    const next = clone2(c3);
+    next.edits.trims.splice(index2, 1);
+    return finish(next, context);
+  }
+  function setSpeed(c3, start, end, rate, context = {}) {
+    const r4 = range(start, end, context);
+    if (!Number.isFinite(rate) || rate < 0.25 || rate > 8) throw new Error("Speed must be between 0.25 and 8.");
+    if (c3.edits.trims.some((t3) => overlap(t3, r4))) throw new Error("Restore the removed range before changing its speed.");
+    const next = clone2(c3);
+    next.edits.speeds = merge2([...subtract(next.edits.speeds, r4), ...rate === 1 ? [] : [{ ...r4, rate }]], true);
+    return finish(next, context);
+  }
+  function clearSpeed(c3, index2, context) {
+    if (!c3.edits.speeds[index2]) throw new Error("Speed range no longer exists.");
+    const next = clone2(c3);
+    next.edits.speeds.splice(index2, 1);
+    return finish(next, context);
+  }
+  var uniqueId = (items, prefix) => {
+    let n2 = 1;
+    while (items.some((r4) => r4.id === `${prefix}${n2}`)) n2++;
+    return `${prefix}${n2}`;
+  };
+  function addZoomRegion(c3, { tStart, tEnd, x: x4, y: y3, depth }, context = {}) {
+    const r4 = range(tStart, tEnd, context), next = clone2(c3);
+    if (next.zoom.regions.some((z4) => overlap({ start: z4.tStart, end: z4.tEnd }, r4))) throw new Error("Zoom regions cannot overlap; choose an empty range.");
+    next.zoom.regions.push({ id: uniqueId(next.zoom.regions, "manual-"), tStart: r4.start, tEnd: r4.end, depth, keyframes: [{ t: r4.start, x: x4, y: y3 }], stepIds: [], source: "manual" });
+    next.zoom.regions.sort((a3, b3) => a3.tStart - b3.tStart);
+    return finish(next, context);
+  }
+  function updateZoomRegion(c3, id, patch, context = {}) {
+    const next = clone2(c3), z4 = next.zoom.regions.find((z5) => z5.id === id);
+    if (!z4) throw new Error("Zoom region no longer exists.");
+    for (const k4 of Object.keys(patch)) if (!["tStart", "tEnd", "depth", "keyframes"].includes(k4)) throw new Error(`Cannot edit zoom ${k4}.`);
+    const oldStart = z4.tStart;
+    Object.assign(z4, clone2(patch), { source: "manual" });
+    const r4 = range(z4.tStart, z4.tEnd, context);
+    z4.tStart = r4.start;
+    z4.tEnd = r4.end;
+    if (!patch.keyframes) z4.keyframes = z4.keyframes.map((k4) => ({ ...k4, t: Math.max(z4.tStart, Math.min(z4.tEnd, k4.t + z4.tStart - oldStart)) }));
+    z4.keyframes.sort((a3, b3) => a3.t - b3.t);
+    if (z4.keyframes.length) z4.keyframes[0].t = z4.tStart;
+    next.zoom.regions.sort((a3, b3) => a3.tStart - b3.tStart);
+    return finish(next, context);
+  }
+  function deleteZoomRegion(c3, id, context) {
+    const next = clone2(c3);
+    next.zoom.regions = next.zoom.regions.filter((z4) => z4.id !== id);
+    next.zoom.autoSuggest = false;
+    return finish(next, context);
+  }
+  function setZoomFocus(c3, id, t3, x4, y3, context = {}) {
+    const z4 = c3.zoom.regions.find((z5) => z5.id === id);
+    if (!z4) throw new Error("Zoom region no longer exists.");
+    t3 = Math.max(z4.tStart, Math.min(z4.tEnd, snapFrame(t3)));
+    const keyframes = z4.keyframes.filter((k4) => Math.abs(k4.t - t3) > 1e-9);
+    keyframes.push({ t: t3, x: x4, y: y3 });
+    return updateZoomRegion(c3, id, { keyframes }, context);
+  }
+  function withCues(c3, context = {}) {
+    const next = clone2(c3);
+    next.captions.cues ??= clone2(context.plan?.cues ?? context.cues ?? []);
+    return next;
+  }
+  function setCaption(c3, id, patch, context = {}) {
+    const next = withCues(c3, context), cue = next.captions.cues.find((cue2) => cue2.id === id);
+    if (!cue) throw new Error("Caption no longer exists.");
+    for (const key of Object.keys(patch)) if (!["text", "start", "end"].includes(key)) throw new Error(`Cannot edit caption ${key}.`);
+    Object.assign(cue, patch);
+    Object.assign(cue, range(cue.start, cue.end, context));
+    next.captions.cues.sort((a3, b3) => a3.start - b3.start);
+    return finish(next, context);
+  }
+  function addCaption(c3, { text, start, end }, context = {}) {
+    const next = withCues(c3, context), r4 = range(start, end, context);
+    next.captions.cues.push({ id: uniqueId(next.captions.cues, "caption-"), text, ...r4 });
+    next.captions.cues.sort((a3, b3) => a3.start - b3.start);
+    return finish(next, context);
+  }
+  function deleteCaption(c3, id, context = {}) {
+    const next = withCues(c3, context);
+    next.captions.cues = next.captions.cues.filter((cue) => cue.id !== id);
+    return finish(next, context);
+  }
+  function autoZoomRegenerate(c3, events, record) {
+    const next = clone2(c3), manual = next.zoom.regions.filter((z4) => z4.source === "manual");
+    const auto = suggestZoomRegions({ events, record, options: zoomOptions(next.zoom) }).filter((z4) => !manual.some((m3) => z4.tStart < m3.tEnd && z4.tEnd > m3.tStart));
+    auto.forEach((z4, i3) => {
+      z4.id = uniqueId([...manual, ...auto.slice(0, i3)], "auto-");
+    });
+    next.zoom.regions = [...manual, ...auto].sort((a3, b3) => a3.tStart - b3.tStart);
+    return finish(next, { duration: record.durationSec });
+  }
+  function lastPart(context, stepId) {
+    const step = context.steps?.find((s3) => s3.id === stepId);
+    if (!step) throw new Error("That step no longer exists.");
+    const part = keptParts(context.timemap, step.tStart, step.tEnd).filter((p3) => !p3.hold).at(-1);
+    if (!part) throw new Error("That step was cut, so there is nothing to adjust.");
+    return part;
+  }
+  function fixFreeze(c3, stepId, overrunSec, context = {}) {
+    if (!Number.isFinite(overrunSec) || overrunSec <= 0) throw new Error("There is no overrun to fix.");
+    const part = lastPart(context, stepId), t3 = Math.max(part.srcStart, part.srcEnd - 1 / 60), extra = Math.ceil(overrunSec * 100) / 100;
+    const next = clone2(c3);
+    next.edits.holds ??= [];
+    const existing = next.edits.holds.find((h3) => Math.abs(h3.t - t3) < 1e-9);
+    if (existing) existing.duration = +(existing.duration + extra).toFixed(3);
+    else next.edits.holds.push({ t: t3, duration: extra });
+    next.edits.holds.sort((a3, b3) => a3.t - b3.t);
+    if (next.edits.holds.some((h3) => h3.duration > MAX_HOLD_SEC)) throw new Error(`A frozen frame can last at most ${MAX_HOLD_SEC} seconds.`);
+    return finish(next, context);
+  }
+  var MIN_FIT_RATE = 0.5;
+  function fixSlow(c3, stepId, overrunSec, context = {}) {
+    if (!Number.isFinite(overrunSec) || overrunSec <= 0) throw new Error("There is no overrun to fix.");
+    const part = lastPart(context, stepId), base = part.rate, need = overrunSec + 0.02;
+    const floor2 = Math.min(part.srcEnd, Math.max(part.srcStart, Number.isFinite(context.narrationStartSrc) ? Math.ceil(context.narrationStartSrc * 60 - 1e-9) / 60 : part.srcStart));
+    const rateFor = (length) => length / (length / base + need);
+    let start = part.srcEnd - Math.min(part.srcEnd - floor2, Math.max(need * 3 * base, 1));
+    if (rateFor(part.srcEnd - snapFrame(start)) < MIN_FIT_RATE) start = floor2;
+    start = Math.max(floor2, snapFrame(start));
+    const end = Math.min(part.srcEnd, snapFrame(part.srcEnd)), rate = +rateFor(end - start).toFixed(3);
+    if (!(end > start) || rate < MIN_FIT_RATE) throw new Error(`Slowing this step enough would go below ${MIN_FIT_RATE}x. Freeze the last frame instead.`);
+    return setSpeed(c3, start, end, rate, context);
+  }
+
+  // editor/VoicePanel.jsx
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.append(area);
+      area.select();
+      try {
+        return document.execCommand("copy");
+      } finally {
+        area.remove();
+      }
+    }
+  }
+  function EngineCard({ info }) {
+    const [copied, setCopied] = d2(false);
+    if (info.installed) return null;
+    return /* @__PURE__ */ k("section", { class: "voice-card", "aria-label": "Voice engine" }, /* @__PURE__ */ k("h3", null, "Set up voice-over"), /* @__PURE__ */ k("p", null, "Voice-over runs on your computer with a free model (about 100 MB download). The editor cannot install it for you, so run this once in a terminal, then reload the editor:"), /* @__PURE__ */ k("div", { class: "command-row" }, /* @__PURE__ */ k("code", null, INSTALL_COMMAND), /* @__PURE__ */ k(Button, { size: "sm", variant: "outline", "aria-label": "Copy install command", onClick: async () => {
+      if (await copyText(INSTALL_COMMAND)) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      }
+    } }, copied ? /* @__PURE__ */ k(Check, { size: 14, "aria-hidden": "true" }) : /* @__PURE__ */ k(Copy, { size: 14, "aria-hidden": "true" }), copied ? "Copied" : "Copy")), /* @__PURE__ */ k("p", { class: "setting-help" }, "You can still record your own voice or import audio files below without it."), info.error && /* @__PURE__ */ k("p", { class: "error" }, info.error));
+  }
+  function VoicePicker({ id, value, onChange, info, ctl, controller }) {
+    const groups = groupVoices(info.voices ?? []);
+    const known = (info.voices ?? []).some((v3) => v3.id === value);
+    const optionGroups = groups.map((g4) => ({ label: g4.label, options: g4.voices.map((v3) => ({ value: v3.id, label: v3.label })) }));
+    if (!known && value) optionGroups.push({ label: "Other", options: [{ value, label: value }] });
+    const sampling = ctl.sampleBusy === value, playing = ctl.playing?.kind === "sample" && ctl.playing.id === value;
+    return /* @__PURE__ */ k("div", { class: "voice-pick" }, /* @__PURE__ */ k(Select2, { id, "aria-label": "Voice", value, onValueChange: onChange, groups: optionGroups, disabled: !info.installed }), /* @__PURE__ */ k(Tooltip2, { text: info.installed ? sampling ? "Making a sample of this voice\u2026" : "Hear a short sample of this voice" : "Install the voice engine to hear samples" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": playing ? "Stop sample" : sampling ? "Preparing sample" : "Play sample", disabled: !info.installed || !value || !!ctl.sampleBusy && !sampling, onClick: () => controller.playSample(value) }, sampling ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 16, "aria-hidden": "true" }) : playing ? /* @__PURE__ */ k(Square, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 16, "aria-hidden": "true" }))));
+  }
+  function VoiceBrowser({ info, ctl, controller, value, onPick }) {
+    const groups = groupVoices(info.voices ?? []);
+    if (!groups.length) return null;
+    return /* @__PURE__ */ k("details", { class: "voice-browse" }, /* @__PURE__ */ k("summary", null, "Browse all voices"), /* @__PURE__ */ k("div", { class: "voice-list", role: "group", "aria-label": "All voices" }, groups.map((group) => /* @__PURE__ */ k("div", { key: group.label }, /* @__PURE__ */ k("h4", null, group.label), group.voices.map((voice) => {
+      const sampling = ctl.sampleBusy === voice.id, playing = ctl.playing?.kind === "sample" && ctl.playing.id === voice.id;
+      return /* @__PURE__ */ k("div", { class: "voice-item", key: voice.id }, /* @__PURE__ */ k(Button, { class: "voice-use", "aria-pressed": value === voice.id, onClick: () => onPick(voice.id) }, voice.label), /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `${playing ? "Stop" : "Play"} sample of ${voice.label.split(" \xB7 ")[0]}`, disabled: !info.installed || !!ctl.sampleBusy && !sampling, onClick: () => controller.playSample(voice.id) }, sampling ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 14, "aria-hidden": "true" }) : playing ? /* @__PURE__ */ k(Square, { size: 14, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 14, "aria-hidden": "true" })));
+    })))));
+  }
+  function ScriptRow({ row, info, ctl, controller, job, warnings, notice, busy, openRecorder, setOpenRecorder, setSteps, fix, pickFile }) {
+    const [draft, setDraft] = d2(null);
+    const generating = job.running && job.current === row.id;
+    const text = draft ?? row.text ?? "";
+    const playingClip = ctl.playing?.kind === "clip" && ctl.playing.id === row.id;
+    const generateLabel = row.status === "own" || row.status === "file" ? "Use generated voice" : row.status === "fresh" || row.status === "stale" ? "Update voice" : "Generate voice";
+    const cannotGenerate = !info.installed ? "Install the voice engine to generate voice-overs" : !row.text ? "Write some narration first" : row.muted ? "This step is muted" : job.running ? "Wait for the current job to finish" : "";
+    const rowError = job.errors?.[row.id] ?? (notice?.id === row.id ? notice.message : "");
+    return /* @__PURE__ */ k("li", { class: "script-row", "aria-label": `Narration step ${row.name}` }, /* @__PURE__ */ k("div", { class: "script-head" }, /* @__PURE__ */ k("strong", { title: row.name }, row.name), /* @__PURE__ */ k(Tooltip2, { text: STATUS_HELP[row.status] }, /* @__PURE__ */ k(Badge, { class: `status status-${row.status}` }, generating ? "Generating\u2026" : row.label))), /* @__PURE__ */ k(
+      "textarea",
+      {
+        class: "ui-input narration-text",
+        rows: "2",
+        maxLength: MAX_NARRATION_CHARS,
+        "aria-label": `Narration for ${row.name}`,
+        value: text,
+        placeholder: "Write what the narrator says for this step",
+        onInput: (e3) => {
+          setDraft(e3.currentTarget.value);
+          setSteps(row.id, { text: e3.currentTarget.value });
+        },
+        onBlur: () => setDraft(null)
+      }
+    ), /* @__PURE__ */ k("div", { class: "script-meta" }, /* @__PURE__ */ k("span", { class: "setting-help" }, row.edited ? "Edited here. Clear the box to use the written narration again." : row.written ? "From the storyboard." : ""), /* @__PURE__ */ k("span", { class: "counter", "aria-label": `${text.length} of ${MAX_NARRATION_CHARS} characters` }, text.length, "/", MAX_NARRATION_CHARS), row.durationSec != null && /* @__PURE__ */ k("span", { class: "duration" }, formatDuration(row.durationSec))), /* @__PURE__ */ k("div", { class: "row-actions", role: "group", "aria-label": `Voice-over actions for ${row.name}` }, /* @__PURE__ */ k(Tooltip2, { text: row.clipKey ? playingClip ? "Stop" : "Play this voice-over" : "There is no voice-over to play yet" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `${playingClip ? "Stop" : "Play"} clip, ${row.name}`, disabled: !row.clipKey, onClick: () => controller.playClip(row.id, row.clipKey) }, playingClip ? /* @__PURE__ */ k(Square, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: cannotGenerate || (row.status === "own" || row.status === "file" ? "Replace your audio with the generated voice" : generateLabel) }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `${generateLabel}, ${row.name}`, disabled: !!cannotGenerate, onClick: () => controller.generate({ stepIds: [row.id], force: row.status === "own" || row.status === "file" }) }, generating ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 16, "aria-hidden": "true" }) : row.status === "stale" || row.status === "fresh" ? /* @__PURE__ */ k(RefreshCw, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Sparkles, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Record your own voice for this step" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Record my voice, ${row.name}`, "aria-pressed": openRecorder === row.id, onClick: () => setOpenRecorder(openRecorder === row.id ? null : row.id) }, /* @__PURE__ */ k(Mic, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Use an audio file you already have" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Import file, ${row.name}`, disabled: busy === row.id, onClick: () => pickFile(row.id) }, busy === row.id ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Upload, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: row.muted ? "Turn this step\u2019s voice-over back on" : "Silence this step" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Mute ${row.name}`, "aria-pressed": row.muted, onClick: () => setSteps(row.id, { muted: !row.muted }) }, row.muted ? /* @__PURE__ */ k(VolumeX, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Volume2, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: row.clipKey ? "Remove the voice-over from this step" : "There is no voice-over to remove" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Remove clip, ${row.name}`, disabled: !row.clipKey, onClick: () => controller.removeClip(row.id) }, /* @__PURE__ */ k(Trash, { size: 16, "aria-hidden": "true" })))), openRecorder === row.id && /* @__PURE__ */ k(Recorder, { stepName: row.name, onClose: () => setOpenRecorder(null), onSave: (wav) => controller.saveClip(row.id, wav, "own") }), warnings.map((w4) => /* @__PURE__ */ k("div", { class: "row-warning", role: "status", key: w4.code }, /* @__PURE__ */ k("p", null, /* @__PURE__ */ k(TriangleAlert, { size: 14, "aria-hidden": "true" }), w4.message), w4.fixes?.length > 0 && /* @__PURE__ */ k("div", { class: "row-actions" }, w4.fixes.includes("freeze") && /* @__PURE__ */ k(Button, { size: "sm", variant: "outline", onClick: () => fix("freeze", row, w4) }, "Freeze last frame"), w4.fixes.includes("slow") && /* @__PURE__ */ k(Button, { size: "sm", variant: "outline", onClick: () => fix("slow", row, w4) }, "Slow video to fit")))), !!rowError && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, rowError));
+  }
+  function VoicePanel({ state, store, controller, values, defaults }) {
+    const ctl = useController(controller), { project, composition, plan } = state;
+    const info = project.voice ?? { installed: false, voices: [] };
+    const [openRecorder, setOpenRecorder] = d2(null), [notice, setNotice] = d2(null), [busy, setBusy] = d2(null);
+    const file = A2(), importFor = A2(null);
+    const voiceId = values["audio.voice.voiceId"], speed = values["audio.voice.speed"];
+    const rows = scriptRows({ storyboard: project.storyboard, composition, clips: project.clips, voice: voiceId, speed });
+    const summary = voiceSummary(rows), todo = needsGenerating(rows), job = ctl.job;
+    const common = { values, defaults, state, store };
+    const warningsFor = (id) => (plan?.audio.warnings ?? []).filter((w4) => w4.stepId === id);
+    function setSteps(id, patch, path = "audio.narration.steps") {
+      store.change(path, narrationSteps(composition, id, patch));
+    }
+    function fix(kind, row, warning) {
+      const narration = plan.audio.narration.find((n2) => n2.stepId === row.id);
+      const context = {
+        duration: project.record.durationSec,
+        steps: project.events.steps,
+        timemap: plan.timemap,
+        narrationStartSrc: narration ? sourceAt(plan.timemap, narration.outStart).t : void 0
+      };
+      try {
+        store.setComposition((kind === "freeze" ? fixFreeze : fixSlow)(composition, row.id, warning.overrunSec, context), "edits");
+        setNotice(null);
+      } catch (error) {
+        setNotice({ id: row.id, message: error.message });
+      }
+    }
+    async function importFile(id, picked) {
+      if (!picked) return;
+      setBusy(id);
+      setNotice(null);
+      try {
+        if (picked.size > MAX_UPLOAD_BYTES) throw new Error("That file is larger than 200 MB.");
+        const { wav } = await convertToWav(await picked.arrayBuffer());
+        if (wav.length > MAX_UPLOAD_BYTES) throw new Error("That audio is too long to import (over 200 MB as WAV).");
+        await controller.saveClip(id, wav, "file");
+      } catch (error) {
+        setNotice({ id, message: error.message });
+      } finally {
+        setBusy(null);
+      }
+    }
+    const enabledSetting = settingFor("audio.voice.enabled");
+    return /* @__PURE__ */ k("div", { class: "voice-panel" }, /* @__PURE__ */ k(EngineCard, { info }), /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Narrator"), /* @__PURE__ */ k(SettingField, { ...common, setting: enabledSetting, render: ({ id, value, onChange }) => /* @__PURE__ */ k(Switch3, { id, "aria-label": enabledSetting.label, checked: value ?? project.brief?.voice?.enabled === true, onCheckedChange: onChange }) }), /* @__PURE__ */ k(
+      SettingField,
+      {
+        ...common,
+        setting: settingFor("audio.voice.voiceId"),
+        render: ({ id, value, onChange }) => /* @__PURE__ */ k(VoicePicker, { id, value, onChange, info, ctl, controller }),
+        extra: /* @__PURE__ */ k(VoiceBrowser, { info, ctl, controller, value: voiceId, onPick: (id) => store.change("audio.voice.voiceId", id) })
+      }
+    ), /* @__PURE__ */ k(SettingField, { ...common, setting: { ...settingFor("audio.voice.speed"), min: SPEED_MIN, max: SPEED_MAX, step: 0.05 }, help: "How fast the narrator speaks; one is the natural pace. Changing it makes new voice-overs." }), /* @__PURE__ */ k(SettingField, { ...common, setting: settingFor("audio.voice.gainDb") })), /* @__PURE__ */ k("section", { class: "script", "aria-label": "Script" }, /* @__PURE__ */ k("div", { class: "script-heading" }, /* @__PURE__ */ k("h3", null, "Script"), /* @__PURE__ */ k("span", { class: "setting-help", role: "status" }, summary.total ? `${summary.ready} of ${summary.total} voice-overs ready` : "No narration yet")), /* @__PURE__ */ k("div", { class: "job-bar" }, job.running ? /* @__PURE__ */ k(Fragment, null, /* @__PURE__ */ k("progress", { "aria-label": "Voice-over progress", max: Math.max(1, job.total), value: job.done + job.failed }), /* @__PURE__ */ k("span", { class: "setting-help", role: "status" }, job.cancelling ? "Stopping after this step\u2026" : `Generating ${Math.min(job.total, job.done + job.failed + 1)} of ${job.total}\u2026`), /* @__PURE__ */ k(Button, { size: "sm", disabled: job.cancelling, onClick: () => controller.cancel() }, "Cancel")) : /* @__PURE__ */ k(Tooltip2, { text: !info.installed ? "Install the voice engine to generate voice-overs" : todo.length ? "Make voice-overs for every step that needs one" : "Every step already has an up-to-date voice-over" }, /* @__PURE__ */ k(Button, { variant: "outline", size: "sm", disabled: !info.installed || !todo.length, onClick: () => controller.generate({ stepIds: todo.map((r4) => r4.id) }) }, todo.length ? `Generate all (${todo.length})` : "Generate all"))), !job.running && job.result && /* @__PURE__ */ k("p", { class: job.result.error || job.result.failed ? "error" : "setting-help", role: "status" }, job.result.error ? job.result.error : job.result.kind === "cancelled" ? `Stopped. ${job.result.done} made.` : job.result.failed ? `${job.result.done} made, ${job.result.failed} could not be made.` : `Done. ${job.result.done} voice-over${job.result.done === 1 ? "" : "s"} ready.`), ctl.error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, ctl.error), rows.length ? /* @__PURE__ */ k("ul", { class: "script-list" }, rows.map((row) => /* @__PURE__ */ k(
+      ScriptRow,
+      {
+        key: row.id,
+        row,
+        info,
+        ctl,
+        controller,
+        job,
+        warnings: warningsFor(row.id),
+        notice,
+        busy,
+        openRecorder,
+        setOpenRecorder,
+        setSteps,
+        fix,
+        pickFile: (id) => {
+          importFor.current = id;
+          file.current.click();
+        }
+      }
+    ))) : /* @__PURE__ */ k("p", { class: "empty" }, "This project has no steps to narrate."), /* @__PURE__ */ k("input", { ref: file, class: "sr-only", type: "file", accept: "audio/*", tabIndex: "-1", "aria-label": "Choose an audio file", onChange: (e3) => {
+      const picked = e3.currentTarget.files?.[0];
+      const id = importFor.current;
+      e3.currentTarget.value = "";
+      importFile(id, picked);
+    } })));
+  }
+
+  // editor/MusicPanel.jsx
+  var MAX_MUSIC_BYTES = 200 * 1024 * 1024;
+  var MIX_HELP = {
+    "audio.loudness.enabled": "Recommended. Without it, the video is exactly as loud as the recording and music you gave it.",
+    "audio.loudness.targetLufs": "Minus 16 is a good level for online video and podcasts. A smaller number (such as minus 20) is quieter; a bigger one (such as minus 12) is louder.",
+    "audio.loudness.truePeakDb": "Minus 1 leaves a little room under the loudest possible sound so nothing distorts after the video is compressed. Leave it unless you know you need to change it."
+  };
+  function useDuration(url) {
+    const [seconds2, setSeconds] = d2(null);
+    h2(() => {
+      setSeconds(null);
+      if (!url) return void 0;
+      const probe = new Audio();
+      probe.preload = "metadata";
+      probe.onloadedmetadata = () => setSeconds(Number.isFinite(probe.duration) ? probe.duration : null);
+      probe.src = url;
+      return () => {
+        probe.onloadedmetadata = null;
+        probe.removeAttribute("src");
+      };
+    }, [url]);
+    return seconds2;
+  }
+  function MusicFile({ id, value, state, store, controller, ctl }) {
+    const input = A2(), [busy, setBusy] = d2(false), [error, setError] = d2("");
+    const url = value ? editorAudioUrls.music(value) : "", seconds2 = useDuration(url), playing = ctl.playing?.kind === "music";
+    async function choose(file) {
+      if (!file) return;
+      setError("");
+      const ext = file.name.split(".").pop().toLowerCase();
+      if (!MUSIC_EXTENSIONS.includes(ext)) {
+        setError(`Choose a ${MUSIC_EXTENSIONS.map((e3) => e3.toUpperCase()).join(", ")} file.`);
+        return;
+      }
+      if (file.size > MAX_MUSIC_BYTES) {
+        setError("That file is larger than 200 MB.");
+        return;
+      }
+      setBusy(true);
+      try {
+        const { file: stored } = await controller.saveMusic(file);
+        store.setComposition(changeComposition(changeComposition(state.composition, "audio.music.file", stored), "audio.music.enabled", true), "audio.music.file");
+      } catch (e3) {
+        setError(e3.message);
+      } finally {
+        setBusy(false);
+      }
+    }
+    return /* @__PURE__ */ k("div", { class: "music-file" }, value ? /* @__PURE__ */ k("p", { class: "music-name", id: `${id}-name` }, /* @__PURE__ */ k("strong", { title: value }, baseName(value)), seconds2 != null && /* @__PURE__ */ k("span", { class: "duration" }, " \xB7 ", formatDuration(seconds2))) : /* @__PURE__ */ k("p", { class: "setting-help", id: `${id}-name` }, "No music chosen yet."), /* @__PURE__ */ k("div", { class: "row-actions", role: "group", id, "aria-label": "Music file" }, /* @__PURE__ */ k(Button, { variant: "outline", size: "sm", disabled: busy, onClick: () => input.current.click() }, busy ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 14, "aria-hidden": "true" }) : /* @__PURE__ */ k(Upload, { size: 14, "aria-hidden": "true" }), value ? "Replace file" : "Choose file"), /* @__PURE__ */ k(Tooltip2, { text: value ? "Listen to the music on its own" : "Choose a music file first" }, /* @__PURE__ */ k(Button, { size: "sm", "aria-label": playing ? "Stop music preview" : "Play music preview", disabled: !value, onClick: () => controller.playMusic(url) }, playing ? /* @__PURE__ */ k(Square, { size: 14, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 14, "aria-hidden": "true" }), playing ? "Stop" : "Play preview")), /* @__PURE__ */ k(Tooltip2, { text: value ? "Take the music out of the video" : "There is no music to remove" }, /* @__PURE__ */ k(Button, { size: "sm", "aria-label": "Remove music", disabled: !value, onClick: () => {
+      controller.stopPlayback();
+      store.setComposition(changeComposition(changeComposition(state.composition, "audio.music.file", null), "audio.music.enabled", false), "audio.music.file");
+    } }, /* @__PURE__ */ k(Trash, { size: 14, "aria-hidden": "true" }), "Remove"))), /* @__PURE__ */ k(
+      "input",
+      {
+        ref: input,
+        class: "sr-only",
+        type: "file",
+        tabIndex: "-1",
+        "aria-label": "Choose a music file",
+        accept: MUSIC_EXTENSIONS.map((e3) => `.${e3}`).join(",") + ",audio/*",
+        onChange: (e3) => {
+          const picked = e3.currentTarget.files?.[0];
+          e3.currentTarget.value = "";
+          choose(picked);
+        }
+      }
+    ), !!error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, error));
+  }
+  function MusicPanel({ state, store, controller, values, defaults }) {
+    const ctl = useController(controller), common = { values, defaults, state, store };
+    const field = (path) => /* @__PURE__ */ k(SettingField, { ...common, key: path, setting: settingFor(path) });
+    const measured = loudnessText(state.project.lastExport);
+    return /* @__PURE__ */ k("div", { class: "music-panel" }, /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Background music"), MUSIC_PANEL_PATHS.music.map((path) => path === "audio.music.file" ? /* @__PURE__ */ k(SettingField, { ...common, key: path, setting: settingFor(path), render: ({ id, value }) => /* @__PURE__ */ k(MusicFile, { id, value, state, store, controller, ctl }) }) : field(path))), /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Music under the voice"), MUSIC_PANEL_PATHS.ducking.map(field), /* @__PURE__ */ k("details", null, /* @__PURE__ */ k("summary", null, "Advanced"), MUSIC_PANEL_PATHS.advanced.map(field))), /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Mix and loudness"), MUSIC_PANEL_PATHS.loudness.map((path) => /* @__PURE__ */ k(SettingField, { ...common, key: path, setting: settingFor(path), extra: /* @__PURE__ */ k("p", { class: "setting-help" }, MIX_HELP[path]) })), /* @__PURE__ */ k("p", { class: "last-measured", role: "status" }, /* @__PURE__ */ k("strong", null, "Last measured:"), " ", measured ?? "not yet. Export the video to measure it."), /* @__PURE__ */ k("p", { class: "setting-help" }, "The preview plays the same mix, including the level adjustment, so what you hear is close to what you export.")));
+  }
+
+  // editor/Settings.jsx
+  function Settings({ state, store, controller }) {
+    const [query, setQuery] = d2(""), [tab, setTab] = d2("look");
+    const groups = groupSettings(SETTINGS, query), names = Object.keys(groups);
+    const values = compositionPaths(state.composition), defaults = compositionPaths({});
+    const audio = groups.audio ?? [];
+    const tabNames = { look: "Look", cursor: "Cursor", zoom: "Zoom", captions: "Captions", cards: "Intro & outro", audio: "Audio", voice: "Voice", music: "Music", output: "Size & quality" };
+    const has = { voice: audio.some((s3) => s3.path.startsWith("audio.voice.")), music: audio.some((s3) => !s3.path.startsWith("audio.voice.")) };
+    const ordered = ["look", "cursor", "zoom", "captions", "cards", "voice", "music", "output"].filter((name) => name === "voice" || name === "music" ? has[name] && controller : names.includes(name));
+    const active = ordered.includes(tab) ? tab : ordered[0];
+    const field = (s3) => /* @__PURE__ */ k(SettingField, { key: s3.path, setting: s3, values, defaults, state, store });
     function fields(entries) {
       const sections2 = {};
       for (const entry of entries) (sections2[entry.section] ??= []).push(entry);
       return Object.entries(sections2).map(([name, items]) => /* @__PURE__ */ k("details", { class: "setting-group", key: name, open: true }, /* @__PURE__ */ k("summary", null, name.replace(/^title card/, "Intro card")), items.map(field)));
     }
-    return /* @__PURE__ */ k("aside", { class: "settings", "aria-label": "Composition settings" }, /* @__PURE__ */ k("div", { class: "panel-heading" }, /* @__PURE__ */ k("h2", null, "Settings"), /* @__PURE__ */ k("span", null, "COMPOSITION")), /* @__PURE__ */ k(Label3, { class: "search" }, /* @__PURE__ */ k("span", { class: "sr-only" }, "Search settings"), /* @__PURE__ */ k(Input2, { type: "search", placeholder: "Search settings\u2026", value: query, onInput: (e3) => setQuery(e3.currentTarget.value) })), /* @__PURE__ */ k(Tabs3, { value: active ?? "", onValueChange: setTab, className: "settings-tabs" }, /* @__PURE__ */ k(TabsList3, { "aria-label": "Settings groups" }, ordered.map((name) => /* @__PURE__ */ k(TabsTrigger3, { key: name, value: name }, tabNames[name]))), active ? /* @__PURE__ */ k(TabsContent3, { value: active }, fields(groups[active].filter((s3) => !s3.advanced)), groups[active].some((s3) => s3.advanced) && /* @__PURE__ */ k("details", null, /* @__PURE__ */ k("summary", null, "Advanced"), fields(groups[active].filter((s3) => s3.advanced)))) : /* @__PURE__ */ k("p", { class: "empty" }, "No matching settings")));
+    return /* @__PURE__ */ k("aside", { class: "settings", "aria-label": "Composition settings" }, /* @__PURE__ */ k("div", { class: "panel-heading" }, /* @__PURE__ */ k("h2", null, "Settings"), /* @__PURE__ */ k("span", null, "COMPOSITION")), /* @__PURE__ */ k(Label3, { class: "search" }, /* @__PURE__ */ k("span", { class: "sr-only" }, "Search settings"), /* @__PURE__ */ k(Input2, { type: "search", placeholder: "Search settings\u2026", value: query, onInput: (e3) => setQuery(e3.currentTarget.value) })), /* @__PURE__ */ k(Tabs3, { value: active ?? "", onValueChange: setTab, className: "settings-tabs" }, /* @__PURE__ */ k(TabsList3, { "aria-label": "Settings groups" }, ordered.map((name) => /* @__PURE__ */ k(TabsTrigger3, { key: name, value: name }, tabNames[name]))), active === "voice" ? /* @__PURE__ */ k(TabsContent3, { value: "voice" }, /* @__PURE__ */ k(VoicePanel, { state, store, controller, values, defaults })) : active === "music" ? /* @__PURE__ */ k(TabsContent3, { value: "music" }, /* @__PURE__ */ k(MusicPanel, { state, store, controller, values, defaults })) : active ? /* @__PURE__ */ k(TabsContent3, { value: active }, fields(groups[active].filter((s3) => !s3.advanced)), groups[active].some((s3) => s3.advanced) && /* @__PURE__ */ k("details", null, /* @__PURE__ */ k("summary", null, "Advanced"), fields(groups[active].filter((s3) => s3.advanced)))) : /* @__PURE__ */ k("p", { class: "empty" }, "No matching settings")));
   }
 
   // node_modules/@radix-ui/react-dialog/dist/index.mjs
@@ -29120,7 +30777,20 @@
   }
 
   // editor/ExportDialog.jsx
-  function ExportDialog({ store, onClose }) {
+  function VoiceChecklist({ state, controller }) {
+    const ctl = useController(controller), { project, composition, plan } = state;
+    if (!composition) return null;
+    const voice = resolveComposition(composition).audio.voice;
+    if (!(voice.enabled ?? project.brief?.voice?.enabled === true)) return null;
+    const rows = scriptRows({ storyboard: project.storyboard, composition, clips: project.clips, voice: voice.voiceId, speed: voice.speed });
+    const summary = voiceSummary(rows), todo = needsGenerating(rows), warnings = plan?.audio.warnings ?? [], job = ctl.job;
+    if (!summary.total) return null;
+    return /* @__PURE__ */ k("ul", { class: "export-checklist", "aria-label": "Voice-over checklist" }, /* @__PURE__ */ k("li", { class: todo.length ? "warn" : "ok" }, /* @__PURE__ */ k("span", null, "Voice: ", summary.ready, " of ", summary.total, " steps ready"), !!todo.length && /* @__PURE__ */ k(S, null, " ", /* @__PURE__ */ k("span", { class: "setting-help" }, "The rest will be silent or use out-of-date audio."), project.voice?.installed ? /* @__PURE__ */ k(Button, { size: "sm", variant: "outline", disabled: job.running, onClick: () => controller.generate({ stepIds: todo.map((r4) => r4.id) }) }, job.running ? `Generating ${Math.min(job.total, job.done + job.failed + 1)} of ${job.total}\u2026` : "Generate missing") : /* @__PURE__ */ k("span", { class: "setting-help" }, "Install the voice engine to make them (see the Voice tab).")), ctl.error && /* @__PURE__ */ k("span", { class: "error" }, ctl.error)), !!warnings.length && /* @__PURE__ */ k("li", { class: "warn" }, /* @__PURE__ */ k("span", null, warnings.length, " narration timing ", warnings.length === 1 ? "warning" : "warnings", ". Review ", warnings.length === 1 ? "it" : "them", " in the Voice tab before exporting.")));
+  }
+  function ExportDialog({ store, voice, onClose }) {
+    const [state, setState] = d2(store.getState());
+    h2(() => store.subscribe(setState), [store]);
+    const voiceJob = useController(voice).job;
     const initial = store.getState().composition.output;
     const [size4, setSize] = d2(initial.height > 1080 ? "4k" : "1080"), [fps, setFps] = d2(initial.fps);
     const [job, setJob] = d2({ event: "idle", data: {} }), [error, setError] = d2(""), [busy, setBusy] = d2(false);
@@ -29145,6 +30815,7 @@
             started.current = performance.now();
             setEta(null);
           }
+          if (message.event === "complete") store.setProject({ lastExport: message.data.audio ?? null });
           if (message.event === "progress" && message.data.frame > 0) setEta(Math.max(0, Math.round((performance.now() - started.current) / 1e3 / message.data.frame * (message.data.total - message.data.frame))));
           if (["complete", "error", "cancelled"].includes(message.event)) controller.abort();
         });
@@ -29183,14 +30854,14 @@
         setError(e3.message);
       }
     }
-    return /* @__PURE__ */ k(Dialog2, { title: "Export composition", description: "Save your edited video as an MP4 file.", onClose, locked: running }, /* @__PURE__ */ k("div", { class: "export-options" }, /* @__PURE__ */ k(Label3, null, "Size ", /* @__PURE__ */ k(Select2, { "aria-label": "Size", disabled: running, value: size4, onValueChange: setSize, options: [{ value: "1080", label: "1080p" }, { value: "4k", label: "4K" }] })), /* @__PURE__ */ k(Label3, null, "Frame rate ", /* @__PURE__ */ k(Select2, { "aria-label": "Frame rate", disabled: running, value: fps, onValueChange: (next) => setFps(+next), options: [{ value: 30, label: "30 fps" }, { value: 60, label: "60 fps" }] }))), /* @__PURE__ */ k("div", { "aria-live": "polite" }, /* @__PURE__ */ k("p", null, job.event === "idle" ? "Ready to export" : job.event), running && /* @__PURE__ */ k(S, null, /* @__PURE__ */ k("progress", { "aria-label": "Export progress", max: job.data.total ?? 1, value: job.data.frame ?? 0 }), /* @__PURE__ */ k("p", null, job.data.frame ?? 0, " / ", job.data.total ?? "\u2026", " frames", eta !== null ? ` \xB7 ETA ${eta}s` : "")), job.event === "complete" && /* @__PURE__ */ k(S, null, /* @__PURE__ */ k("p", { class: "output-path" }, job.data.finalFile), /* @__PURE__ */ k(Button, { onClick: () => request("/api/reveal", { method: "POST" }).catch((e3) => setError(e3.message)) }, "Reveal")), job.event === "error" && /* @__PURE__ */ k("p", { class: "error" }, job.data.message)), error && /* @__PURE__ */ k("p", { role: "alert", class: "error" }, error), /* @__PURE__ */ k("div", { class: "dialog-actions" }, running ? /* @__PURE__ */ k(S, null, /* @__PURE__ */ k(Button, { onClick: cancel }, "Cancel export"), error && /* @__PURE__ */ k(Button, { onClick: () => {
+    return /* @__PURE__ */ k(Dialog2, { title: "Export composition", description: "Save your edited video as an MP4 file.", onClose, locked: running }, /* @__PURE__ */ k("div", { class: "export-options" }, /* @__PURE__ */ k(Label3, null, "Size ", /* @__PURE__ */ k(Select2, { "aria-label": "Size", disabled: running, value: size4, onValueChange: setSize, options: [{ value: "1080", label: "1080p" }, { value: "4k", label: "4K" }] })), /* @__PURE__ */ k(Label3, null, "Frame rate ", /* @__PURE__ */ k(Select2, { "aria-label": "Frame rate", disabled: running, value: fps, onValueChange: (next) => setFps(+next), options: [{ value: 30, label: "30 fps" }, { value: 60, label: "60 fps" }] }))), !running && /* @__PURE__ */ k(VoiceChecklist, { state, controller: voice }), /* @__PURE__ */ k("div", { "aria-live": "polite" }, /* @__PURE__ */ k("p", null, job.event === "idle" ? "Ready to export" : job.event), running && /* @__PURE__ */ k(S, null, /* @__PURE__ */ k("progress", { "aria-label": "Export progress", max: job.data.total ?? 1, value: job.data.frame ?? 0 }), /* @__PURE__ */ k("p", null, job.data.frame ?? 0, " / ", job.data.total ?? "\u2026", " frames", eta !== null ? ` \xB7 ETA ${eta}s` : "")), job.event === "complete" && /* @__PURE__ */ k(S, null, /* @__PURE__ */ k("p", { class: "output-path" }, job.data.finalFile), job.data.audio ? /* @__PURE__ */ k("p", { class: "loudness-result", role: "status" }, /* @__PURE__ */ k("strong", null, "Sound:"), " ", loudnessText(job.data.audio) ?? "could not be measured") : null, job.data.audio?.warnings?.map((w4) => /* @__PURE__ */ k("p", { class: "warning" }, w4)), /* @__PURE__ */ k(Button, { onClick: () => request("/api/reveal", { method: "POST" }).catch((e3) => setError(e3.message)) }, "Reveal")), job.event === "error" && /* @__PURE__ */ k("p", { class: "error" }, job.data.message)), error && /* @__PURE__ */ k("p", { role: "alert", class: "error" }, error), /* @__PURE__ */ k("div", { class: "dialog-actions" }, running ? /* @__PURE__ */ k(S, null, /* @__PURE__ */ k(Button, { onClick: cancel }, "Cancel export"), error && /* @__PURE__ */ k(Button, { onClick: () => {
       setError("");
       watch();
-    } }, "Reconnect progress")) : /* @__PURE__ */ k(Button, { variant: "default", onClick: start }, "Start export")));
+    } }, "Reconnect progress")) : /* @__PURE__ */ k(Tooltip2, { text: voiceJob.running ? "Wait for the voice-over to finish" : "Render the video" }, /* @__PURE__ */ k(Button, { variant: "default", disabled: voiceJob.running, onClick: start }, "Start export"))));
   }
 
   // editor/TopBar.jsx
-  function TopBar({ state, store, theme, toggleTheme, notify }) {
+  function TopBar({ state, store, voice, theme, toggleTheme, notify }) {
     const [exportOpen, setExportOpen] = d2(false);
     const status = state.error ? "Error" : state.saving || state.dirty ? "Saving" : "Saved";
     return /* @__PURE__ */ k("header", { class: "topbar" }, /* @__PURE__ */ k("div", { class: "brand" }, /* @__PURE__ */ k(Clapperboard, { size: 20, "aria-hidden": "true" }), /* @__PURE__ */ k("span", null, "Showreel")), /* @__PURE__ */ k("div", { class: "project-name" }, /* @__PURE__ */ k("strong", null, state.project?.name ?? "Loading project\u2026")), /* @__PURE__ */ k("span", { class: `save-status ${state.error ? "error" : ""}`, role: "status", title: state.error ?? "" }, status), state.error && state.dirty && /* @__PURE__ */ k(Button, { onClick: () => store.save().catch(() => {
@@ -29200,148 +30871,49 @@
     } }, /* @__PURE__ */ k(Undo2, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: state.future.length ? "Redo (\u2318/Ctrl Shift Z)" : "Nothing to redo (\u2318/Ctrl Shift Z)" }, /* @__PURE__ */ k(Button, { size: "icon", disabled: !state.future.length, "aria-label": "Redo", onClick: () => {
       store.redo();
       notify("Redone");
-    } }, /* @__PURE__ */ k(Redo2, { size: 16, "aria-hidden": "true" })))), /* @__PURE__ */ k(Tooltip2, { text: `Switch to ${theme === "dark" ? "light" : "dark"} theme` }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Switch to ${theme === "dark" ? "light" : "dark"} theme`, onClick: toggleTheme }, theme === "dark" ? /* @__PURE__ */ k(Sun, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Moon, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: state.composition ? "Export your video" : "Load a recording before exporting" }, /* @__PURE__ */ k(Button, { variant: "default", disabled: !state.composition, onClick: () => setExportOpen(true) }, /* @__PURE__ */ k(Download, { size: 16, "aria-hidden": "true" }), "Export")), exportOpen && /* @__PURE__ */ k(ExportDialog, { store, onClose: () => setExportOpen(false) }));
-  }
-
-  // editor/edit-ops.mjs
-  var snapFrame = (t3) => Math.round(t3 * 60) / 60;
-  var clone2 = (c3) => structuredClone(c3);
-  var overlap = (a3, b3) => a3.start < b3.end && b3.start < a3.end;
-  function range(start, end, { duration = Infinity } = {}) {
-    start = snapFrame(start);
-    end = Math.min(duration, snapFrame(end));
-    if (!Number.isFinite(start + end) || start < 0 || end > duration || end - start < 1 / 60 - 1e-9) throw new Error("Choose a valid range inside the recording.");
-    return { start, end };
-  }
-  function finish(c3, { duration } = {}) {
-    const result = validateComposition(c3, duration === void 0 ? {} : { duration });
-    if (!result.ok) throw new Error(result.errors.join("\n"));
-    return c3;
-  }
-  function merge2(ranges, speed = false) {
-    return ranges.sort((a3, b3) => a3.start - b3.start).reduce((out, r4) => {
-      const last2 = out.at(-1);
-      if (last2 && r4.start <= last2.end + 1e-9 && (!speed || last2.rate === r4.rate)) last2.end = Math.max(last2.end, r4.end);
-      else out.push({ ...r4 });
-      return out;
-    }, []);
-  }
-  var subtract = (ranges, cut) => ranges.flatMap((r4) => !overlap(r4, cut) ? [r4] : [
-    ...r4.start < cut.start ? [{ ...r4, end: cut.start }] : [],
-    ...r4.end > cut.end ? [{ ...r4, start: cut.end }] : []
-  ]);
-  var splitAt = (c3) => c3;
-  function cutRange(c3, start, end, context = {}) {
-    const r4 = range(start, end, context), next = clone2(c3);
-    if (r4.end - r4.start < 0.1 - 1e-9) throw new Error("A cut must be at least 0.1 seconds.");
-    next.edits.trims = merge2([...next.edits.trims, r4]);
-    if (next.edits.trims.some((t3) => t3.start === 0 && t3.end >= context.duration)) throw new Error("Keep at least one frame of the recording.");
-    next.edits.speeds = subtract(next.edits.speeds, r4);
-    return finish(next, context);
-  }
-  function restoreRange(c3, index2, context) {
-    if (!c3.edits.trims[index2]) throw new Error("Removed range no longer exists.");
-    const next = clone2(c3);
-    next.edits.trims.splice(index2, 1);
-    return finish(next, context);
-  }
-  function setSpeed(c3, start, end, rate, context = {}) {
-    const r4 = range(start, end, context);
-    if (!Number.isFinite(rate) || rate < 0.25 || rate > 8) throw new Error("Speed must be between 0.25 and 8.");
-    if (c3.edits.trims.some((t3) => overlap(t3, r4))) throw new Error("Restore the removed range before changing its speed.");
-    const next = clone2(c3);
-    next.edits.speeds = merge2([...subtract(next.edits.speeds, r4), ...rate === 1 ? [] : [{ ...r4, rate }]], true);
-    return finish(next, context);
-  }
-  function clearSpeed(c3, index2, context) {
-    if (!c3.edits.speeds[index2]) throw new Error("Speed range no longer exists.");
-    const next = clone2(c3);
-    next.edits.speeds.splice(index2, 1);
-    return finish(next, context);
-  }
-  var uniqueId = (items, prefix) => {
-    let n2 = 1;
-    while (items.some((r4) => r4.id === `${prefix}${n2}`)) n2++;
-    return `${prefix}${n2}`;
-  };
-  function addZoomRegion(c3, { tStart, tEnd, x: x4, y: y3, depth }, context = {}) {
-    const r4 = range(tStart, tEnd, context), next = clone2(c3);
-    if (next.zoom.regions.some((z4) => overlap({ start: z4.tStart, end: z4.tEnd }, r4))) throw new Error("Zoom regions cannot overlap; choose an empty range.");
-    next.zoom.regions.push({ id: uniqueId(next.zoom.regions, "manual-"), tStart: r4.start, tEnd: r4.end, depth, keyframes: [{ t: r4.start, x: x4, y: y3 }], stepIds: [], source: "manual" });
-    next.zoom.regions.sort((a3, b3) => a3.tStart - b3.tStart);
-    return finish(next, context);
-  }
-  function updateZoomRegion(c3, id, patch, context = {}) {
-    const next = clone2(c3), z4 = next.zoom.regions.find((z5) => z5.id === id);
-    if (!z4) throw new Error("Zoom region no longer exists.");
-    for (const k4 of Object.keys(patch)) if (!["tStart", "tEnd", "depth", "keyframes"].includes(k4)) throw new Error(`Cannot edit zoom ${k4}.`);
-    const oldStart = z4.tStart;
-    Object.assign(z4, clone2(patch), { source: "manual" });
-    const r4 = range(z4.tStart, z4.tEnd, context);
-    z4.tStart = r4.start;
-    z4.tEnd = r4.end;
-    if (!patch.keyframes) z4.keyframes = z4.keyframes.map((k4) => ({ ...k4, t: Math.max(z4.tStart, Math.min(z4.tEnd, k4.t + z4.tStart - oldStart)) }));
-    z4.keyframes.sort((a3, b3) => a3.t - b3.t);
-    if (z4.keyframes.length) z4.keyframes[0].t = z4.tStart;
-    next.zoom.regions.sort((a3, b3) => a3.tStart - b3.tStart);
-    return finish(next, context);
-  }
-  function deleteZoomRegion(c3, id, context) {
-    const next = clone2(c3);
-    next.zoom.regions = next.zoom.regions.filter((z4) => z4.id !== id);
-    next.zoom.autoSuggest = false;
-    return finish(next, context);
-  }
-  function setZoomFocus(c3, id, t3, x4, y3, context = {}) {
-    const z4 = c3.zoom.regions.find((z5) => z5.id === id);
-    if (!z4) throw new Error("Zoom region no longer exists.");
-    t3 = Math.max(z4.tStart, Math.min(z4.tEnd, snapFrame(t3)));
-    const keyframes = z4.keyframes.filter((k4) => Math.abs(k4.t - t3) > 1e-9);
-    keyframes.push({ t: t3, x: x4, y: y3 });
-    return updateZoomRegion(c3, id, { keyframes }, context);
-  }
-  function withCues(c3, context = {}) {
-    const next = clone2(c3);
-    next.captions.cues ??= clone2(context.plan?.cues ?? context.cues ?? []);
-    return next;
-  }
-  function setCaption(c3, id, patch, context = {}) {
-    const next = withCues(c3, context), cue = next.captions.cues.find((cue2) => cue2.id === id);
-    if (!cue) throw new Error("Caption no longer exists.");
-    for (const key of Object.keys(patch)) if (!["text", "start", "end"].includes(key)) throw new Error(`Cannot edit caption ${key}.`);
-    Object.assign(cue, patch);
-    Object.assign(cue, range(cue.start, cue.end, context));
-    next.captions.cues.sort((a3, b3) => a3.start - b3.start);
-    return finish(next, context);
-  }
-  function addCaption(c3, { text, start, end }, context = {}) {
-    const next = withCues(c3, context), r4 = range(start, end, context);
-    next.captions.cues.push({ id: uniqueId(next.captions.cues, "caption-"), text, ...r4 });
-    next.captions.cues.sort((a3, b3) => a3.start - b3.start);
-    return finish(next, context);
-  }
-  function deleteCaption(c3, id, context = {}) {
-    const next = withCues(c3, context);
-    next.captions.cues = next.captions.cues.filter((cue) => cue.id !== id);
-    return finish(next, context);
-  }
-  function autoZoomRegenerate(c3, events, record) {
-    const next = clone2(c3), manual = next.zoom.regions.filter((z4) => z4.source === "manual");
-    const auto = suggestZoomRegions({ events, record, options: zoomOptions(next.zoom) }).filter((z4) => !manual.some((m3) => z4.tStart < m3.tEnd && z4.tEnd > m3.tStart));
-    auto.forEach((z4, i3) => {
-      z4.id = uniqueId([...manual, ...auto.slice(0, i3)], "auto-");
-    });
-    next.zoom.regions = [...manual, ...auto].sort((a3, b3) => a3.tStart - b3.tStart);
-    return finish(next, { duration: record.durationSec });
+    } }, /* @__PURE__ */ k(Redo2, { size: 16, "aria-hidden": "true" })))), /* @__PURE__ */ k(Tooltip2, { text: `Switch to ${theme === "dark" ? "light" : "dark"} theme` }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Switch to ${theme === "dark" ? "light" : "dark"} theme`, onClick: toggleTheme }, theme === "dark" ? /* @__PURE__ */ k(Sun, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Moon, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: state.composition ? "Export your video" : "Load a recording before exporting" }, /* @__PURE__ */ k(Button, { variant: "default", disabled: !state.composition, onClick: () => setExportOpen(true) }, /* @__PURE__ */ k(Download, { size: 16, "aria-hidden": "true" }), "Export")), exportOpen && /* @__PURE__ */ k(ExportDialog, { store, voice, onClose: () => setExportOpen(false) }));
   }
 
   // editor/ui/separator.jsx
   var Separator = () => /* @__PURE__ */ k("span", { role: "separator", "aria-orientation": "vertical", className: "ui-separator" });
 
-  // editor/ui/badge.jsx
-  var Badge = (props) => /* @__PURE__ */ k("span", { className: "ui-badge", ...props });
+  // editor/audio-view.mjs
+  function voiceBlocks({ plan, storyboard, composition, output }) {
+    const map = plan?.timemap;
+    if (!map || !plan.audio?.narration?.length) return [];
+    const toDisplay = (t3) => output ? t3 : sourceAt(map, t3).t;
+    return plan.audio.narration.map((n2) => {
+      const step = storyboard?.steps?.find((s3) => s3.id === n2.stepId), text = effectiveNarration(step, composition);
+      const warnings = (plan.audio.warnings ?? []).filter((w4) => w4.stepId === n2.stepId);
+      return {
+        stepId: n2.stepId,
+        outStart: n2.outStart,
+        outEnd: n2.outStart + n2.durationSec,
+        start: toDisplay(n2.outStart),
+        end: toDisplay(n2.outStart + n2.durationSec),
+        label: firstWords(text) || n2.stepId,
+        source: n2.source ?? "tts",
+        warning: warnings.length ? warnings.map((w4) => w4.message).join(" ") : null
+      };
+    });
+  }
+  function musicBar({ plan, output }) {
+    const map = plan?.timemap, music = plan?.audio?.music;
+    if (!map || !music) return null;
+    const toDisplay = (t3) => output ? t3 : sourceAt(map, t3).t;
+    const start = toDisplay(0), end = toDisplay(map.outputDuration);
+    return {
+      start,
+      end,
+      fadeIn: Math.max(0, toDisplay(Math.min(music.fadeInSec, map.outputDuration)) - start),
+      fadeOut: Math.max(0, end - toDisplay(Math.max(0, map.outputDuration - music.fadeOutSec))),
+      url: music.url,
+      loop: music.loop
+    };
+  }
 
   // editor/Timeline.jsx
+  var LABEL_WIDTH = 88;
   var clock = (t3) => `${Math.floor(t3 / 60)}:${(t3 % 60).toFixed(2).padStart(5, "0")}`;
   var clamp8 = (v3, lo, hi) => Math.max(lo, Math.min(hi, v3));
   function Timeline({ state, store, time, setTime, setPlaying, selection, setSelection }) {
@@ -29607,11 +31179,11 @@
     }
     function changeScale(value, clientX) {
       const el = scroller.current, next = clamp8(value, 10, 800), rect = el.getBoundingClientRect();
-      const offset4 = clientX === void 0 ? el.clientWidth / 2 : clientX - rect.left;
-      const position = (el.scrollLeft + offset4) / scale;
+      const offset4 = clientX === void 0 ? (el.clientWidth + LABEL_WIDTH) / 2 : clientX - rect.left;
+      const position = (el.scrollLeft + offset4 - LABEL_WIDTH) / scale;
       setScale(next);
       requestAnimationFrame(() => {
-        el.scrollLeft = position * next - offset4;
+        el.scrollLeft = position * next + LABEL_WIDTH - offset4;
       });
     }
     h2(() => {
@@ -29630,6 +31202,11 @@
       return () => el.removeEventListener("wheel", wheel);
     }, [scale, plan]);
     if (!c3 || !plan) return /* @__PURE__ */ k("p", { class: "empty" }, "Load a recording to edit its timeline.");
+    const voice = voiceBlocks({ plan, storyboard: project.storyboard, composition: c3, output }), music = musicBar({ plan, output });
+    const jumpTo = (t3) => {
+      setPlaying(false);
+      setTime(t3);
+    };
     const selectedZoom = shown.zoom.regions.find((z4) => selection?.type === "zoom" && z4.id === selection.id);
     const ticks = [];
     const tickStep = [0.25, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600].find((n2) => n2 * scale >= 65) ?? 600;
@@ -29684,7 +31261,7 @@
       setSpeedOpen(false);
     } }, "Apply"))), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: "Add zoom region (Z)" }, /* @__PURE__ */ k(Button, { onClick: addZoom }, "Add zoom")), /* @__PURE__ */ k("div", { class: "depth-control" }, /* @__PURE__ */ k("span", null, "Depth"), /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Decrease zoom depth", disabled: zoomDepth(selectedZoom?.depth ?? depth) <= 1.05, onClick: () => changeDepth(Math.max(1.05, +(zoomDepth(selectedZoom?.depth ?? depth) - 0.05).toFixed(2))) }, "\u2212"), /* @__PURE__ */ k(Tooltip2, { text: "Zoom depth" }, /* @__PURE__ */ k(Popover2, { label: "Zoom depth", trigger: /* @__PURE__ */ k(Button, { "aria-label": "Zoom depth" }, zoomDepth(selectedZoom?.depth ?? depth), "\xD7") }, /* @__PURE__ */ k(Label3, null, "Zoom depth", /* @__PURE__ */ k(Input2, { "aria-label": "Zoom depth value", type: "number", min: "1.05", max: "4", step: "0.05", value: zoomDepth(selectedZoom?.depth ?? depth), onInput: (e3) => {
       changeDepth(+e3.currentTarget.value);
-    } })))), /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Increase zoom depth", disabled: zoomDepth(selectedZoom?.depth ?? depth) >= 4, onClick: () => changeDepth(Math.min(4, +(zoomDepth(selectedZoom?.depth ?? depth) + 0.05).toFixed(2))) }, "+")), /* @__PURE__ */ k(Tooltip2, { text: "Regenerate automatic zooms; preserve manual regions" }, /* @__PURE__ */ k(Button, { onClick: () => commit(() => autoZoomRegenerate(working, project.events, project.record)) }, "Auto zoom")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: "Add caption (C)" }, /* @__PURE__ */ k(Button, { onClick: addCue }, "Add caption")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: selection?.type === "trim" ? "Restore the selected removed range" : "Select a removed range to restore it" }, /* @__PURE__ */ k(Button, { disabled: selection?.type !== "trim", onClick: () => restore() }, "Restore")), /* @__PURE__ */ k("div", { class: "time-mode" }, /* @__PURE__ */ k(Tooltip2, { text: "Show source or edited output time" }, /* @__PURE__ */ k("span", null, /* @__PURE__ */ k(ToggleGroup, { "aria-label": "Timeline time", value: output ? "output" : "source", onValueChange: (next) => setOutput(next === "output"), options: [{ value: "source", label: "Source" }, { value: "output", label: "Output" }] })))), /* @__PURE__ */ k("div", { class: "timeline-summary" }, /* @__PURE__ */ k("strong", null, "Result ", clock(map.outputDuration)), /* @__PURE__ */ k("span", null, " \xB7 ", clock(c3.edits.trims.reduce((n2, r4) => n2 + r4.end - r4.start, 0)), " removed \xB7 ", c3.edits.trims.length, " ", c3.edits.trims.length === 1 ? "cut" : "cuts")), /* @__PURE__ */ k(Tooltip2, { text: `${output ? "OUTPUT" : "SOURCE"} TIME \xB7 Drag to select \xB7 Alt disables snapping` }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Timeline help" }, /* @__PURE__ */ k(Info, { size: 14, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline out (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline out", onClick: () => changeScale(scale / 1.4) }, "\u2212")), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline in (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline in", onClick: () => changeScale(scale * 1.4) }, "+"))), error && /* @__PURE__ */ k("p", { role: "status", class: "timeline-message" }, error), selectedZoom && /* @__PURE__ */ k("p", { class: "timeline-message" }, "Click the preview to set this region\u2019s focus at the playhead."), /* @__PURE__ */ k("div", { class: "timeline-grid" }, /* @__PURE__ */ k("div", { class: "track-labels", "aria-hidden": "true" }, ["Time", "Video", "Speed", "Zoom", "Captions", "Cursor"].map((label) => /* @__PURE__ */ k("div", null, label))), /* @__PURE__ */ k("div", { class: "timeline-scroll", ref: scroller, tabIndex: "0", "aria-label": "Timeline; scroll horizontally to pan" }, /* @__PURE__ */ k("div", { class: "timeline-lanes", ref: lanes, style: { width } }, /* @__PURE__ */ k(
+    } })))), /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Increase zoom depth", disabled: zoomDepth(selectedZoom?.depth ?? depth) >= 4, onClick: () => changeDepth(Math.min(4, +(zoomDepth(selectedZoom?.depth ?? depth) + 0.05).toFixed(2))) }, "+")), /* @__PURE__ */ k(Tooltip2, { text: "Regenerate automatic zooms; preserve manual regions" }, /* @__PURE__ */ k(Button, { onClick: () => commit(() => autoZoomRegenerate(working, project.events, project.record)) }, "Auto zoom")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: "Add caption (C)" }, /* @__PURE__ */ k(Button, { onClick: addCue }, "Add caption")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: selection?.type === "trim" ? "Restore the selected removed range" : "Select a removed range to restore it" }, /* @__PURE__ */ k(Button, { disabled: selection?.type !== "trim", onClick: () => restore() }, "Restore")), /* @__PURE__ */ k("div", { class: "time-mode" }, /* @__PURE__ */ k(Tooltip2, { text: "Show source or edited output time" }, /* @__PURE__ */ k("span", null, /* @__PURE__ */ k(ToggleGroup, { "aria-label": "Timeline time", value: output ? "output" : "source", onValueChange: (next) => setOutput(next === "output"), options: [{ value: "source", label: "Source" }, { value: "output", label: "Output" }] })))), /* @__PURE__ */ k("div", { class: "timeline-summary" }, /* @__PURE__ */ k("strong", null, "Result ", clock(map.outputDuration)), /* @__PURE__ */ k("span", null, " \xB7 ", clock(c3.edits.trims.reduce((n2, r4) => n2 + r4.end - r4.start, 0)), " removed \xB7 ", c3.edits.trims.length, " ", c3.edits.trims.length === 1 ? "cut" : "cuts")), /* @__PURE__ */ k(Tooltip2, { text: `${output ? "OUTPUT" : "SOURCE"} TIME \xB7 Drag to select \xB7 Alt disables snapping` }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Timeline help" }, /* @__PURE__ */ k(Info, { size: 14, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline out (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline out", onClick: () => changeScale(scale / 1.4) }, "\u2212")), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline in (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline in", onClick: () => changeScale(scale * 1.4) }, "+"))), error && /* @__PURE__ */ k("p", { role: "status", class: "timeline-message" }, error), selectedZoom && /* @__PURE__ */ k("p", { class: "timeline-message" }, "Click the preview to set this region\u2019s focus at the playhead."), /* @__PURE__ */ k("div", { class: "timeline-grid", ref: scroller, tabIndex: "0", role: "region", "aria-label": "Timeline; scroll to pan" }, /* @__PURE__ */ k("div", { class: "track-labels", "aria-hidden": "true" }, ["Time", "Video", "Speed", "Zoom", "Captions", "Cursor", "Voice", "Music"].map((label) => /* @__PURE__ */ k("div", { class: ["Voice", "Music"].includes(label) ? "compact" : "" }, label))), /* @__PURE__ */ k("div", { class: "timeline-scroll" }, /* @__PURE__ */ k("div", { class: "timeline-lanes", ref: lanes, style: { width } }, /* @__PURE__ */ k(
       "div",
       {
         class: "timeline-ruler",
@@ -29726,7 +31303,33 @@
         }
       },
       project.storyboard.steps.find((s3) => s3.id === step.id)?.name ?? project.storyboard.steps.find((s3) => s3.id === step.id)?.title ?? project.storyboard.steps.find((s3) => s3.id === step.id)?.caption ?? step.id
-    )), splits.map((t3) => /* @__PURE__ */ k("i", { class: "split-line", style: { left: px(t3) } })), c3.edits.trims.map((r4, index2) => /* @__PURE__ */ k(Button, { class: `trim-block ${selection?.type === "trim" && selection.index === index2 ? "selected" : ""}`, style: style(r4.start, r4.end), "aria-label": `Removed ${clock(r4.start)} to ${clock(r4.end)}`, onPointerDown: (e3) => e3.stopPropagation(), onClick: () => setSelection({ type: "trim", index: index2 }) }, "Removed")), selection?.type === "range" && /* @__PURE__ */ k("div", { class: "range-selection", style: style(selection.start, selection.end) })), /* @__PURE__ */ k("div", { class: "timeline-track" }, !shown.edits.speeds.length && /* @__PURE__ */ k("span", { class: "track-placeholder" }, "Select a part of the video, then choose Speed"), shown.edits.speeds.map((r4, index2) => block({ type: "speed", index: index2 }, r4.start, r4.end, `${r4.rate}x`, "speed"))), /* @__PURE__ */ k("div", { class: "timeline-track" }, !shown.zoom.regions.length && /* @__PURE__ */ k("span", { class: "track-placeholder" }, "Add zoom to bring a detail closer"), shown.zoom.regions.map((z4) => block({ type: "zoom", id: z4.id }, z4.tStart, z4.tEnd, `${zoomDepth(z4.depth)}x \xB7 ${z4.source}`, "zoom"))), /* @__PURE__ */ k("div", { class: "timeline-track" }, cues.map((cue) => block({ type: "caption", id: cue.id }, cue.start, cue.end, cue.text, "caption"))), /* @__PURE__ */ k("div", { class: "timeline-track cursor-track" }, clicks.map((click) => /* @__PURE__ */ k("span", { class: "click-marker", style: { left: px(click.t) }, title: `Click at ${clock(click.t)}` }))), /* @__PURE__ */ k("div", { class: "timeline-playhead", style: { left: (output ? time : sourceT) * scale } })))), editing && /* @__PURE__ */ k("form", { class: "caption-inline", onSubmit: (e3) => {
+    )), splits.map((t3) => /* @__PURE__ */ k("i", { class: "split-line", style: { left: px(t3) } })), c3.edits.trims.map((r4, index2) => /* @__PURE__ */ k(Button, { class: `trim-block ${selection?.type === "trim" && selection.index === index2 ? "selected" : ""}`, style: style(r4.start, r4.end), "aria-label": `Removed ${clock(r4.start)} to ${clock(r4.end)}`, onPointerDown: (e3) => e3.stopPropagation(), onClick: () => setSelection({ type: "trim", index: index2 }) }, "Removed")), selection?.type === "range" && /* @__PURE__ */ k("div", { class: "range-selection", style: style(selection.start, selection.end) })), /* @__PURE__ */ k("div", { class: "timeline-track" }, !shown.edits.speeds.length && /* @__PURE__ */ k("span", { class: "track-placeholder" }, "Select a part of the video, then choose Speed"), shown.edits.speeds.map((r4, index2) => block({ type: "speed", index: index2 }, r4.start, r4.end, `${r4.rate}x`, "speed"))), /* @__PURE__ */ k("div", { class: "timeline-track" }, !shown.zoom.regions.length && /* @__PURE__ */ k("span", { class: "track-placeholder" }, "Add zoom to bring a detail closer"), shown.zoom.regions.map((z4) => block({ type: "zoom", id: z4.id }, z4.tStart, z4.tEnd, `${zoomDepth(z4.depth)}x \xB7 ${z4.source}`, "zoom"))), /* @__PURE__ */ k("div", { class: "timeline-track" }, cues.map((cue) => block({ type: "caption", id: cue.id }, cue.start, cue.end, cue.text, "caption"))), /* @__PURE__ */ k("div", { class: "timeline-track cursor-track" }, clicks.map((click) => /* @__PURE__ */ k("span", { class: "click-marker", style: { left: px(click.t) }, title: `Click at ${clock(click.t)}` }))), /* @__PURE__ */ k("div", { class: "timeline-track compact voice-track" }, !voice.length && /* @__PURE__ */ k("span", { class: "track-placeholder" }, "Voice-overs appear here once they are made"), voice.map((b3) => /* @__PURE__ */ k(
+      "button",
+      {
+        type: "button",
+        key: b3.stepId,
+        class: `voice-block ${b3.source} ${b3.warning ? "warn" : ""}`,
+        style: { left: b3.start * scale, width: Math.max(6, (b3.end - b3.start) * scale) },
+        title: b3.warning ?? b3.label,
+        "aria-label": `Voice: ${b3.label}, ${clock(b3.start)} to ${clock(b3.end)}${b3.warning ? `. Warning: ${b3.warning}` : ""}. Select to move the playhead here.`,
+        onClick: () => jumpTo(b3.outStart)
+      },
+      b3.warning && /* @__PURE__ */ k("b", { "aria-hidden": "true" }, "!"),
+      /* @__PURE__ */ k("span", null, b3.label)
+    ))), /* @__PURE__ */ k("div", { class: "timeline-track compact music-track" }, !music && /* @__PURE__ */ k("span", { class: "track-placeholder" }, "Add background music in the Music tab"), music && /* @__PURE__ */ k(
+      "button",
+      {
+        type: "button",
+        class: "music-bar",
+        style: { left: music.start * scale, width: Math.max(6, (music.end - music.start) * scale) },
+        title: baseName(c3.audio.music.file),
+        "aria-label": `Music: ${baseName(c3.audio.music.file)}. Select to move the playhead to the start.`,
+        onClick: () => jumpTo(0)
+      },
+      /* @__PURE__ */ k("i", { class: "fade-in", style: { width: music.fadeIn * scale }, "aria-hidden": "true" }),
+      /* @__PURE__ */ k("i", { class: "fade-out", style: { width: music.fadeOut * scale }, "aria-hidden": "true" }),
+      /* @__PURE__ */ k("span", null, baseName(c3.audio.music.file))
+    )), /* @__PURE__ */ k("div", { class: "timeline-playhead", style: { left: (output ? time : sourceT) * scale } })))), editing && /* @__PURE__ */ k("form", { class: "caption-inline", onSubmit: (e3) => {
       e3.preventDefault();
       if (commit(() => setCaption(c3, editing.id, { text: editing.text }, context))) setEditing(null);
     } }, /* @__PURE__ */ k(Label3, null, "Caption text ", /* @__PURE__ */ k(Input2, { autoFocus: true, maxLength: "140", value: editing.text, onInput: (e3) => setEditing({ ...editing, text: e3.currentTarget.value }), onKeyDown: (e3) => {
@@ -29740,6 +31343,7 @@
   }
   function App() {
     const [store] = d2(createEditorStore), [state, setState] = d2(store.getState());
+    const [voice] = d2(() => createVoiceController({ store }));
     const shell = A2(), splitter = A2();
     const [chosen, setChosen] = d2(() => Number(readPreference("timeline-height", 0)) || 0), [viewportH, setViewportH] = d2(innerHeight);
     const height = timelineHeight(chosen, viewportH);
@@ -29762,6 +31366,7 @@
         storeError.current = next.error;
       });
       store.load();
+      voice.start();
       openFrames().then((frames) => {
         opened = frames;
         if (!active) {
@@ -29777,6 +31382,7 @@
         active = false;
         opened?.close();
         unsubscribe();
+        voice.dispose();
         store.dispose();
       };
     }, [store]);
@@ -29868,7 +31474,7 @@
       addEventListener("pointerup", finish2);
       addEventListener("pointercancel", finish2);
     }
-    return /* @__PURE__ */ k(TooltipProvider2, { delayDuration: 350 }, /* @__PURE__ */ k("div", { ref: shell, class: "editor-shell", style: { "--timeline-height": `${height}px` } }, /* @__PURE__ */ k(TopBar, { state, store, theme, toggleTheme: () => {
+    return /* @__PURE__ */ k(TooltipProvider2, { delayDuration: 350 }, /* @__PURE__ */ k("div", { ref: shell, class: "editor-shell", style: { "--timeline-height": `${height}px` } }, /* @__PURE__ */ k(TopBar, { state, store, voice, theme, toggleTheme: () => {
       const next = theme === "dark" ? "light" : "dark";
       setTheme(next);
       writePreference("theme", next);
@@ -29892,7 +31498,7 @@
           }
         }
       }
-    )), /* @__PURE__ */ k("div", { class: "settings-column" }, state.composition && /* @__PURE__ */ k(Settings, { state, store }))), /* @__PURE__ */ k("div", { class: "splitter", role: "separator", tabIndex: "0", "aria-label": "Resize timeline", "aria-orientation": "horizontal", "aria-valuemin": 190, "aria-valuemax": Math.floor(innerHeight * 0.6), "aria-valuenow": Math.round(height), onPointerDown: startResize, onDblClick: () => resizeTimeline(0), onKeyDown: (e3) => {
+    )), /* @__PURE__ */ k("div", { class: "settings-column" }, state.composition && /* @__PURE__ */ k(Settings, { state, store, controller: voice }))), /* @__PURE__ */ k("div", { class: "splitter", role: "separator", tabIndex: "0", "aria-label": "Resize timeline", "aria-orientation": "horizontal", "aria-valuemin": 190, "aria-valuemax": Math.floor(innerHeight * 0.6), "aria-valuenow": Math.round(height), onPointerDown: startResize, onDblClick: () => resizeTimeline(0), onKeyDown: (e3) => {
       if (["ArrowUp", "ArrowDown", "Home", "End", "Enter"].includes(e3.key)) {
         e3.preventDefault();
         resizeTimeline(e3.key === "Home" ? 190 : e3.key === "End" ? innerHeight * 0.6 : e3.key === "Enter" ? 0 : height + (e3.key === "ArrowUp" ? 16 : -16));
@@ -29900,7 +31506,7 @@
     } }), /* @__PURE__ */ k("section", { id: "timeline-root", "aria-label": "Timeline" }, hint && /* @__PURE__ */ k("div", { class: "hint-card" }, /* @__PURE__ */ k("p", null, "Tip: drag on the Video track to select a part, then press Delete to cut it, or use Speed to fast-forward it."), /* @__PURE__ */ k(Tooltip2, { text: "Dismiss this hint" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Dismiss editing hint", onClick: () => {
       setHint(false);
       writePreference("hint-dismissed", "yes");
-    } }, /* @__PURE__ */ k(X3, { size: 14, "aria-hidden": "true" })))), /* @__PURE__ */ k(Timeline, { state, store, time, setTime, setPlaying, selection, setSelection })), toast && /* @__PURE__ */ k("div", { class: "toast", role: "status" }, toast), shortcuts && /* @__PURE__ */ k(Shortcuts, { onClose: () => setShortcuts(false) }), sheet && state.composition && /* @__PURE__ */ k(Dialog2, { title: "Settings", description: "Adjust the look of your video.", className: "settings-sheet", onClose: () => setSheet(false) }, /* @__PURE__ */ k(Settings, { state, store }))));
+    } }, /* @__PURE__ */ k(X3, { size: 14, "aria-hidden": "true" })))), /* @__PURE__ */ k(Timeline, { state, store, time, setTime, setPlaying, selection, setSelection })), toast && /* @__PURE__ */ k("div", { class: "toast", role: "status" }, toast), shortcuts && /* @__PURE__ */ k(Shortcuts, { onClose: () => setShortcuts(false) }), sheet && state.composition && /* @__PURE__ */ k(Dialog2, { title: "Settings", description: "Adjust the look of your video.", className: "settings-sheet", onClose: () => setSheet(false) }, /* @__PURE__ */ k(Settings, { state, store, controller: voice }))));
   }
 
   // editor/main.jsx
@@ -29954,19 +31560,30 @@ lucide-preact/dist/esm/icons/check.mjs:
 lucide-preact/dist/esm/icons/chevron-down.mjs:
 lucide-preact/dist/esm/icons/chevron-up.mjs:
 lucide-preact/dist/esm/icons/clapperboard.mjs:
+lucide-preact/dist/esm/icons/copy.mjs:
 lucide-preact/dist/esm/icons/download.mjs:
 lucide-preact/dist/esm/icons/info.mjs:
 lucide-preact/dist/esm/icons/keyboard.mjs:
+lucide-preact/dist/esm/icons/loader-circle.mjs:
+lucide-preact/dist/esm/icons/mic.mjs:
 lucide-preact/dist/esm/icons/moon.mjs:
 lucide-preact/dist/esm/icons/pause.mjs:
 lucide-preact/dist/esm/icons/play.mjs:
 lucide-preact/dist/esm/icons/redo-2.mjs:
+lucide-preact/dist/esm/icons/refresh-cw.mjs:
 lucide-preact/dist/esm/icons/rotate-ccw.mjs:
 lucide-preact/dist/esm/icons/settings-2.mjs:
 lucide-preact/dist/esm/icons/skip-back.mjs:
 lucide-preact/dist/esm/icons/skip-forward.mjs:
+lucide-preact/dist/esm/icons/sparkles.mjs:
+lucide-preact/dist/esm/icons/square.mjs:
 lucide-preact/dist/esm/icons/sun.mjs:
+lucide-preact/dist/esm/icons/trash.mjs:
+lucide-preact/dist/esm/icons/triangle-alert.mjs:
 lucide-preact/dist/esm/icons/undo-2.mjs:
+lucide-preact/dist/esm/icons/upload.mjs:
+lucide-preact/dist/esm/icons/volume-2.mjs:
+lucide-preact/dist/esm/icons/volume-x.mjs:
 lucide-preact/dist/esm/icons/x.mjs:
 lucide-preact/dist/esm/lucide-preact.mjs:
   (**

@@ -41,7 +41,7 @@ const checkVoiceId = (id) => { if (!/^[a-z]{2}_[a-z0-9]+$/i.test(id)) throw new 
 const parseSpeed = (raw) => { if (raw === undefined) return 1; const n = Number(raw); if (!Number.isFinite(n) || n <= 0) throw new Error('--speed must be a positive number'); return clampSpeed(n); };
 const exists = (p) => access(p).then(() => true, () => false);
 
-async function readPronunciations(name) {
+export async function readPronunciations(name) {
   try { const data = JSON.parse(await readFile(pronunciationsFile(name), 'utf8')); return data && typeof data === 'object' && !Array.isArray(data) ? data : {}; }
   catch (err) { if (err.code === 'ENOENT') return {}; throw new Error(`${pronunciationsFile(name)} is not valid JSON: ${err.message}`); }
 }

@@ -1,15 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir, stat, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, stat, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
 
 const directory = await mkdtemp(path.join(os.tmpdir(), 'showreel-editor-browser-'));
 process.env.SHOWREEL_HOME = path.join(directory, 'home');
+process.env.SHOWREEL_VOICE_ENGINE = 'fake'; // set before the server starts: the deterministic fake voice engine, never the real model
 const { syntheticRun } = await import('./helpers/synthetic-run.mjs');
 const { startEditorServer } = await import('../scripts/lib/editor/server.mjs');
 const { projectDir } = await import('../scripts/lib/paths.mjs');
+const { SETTINGS } = await import('../scripts/lib/compose/settings-schema.mjs');
+const { encodeWav } = await import('../scripts/lib/voice/wav.mjs');
 
 const until = async (fn, what, ms = 20000) => {
   const end = Date.now() + ms; let last;
@@ -20,7 +23,8 @@ const until = async (fn, what, ms = 20000) => {
 test('real editor: load, edit, undo, autosave, play and export', { timeout: 240000 }, async (t) => {
   let browser, server;
   try {
-    browser = await chromium.launch({ headless: true });
+    // The fake microphone flags let the own-voice recording test run without a real device or a permission prompt.
+    browser = await chromium.launch({ headless: true, args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
     const run = await syntheticRun(browser);
     const compositionFile = path.join(projectDir(run.name), 'composition.json');
     server = await startEditorServer({ name: run.name });
@@ -175,6 +179,112 @@ test('real editor: load, edit, undo, autosave, play and export', { timeout: 2400
       assert.ok((await stat(finalFile)).size > 10000, 'final.mp4 has content');
       const c = await saved();
       assert.equal(c.output.fps, 30);
+    });
+
+
+    // ---- Phase 6 audio UI (written without a browser available: first run of these is by the integration session) ----
+    await t.test('Voice and Music tabs, script rows, fake-engine generation, timeline tracks and every audio setting', async () => {
+      await page.keyboard.press('Escape'); // the export dialog from the previous test stays open
+      await until(async () => (await page.getByRole('dialog').count()) === 0, 'export dialog closed');
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const voiceTab = page.getByRole('tab', { name: 'Voice', exact: true }), musicTab = page.getByRole('tab', { name: 'Music', exact: true });
+      assert.equal(await voiceTab.count(), 1, 'Voice tab'); assert.equal(await musicTab.count(), 1, 'Music tab');
+      await voiceTab.click();
+      const rows = page.locator('.script-row');
+      assert.equal(await rows.count(), run.storyboard.steps.length, 'one script row per step');
+      await page.getByRole('combobox', { name: 'Voice', exact: true }).waitFor(); // the fake engine counts as installed
+      assert.equal(await page.getByText('showreel voice install --yes').count(), 0, 'no install card when the engine is available');
+      const narration = page.getByLabel('Narration for Open the report');
+      await narration.fill('Open the report and check the totals.');
+      await until(async () => (await saved()).audio?.narration?.steps?.s1?.text === 'Open the report and check the totals.', 'narration text saved');
+      assert.equal((await rows.first().locator('.status').innerText()).trim(), 'Not generated');
+      assert.match(await page.locator('.counter').first().innerText(), /^\d+\/280$/);
+      const voiceSwitch = page.getByRole('switch', { name: 'Voice-over', exact: true });
+      if (await voiceSwitch.getAttribute('aria-checked') !== 'true') await voiceSwitch.click();
+      await until(async () => (await saved()).audio?.voice?.enabled === true, 'voice-over switched on');
+      await page.getByRole('button', { name: /^Generate voice, Open the report/ }).click();
+      await until(async () => (await rows.first().locator('.status').innerText()).trim() === 'Ready', 'voice-over generated', 30000);
+      const index = JSON.parse(await readFile(path.join(projectDir(run.name), 'voice', 'clips.json'), 'utf8'));
+      assert.ok(index.steps.s1 && index.clips[index.steps.s1].source === 'tts', 'clip index written by the server');
+      await page.locator('.timeline-track.voice-track .voice-block').first().waitFor({ timeout: 10000 });
+      assert.match(await page.locator('.voice-block').first().innerText(), /Open the report/);
+      await waitSaved();
+      // Editing the words makes the clip stale (undo-able through the normal history).
+      await narration.fill('A different sentence now.');
+      await until(async () => (await rows.first().locator('.status').innerText()).trim() === 'Needs update', 'stale after editing');
+      // A voice sample is generated on demand and then plays.
+      await page.getByRole('button', { name: 'Play sample', exact: true }).click();
+      await until(async () => stat(path.join(directory, 'home', 'voice-samples', 'af_heart.wav')).then(() => true, () => false), 'sample file', 30000);
+      // Mute toggle writes composition.json.
+      await page.getByRole('button', { name: /^Mute Open the report/ }).click();
+      await until(async () => (await saved()).audio?.narration?.steps?.s1?.muted === true, 'muted saved');
+      assert.equal((await rows.first().locator('.status').innerText()).trim(), 'Muted');
+      await page.getByRole('button', { name: /^Mute Open the report/ }).click();
+      await until(async () => (await saved()).audio?.narration?.steps?.s1?.muted === undefined, 'unmuted saved');
+      // Import a WAV file for the step.
+      const wavFile = path.join(directory, 'import.wav');
+      await writeFile(wavFile, encodeWav(Float32Array.from({ length: 24000 }, (_, i) => 0.3 * Math.sin(i / 12)), 24000));
+      await page.getByLabel('Choose an audio file').setInputFiles(wavFile);
+      await until(async () => (await rows.first().locator('.status').innerText()).trim() === 'Imported file', 'imported file used', 30000);
+      // Record my own voice with the fake microphone.
+      await page.getByRole('button', { name: /^Record my voice, Open the report/ }).click();
+      await page.getByRole('checkbox', { name: '3-2-1 countdown' }).click();
+      await page.getByRole('button', { name: 'Start recording' }).click();
+      await page.getByRole('meter', { name: 'Microphone level' }).waitFor({ timeout: 10000 });
+      await page.waitForTimeout(1200);
+      await page.getByRole('button', { name: 'Stop', exact: true }).click();
+      await page.getByRole('button', { name: 'Keep recording' }).click();
+      await until(async () => (await rows.first().locator('.status').innerText()).trim() === 'Your recording', 'own recording used', 30000);
+      // Remove the clip again.
+      await page.getByRole('button', { name: /^Remove clip, Open the report/ }).click();
+      await until(async () => (await rows.first().locator('.status').innerText()).trim() === 'Not generated', 'clip removed');
+      // Every audio setting is reachable in the Voice or Music panel.
+      const missing = [];
+      for (const [tab, wanted] of [['Voice', SETTINGS.filter(s => s.path.startsWith('audio.voice.'))], ['Music', SETTINGS.filter(s => s.group === 'audio' && !s.path.startsWith('audio.voice.'))]]) {
+        await page.getByRole('tab', { name: tab, exact: true }).click();
+        for (const setting of wanted) if (await page.locator(`[id="setting-${setting.path}"]`).count() !== 1) missing.push(setting.path);
+      }
+      assert.deepEqual(missing, [], 'settings missing from the audio panels');
+      // Music: upload a file, see the bar on the timeline, then remove it.
+      const musicFile = path.join(directory, 'loop.wav');
+      await writeFile(musicFile, encodeWav(Float32Array.from({ length: 96000 }, (_, i) => 0.2 * Math.sin(i / 30)), 48000));
+      await page.getByLabel('Choose a music file').setInputFiles(musicFile);
+      await until(async () => /^music\/loop-[0-9a-f]{8}\.wav$/.test((await saved()).audio?.music?.file ?? ''), 'music file saved');
+      assert.equal((await saved()).audio.music.enabled, true);
+      await page.locator('.music-bar').waitFor({ timeout: 10000 });
+      await page.getByText('Last measured:').waitFor();
+      await page.getByRole('button', { name: 'Remove music' }).click();
+      await until(async () => (await saved()).audio?.music?.file === null, 'music removed');
+      await page.getByRole('tab', { name: 'Cursor', exact: true }).click();
+    });
+
+    await t.test('timeline keeps its toolbar and ruler while the tracks scroll, with all existing tracks visible at 1280x720', async () => {
+      await page.setViewportSize({ width: 1280, height: 720 });
+      const grid = page.locator('.timeline-grid');
+      assert.ok(await grid.evaluate(el => el.scrollHeight >= el.clientHeight), 'tracks area may scroll');
+      for (const name of ['Time', 'Video', 'Speed', 'Zoom', 'Captions', 'Cursor']) assert.equal(await page.locator('.track-labels > div').filter({ hasText: new RegExp(`^${name}$`) }).count(), 1, name);
+      for (const name of ['Voice', 'Music']) assert.equal(await page.locator('.track-labels > div').filter({ hasText: new RegExp(`^${name}$`) }).count(), 1, name);
+      const toolbarBefore = await page.locator('.timeline-toolbar').boundingBox(), rulerBefore = await page.locator('.timeline-ruler').boundingBox();
+      await grid.evaluate(el => { el.scrollTop = el.scrollHeight; });
+      await page.waitForTimeout(100);
+      const toolbarAfter = await page.locator('.timeline-toolbar').boundingBox(), rulerAfter = await page.locator('.timeline-ruler').boundingBox();
+      assert.equal(toolbarAfter.y, toolbarBefore.y, 'toolbar stays');
+      assert.ok(Math.abs(rulerAfter.y - rulerBefore.y) < 1.5, `ruler stays: ${rulerBefore.y} -> ${rulerAfter.y}`);
+    });
+
+    await t.test('export dialog lists voice readiness and reports the measured loudness', { timeout: 200000 }, async () => {
+      await page.getByRole('tab', { name: 'Voice', exact: true }).click();
+      const rows = page.locator('.script-row');
+      await page.getByRole('button', { name: /^Generate voice, Open the report/ }).click();
+      await until(async () => (await rows.first().locator('.status').innerText()).trim() === 'Ready', 'voice-over generated again', 30000);
+      await page.getByRole('tab', { name: 'Cursor', exact: true }).click();
+      await page.getByRole('button', { name: 'Export' }).click();
+      await page.getByRole('list', { name: 'Voice-over checklist' }).waitFor({ timeout: 10000 });
+      assert.match(await page.getByRole('list', { name: 'Voice-over checklist' }).innerText(), /Voice: 1 of 1 steps ready/);
+      await page.getByRole('button', { name: /^(Start|Export)( export)?$/ }).last().click();
+      await page.locator('.loudness-result').first().waitFor({ timeout: 150000 });
+      assert.match((await page.locator('.loudness-result').first().innerText()).trim(), /LUFS, true peak .* dBTP/);
+      await page.keyboard.press('Escape');
     });
 
     assert.deepEqual(problems, [], `console problems:\n${problems.join('\n')}`);

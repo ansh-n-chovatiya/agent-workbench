@@ -82,3 +82,15 @@ test('extendCues grows cues to the narration span, never shrinks or overlaps', (
   const pushed = extendCues(cues, [{ stepId: 's1', outStart: 0.15, outEnd: 5 }], map);
   near(pushed[0].end, 5); near(pushed[1].start, 5.05); near(pushed[1].end, 7.9);
 });
+
+test('a hold on the last frame of a step lengthens the video that remains and clears the overrun', () => {
+  const plain = placeNarration({ steps, clips: clips(5, 1, 1), timemap: buildTimeMap({ duration: 12 }), fps: 30 });
+  assert.deepEqual(codes(plain), ['s1:voice-overruns-video', 's2:overlap-shifted']);
+  const overrun = plain.warnings[0].overrunSec;
+  const held = placeNarration({ steps, clips: clips(5, 1, 1), timemap: buildTimeMap({ duration: 12, holds: [{ t: 4 - 1 / 60, duration: overrun }] }), fps: 30 });
+  assert.deepEqual(held.warnings, []);
+  // The next step starts later by exactly the hold, and nothing divides by the hold's zero rate.
+  const next = held.placements.find((p) => p.stepId === 's2');
+  near(next.outStart, 4.15 + overrun, 'next step starts after the hold');
+  assert.ok(held.placements.every((p) => Number.isFinite(p.outStart) && Number.isFinite(p.outEnd) && p.rate > 0));
+});

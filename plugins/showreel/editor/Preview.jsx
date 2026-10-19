@@ -9,9 +9,10 @@ import { Slider } from './ui/slider.jsx';
 import { Select } from './ui/select.jsx';
 import { Tooltip } from './ui/tooltip.jsx';
 import { Label } from './ui/label.jsx';
-import { Play, Pause, SkipBack, SkipForward } from 'lucide-preact';
-import { fitPreview } from './layout.mjs';
-import { playbackSync, previewBelowRate } from './playback.mjs';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-preact';
+import { fitPreview, readPreference, writePreference } from './layout.mjs';
+import { playbackSync, previewBelowRate, audioSignature } from './playback.mjs';
+import { createAudioPreview } from './audio-preview.js';
 
 export function Preview({ plan, provider, time, setTime, playing, setPlaying, onPick, focus }) {
   const stage = useRef(), [size, setSize] = useState({width:0,height:0});
@@ -27,6 +28,27 @@ export function Preview({ plan, provider, time, setTime, playing, setPlaying, on
   const [assets, setAssets] = useState(null), [error, setError] = useState(''), [dropped, setDropped] = useState(false);
   current.current = time;
   const duration = plan?.timemap.outputDuration ?? 0, fps = plan?.output.fps ?? 30;
+  // Preview audio: one mix of the whole edited timeline, played through one audio clock (see audio-preview.js).
+  const audio = useRef(null); audio.current ??= createAudioPreview();
+  const [audioStatus, setAudioStatus] = useState('none'), [audioError, setAudioError] = useState('');
+  const [volume, setVolume] = useState(() => { const v = Number(readPreference('volume', '0.8')); return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.8; });
+  const [muted, setMuted] = useState(() => readPreference('muted', '') === 'yes');
+  const signature = audioSignature(plan?.audio), hasAudio = !!signature;
+  const audioReady = audioStatus === 'ready' && !!plan && audio.current.has(plan.audio);
+  useEffect(() => () => audio.current.dispose(), []);
+  useEffect(() => { audio.current.setVolume(volume); audio.current.setMuted(muted); }, [volume, muted]);
+  useEffect(() => {
+    setAudioError('');
+    if (!signature) { setAudioStatus('none'); return undefined; }
+    if (audio.current.has(plan.audio)) { setAudioStatus('ready'); return undefined; }
+    setAudioStatus('preparing');
+    let active = true;
+    const timer = setTimeout(() => { // wait for the edit to settle before decoding and mixing
+      audio.current.prepare(plan.audio).then(result => { if (active && result !== 'stale') setAudioStatus(result === 'ready' ? 'ready' : 'none'); })
+        .catch(e => { if (active) { setAudioStatus('error'); setAudioError(e.message); } });
+    }, 400);
+    return () => { active = false; clearTimeout(timer); };
+  }, [signature]);
   useEffect(() => {
     let active = true; setAssets(null); setError('');
     if (plan) Promise.all([
@@ -43,6 +65,12 @@ export function Preview({ plan, provider, time, setTime, playing, setPlaying, on
     let active = true, raf, busy = false, lastTime = -1, last = performance.now();
     let main = false, starting = false, seeking = false, frameCallback;
     let serial = 0, drawnSerial = 0, expected = 0, previousFrame = null;
+    // 'starting' holds the playhead until sound is really playing, then the audio clock drives it and the video follows.
+    let audioMode = 'off';
+    if (playing && audioReady && rate === 1) {
+      audioMode = 'starting';
+      audio.current.start(() => current.current, { loop }).then(ok => { if (!active) { audio.current.stop(); return; } audioMode = ok ? 'running' : 'off'; });
+    }
     // Some browsers (Chromium builds, Firefox on Linux) cannot play H.264 in <video>; WebCodecs may still decode it.
     // Then playback falls back to the exact frame decoder, which is slower on large sources but always correct.
     let native = media.canPlayType('video/mp4; codecs="avc1.640033"') !== '' && !media.error;
@@ -81,7 +109,9 @@ export function Preview({ plan, provider, time, setTime, playing, setPlaying, on
       if (!active) return;
       raf = requestAnimationFrame(tick);
       if (playing) {
-        let next = current.current + (now - last) / 1000 * rate;
+        let next = audioMode === 'starting' ? current.current
+          : audioMode === 'running' ? audio.current.position() ?? current.current
+          : current.current + (now - last) / 1000 * rate;
         if (next >= duration) {
           next = loop ? next % duration : duration;
           if (!loop) { media.pause(); setPlaying(false); }
@@ -103,6 +133,13 @@ export function Preview({ plan, provider, time, setTime, playing, setPlaying, on
           if (!nativeStart) nativeStart = now;
           if (media.readyState < 2 && !seeking && !media.seeking && now - nativeStart > 1500) { native = false; media.pause(); return; }
           if (media.readyState >= 2) nativeStart = 0;
+          if (state.rate === 0) {
+            // A held frame: the picture waits (frozen) while the narration finishes.
+            if (!media.paused) media.pause();
+            if (!seeking && !media.seeking && media.readyState >= 1 && Math.abs(media.currentTime - state.sourceT) > 0.05) { seeking = true; resetFrames(); media.currentTime = state.sourceT; }
+            if (!seeking && !media.seeking && media.readyState >= 2) paint(t, state, media);
+            return;
+          }
           const sync = playbackSync(state.sourceT, media.currentTime, state.rate, rate);
           if (media.playbackRate !== sync.playbackRate) media.playbackRate = sync.playbackRate;
           if (!seeking && !media.seeking && media.readyState >= 1 && sync.action === 'seek') {
@@ -114,7 +151,7 @@ export function Preview({ plan, provider, time, setTime, playing, setPlaying, on
               starting = false;
             });
           }
-          // Future audio sync belongs here: syncPlaybackAudio(state.sourceT, sync.playbackRate).
+          // Audio needs no sync here: the playhead follows the audio clock, so this video sync follows the audio too.
           // Seek completion is event driven; retain the canvas while the video has no usable frame.
           let count = 0;
           if (!seeking && !media.seeking && media.readyState >= 2) {
@@ -138,11 +175,11 @@ export function Preview({ plan, provider, time, setTime, playing, setPlaying, on
     };
     raf = requestAnimationFrame(tick);
     return () => {
-      active = false; cancelAnimationFrame(raf); media.pause(); provider.pause();
+      active = false; cancelAnimationFrame(raf); media.pause(); provider.pause(); audio.current.stop();
       media.removeEventListener('seeked', seeked); media.removeEventListener('error', unsupported);
       if (frameCallback !== undefined) media.cancelVideoFrameCallback(frameCallback);
     };
-  }, [plan, provider, assets, playing, duration, rate, loop]);
+  }, [plan, provider, assets, playing, duration, rate, loop, audioReady]);
   function pick(event) {
     if (!onPick || !drawn.current) return;
     const { plan: p, state } = drawn.current;
@@ -166,19 +203,24 @@ export function Preview({ plan, provider, time, setTime, playing, setPlaying, on
     }
   }
   // Like any player: pressing Play at the very end starts again from the beginning.
-  const togglePlay = () => { if (!playing && duration > 0 && current.current >= duration - 0.05) { current.current = 0; setTime(0); } setPlaying(!playing); };
+  const togglePlay = () => { audio.current.unlock(); if (!playing && duration > 0 && current.current >= duration - 0.05) { current.current = 0; setTime(0); } setPlaying(!playing); };
   const step = direction => { setPlaying(false); setTime(Math.max(0, Math.min(duration, time + direction / fps))); };
   return <section class="preview" aria-label="Video preview">
     <video ref={video} src="/media/raw.mp4" muted playsInline preload="auto" hidden />
     <div class="preview-stage" ref={stage}><div class="preview-canvas-wrap" style={{width:size.width,height:size.height}}><canvas ref={canvas} onClick={pick} aria-label="Composition preview; click to pick zoom focus" style={{ aspectRatio: plan ? `${plan.output.width}/${plan.output.height}` : '16/9' }} />{crosshair && <span class="focus-crosshair" style={crosshair} aria-label="Selected zoom focus">+</span>}</div></div>
     {error && <p class="error" role="alert">{error}</p>}
     {dropped && <p class="warning" role="status">Preview below 24 fps — frames are being dropped.</p>}
+    {hasAudio && audioStatus === 'preparing' && <p class="audio-status" role="status">Preparing audio…</p>}
+    {hasAudio && rate !== 1 && <p class="audio-status" role="status">Audio muted at this speed</p>}
+    {audioStatus === 'error' && <p class="warning" role="status">Preview audio is unavailable: {audioError}</p>}
     <div class="transport" role="toolbar" aria-label="Preview transport">
       <Tooltip text={plan ? 'Previous frame (,)' : 'Load a recording to step frames'}><Button size="icon" onClick={() => step(-1)} aria-label="Previous frame" disabled={!plan}><SkipBack size={16} aria-hidden="true" /></Button></Tooltip>
       <Tooltip text={plan && assets ? `${playing ? 'Pause' : 'Play'} (Space)` : 'Waiting for the preview to load'}><Button size="icon" onClick={togglePlay} disabled={!plan || !assets} aria-label={playing ? 'Pause' : 'Play'}>{playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}</Button></Tooltip>
       <Tooltip text={plan ? 'Next frame (.)' : 'Load a recording to step frames'}><Button size="icon" onClick={() => step(1)} aria-label="Next frame" disabled={!plan}><SkipForward size={16} aria-hidden="true" /></Button></Tooltip>
       <output class="timecode">{timecode(time, fps)} / {timecode(duration, fps)}</output>
       <div class="seek"><Slider aria-label="Seek output time" min={0} max={duration || 1} step={1 / fps} value={[time]} disabled={!plan} onValueChange={([next]) => {setPlaying(false);setTime(next);}} /></div>
+      {hasAudio && <><Tooltip text={muted ? 'Turn preview audio on' : 'Mute preview audio'}><Button size="icon" aria-label={muted ? 'Unmute audio' : 'Mute audio'} aria-pressed={muted} onClick={() => { setMuted(!muted); writePreference('muted', muted ? '' : 'yes'); }}>{muted ? <VolumeX size={16} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />}</Button></Tooltip>
+        <div class="volume"><Slider aria-label="Volume" min={0} max={1} step={0.05} value={[muted ? 0 : volume]} onValueChange={([next]) => { setVolume(next); writePreference('volume', String(next)); if (muted && next > 0) { setMuted(false); writePreference('muted', ''); } }} /></div></>}
       <Label className="loop-control"><Checkbox aria-label="Loop" checked={loop} onCheckedChange={setLoop} />Loop</Label>
       <Tooltip text="Preview playback speed"><span><Select aria-label="Playback rate" value={rate} onValueChange={next => setRate(+next)} options={[0.5,1,2].map(n => ({value:n,label:`${n}×`}))} /></span></Tooltip>
     </div>

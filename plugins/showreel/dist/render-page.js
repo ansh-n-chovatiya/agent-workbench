@@ -1,4 +1,4 @@
-// showreel render sources sha256: 505b86f9ba83a72773fc47f041339f94ae8fb0707db47ad3f0d6b9367106d28c
+// showreel render sources sha256: edd06c834c2458ddf65c1385d1e5d353b7f493cb75b73d0f27fade3e7e3fc209
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -31823,7 +31823,7 @@
       fade: 0.4,
       transition: "crossfade"
     },
-    edits: { trims: [], speeds: [] },
+    edits: { trims: [], speeds: [], holds: [] },
     audio: {
       voice: { enabled: null, voiceId: "af_heart", speed: 1, gainDb: 0 },
       music: {

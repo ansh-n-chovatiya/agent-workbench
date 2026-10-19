@@ -13,6 +13,10 @@ import { ToggleGroup } from './ui/toggle-group.jsx';
 import { Info } from 'lucide-preact';
 import { Badge } from './ui/badge.jsx';
 import { isTyping } from './helpers.mjs';
+import { voiceBlocks, musicBar } from './audio-view.mjs';
+import { baseName } from './voice-status.mjs';
+
+const LABEL_WIDTH = 88;
 
 const clock = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5,'0')}`;
 const clamp = (v,lo,hi) => Math.max(lo,Math.min(hi,v));
@@ -186,9 +190,10 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
   }
   function changeScale(value,clientX) {
     const el = scroller.current, next = clamp(value,10,800), rect = el.getBoundingClientRect();
-    const offset = clientX === undefined ? el.clientWidth/2 : clientX-rect.left;
-    const position = (el.scrollLeft+offset)/scale;
-    setScale(next); requestAnimationFrame(() => { el.scrollLeft = position*next-offset; });
+    // The sticky label column covers the first LABEL_WIDTH pixels of the scroller; lane time starts after it.
+    const offset = clientX === undefined ? (el.clientWidth+LABEL_WIDTH)/2 : clientX-rect.left;
+    const position = (el.scrollLeft+offset-LABEL_WIDTH)/scale;
+    setScale(next); requestAnimationFrame(() => { el.scrollLeft = position*next+LABEL_WIDTH-offset; });
   }
   useEffect(() => {
     const el = scroller.current; if (!el) return;
@@ -196,6 +201,8 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
     el.addEventListener('wheel',wheel,{passive:false}); return () => el.removeEventListener('wheel',wheel);
   },[scale,plan]);
   if (!c || !plan) return <p class="empty">Load a recording to edit its timeline.</p>;
+  const voice = voiceBlocks({plan,storyboard:project.storyboard,composition:c,output}), music = musicBar({plan,output});
+  const jumpTo = t => { setPlaying(false); setTime(t); };
   const selectedZoom = shown.zoom.regions.find(z => selection?.type === 'zoom' && z.id === selection.id);
   const ticks = []; const tickStep = [0.25,0.5,1,2,5,10,30,60,120,300,600].find(n => n*scale >= 65) ?? 600;
   for(let t=0;t<=extent;t+=tickStep) ticks.push(t);
@@ -234,8 +241,8 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
     </div>
     {error && <p role="status" class="timeline-message">{error}</p>}
     {selectedZoom && <p class="timeline-message">Click the preview to set this region’s focus at the playhead.</p>}
-    <div class="timeline-grid"><div class="track-labels" aria-hidden="true">{['Time','Video','Speed','Zoom','Captions','Cursor'].map(label => <div>{label}</div>)}</div>
-      <div class="timeline-scroll" ref={scroller} tabIndex="0" aria-label="Timeline; scroll horizontally to pan">
+    <div class="timeline-grid" ref={scroller} tabIndex="0" role="region" aria-label="Timeline; scroll to pan"><div class="track-labels" aria-hidden="true">{['Time','Video','Speed','Zoom','Captions','Cursor','Voice','Music'].map(label => <div class={['Voice','Music'].includes(label) ? 'compact' : ''}>{label}</div>)}</div>
+      <div class="timeline-scroll">
         <div class="timeline-lanes" ref={lanes} style={{width}}>
           <div class="timeline-ruler" role="slider" tabIndex="0" aria-label={`Playhead in ${output ? 'output' : 'source'} time`} aria-valuemin="0" aria-valuemax={extent} aria-valuenow={output ? time : sourceT} onPointerDown={rulerDrag}
             onKeyDown={e => { if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) {e.preventDefault();e.stopPropagation();const next = e.key === 'Home' ? 0 : e.key === 'End' ? extent : clamp((output ? time : sourceT)+(e.key === 'ArrowLeft' ? -1 : 1)*(e.shiftKey ? 10 : 1)/60,0,extent); if(output) {setPlaying(false);setTime(next);} else seek(next);} }}>
@@ -252,6 +259,13 @@ export function Timeline({ state, store, time, setTime, setPlaying, selection, s
           <div class="timeline-track">{!shown.zoom.regions.length && <span class="track-placeholder">Add zoom to bring a detail closer</span>}{shown.zoom.regions.map(z => block({type:'zoom',id:z.id},z.tStart,z.tEnd,`${zoomDepth(z.depth)}x · ${z.source}`,'zoom'))}</div>
           <div class="timeline-track">{cues.map(cue => block({type:'caption',id:cue.id},cue.start,cue.end,cue.text,'caption'))}</div>
           <div class="timeline-track cursor-track">{clicks.map(click => <span class="click-marker" style={{left:px(click.t)}} title={`Click at ${clock(click.t)}`} />)}</div>
+          <div class="timeline-track compact voice-track">{!voice.length && <span class="track-placeholder">Voice-overs appear here once they are made</span>}
+            {voice.map(b => <button type="button" key={b.stepId} class={`voice-block ${b.source} ${b.warning ? 'warn' : ''}`} style={{left:b.start*scale,width:Math.max(6,(b.end-b.start)*scale)}} title={b.warning ?? b.label}
+              aria-label={`Voice: ${b.label}, ${clock(b.start)} to ${clock(b.end)}${b.warning ? `. Warning: ${b.warning}` : ''}. Select to move the playhead here.`} onClick={() => jumpTo(b.outStart)}>{b.warning && <b aria-hidden="true">!</b>}<span>{b.label}</span></button>)}</div>
+          <div class="timeline-track compact music-track">{!music && <span class="track-placeholder">Add background music in the Music tab</span>}
+            {music && <button type="button" class="music-bar" style={{left:music.start*scale,width:Math.max(6,(music.end-music.start)*scale)}} title={baseName(c.audio.music.file)}
+              aria-label={`Music: ${baseName(c.audio.music.file)}. Select to move the playhead to the start.`} onClick={() => jumpTo(0)}>
+              <i class="fade-in" style={{width:music.fadeIn*scale}} aria-hidden="true" /><i class="fade-out" style={{width:music.fadeOut*scale}} aria-hidden="true" /><span>{baseName(c.audio.music.file)}</span></button>}</div>
           <div class="timeline-playhead" style={{left:(output ? time : sourceT)*scale}} />
         </div>
       </div>

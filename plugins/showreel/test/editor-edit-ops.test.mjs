@@ -114,3 +114,50 @@ test('editor JavaScript and CSS together stay below 600 KB gzipped', () => {
   const total = ['editor.js','editor.css'].reduce((size,file) => size+gzipSync(readFileSync(new URL(`../dist/editor/${file}`,import.meta.url))).length,0);
   assert.ok(total < 600*1024,`${total} bytes`);
 });
+
+import { buildTimeMap } from '../scripts/lib/compose/timemap.mjs';
+import { placeNarration } from '../scripts/lib/audio/retime.mjs';
+const fitContext = (c, steps = [{id:'s1',tStart:1,tEnd:4},{id:'s2',tStart:4,tEnd:8}]) =>
+  ({duration:10,steps,timemap:buildTimeMap({duration:10,...c.edits}),narrationStartSrc:1.15});
+const overrunOf = (c, clipSec, steps) => {
+  const context = fitContext(c,steps);
+  const result = placeNarration({steps:context.steps,clips:{s1:{durationSec:clipSec}},timemap:context.timemap,cues:[{id:'s1',start:1.15,end:3}]});
+  return result.warnings.find(w => w.code === 'voice-overruns-video')?.overrunSec ?? 0;
+};
+test('fixFreeze holds the last frame of the step and clears the overrun', () => {
+  const c = base(), overrun = overrunOf(c,5);
+  assert.ok(overrun > 0.5);
+  const fixed = valid(op.fixFreeze(c,'s1',overrun,fitContext(c)));
+  assert.equal(fixed.edits.holds.length,1);
+  assert.ok(fixed.edits.holds[0].t > 3.9 && fixed.edits.holds[0].t < 4);
+  assert.ok(overrunOf(fixed,5) < 1/30,`left ${overrunOf(fixed,5)}`);
+  assert.deepEqual(c.edits.holds,[]); // input untouched
+  const again = valid(op.fixFreeze(fixed,'s1',0.5,fitContext(fixed)));
+  assert.equal(again.edits.holds.length,1); assert.ok(again.edits.holds[0].duration > fixed.edits.holds[0].duration);
+  assert.throws(() => op.fixFreeze(c,'s1',0,fitContext(c)),/no overrun/);
+  assert.throws(() => op.fixFreeze(c,'nope',1,fitContext(c)),/no longer exists/);
+});
+test('fixFreeze and fixSlow work on the last visible part after a cut', () => {
+  const c = op.cutRange(base(),3,4,context), overrun = overrunOf(c,3);
+  assert.ok(overrun > 0);
+  const frozen = valid(op.fixFreeze(c,'s1',overrun,fitContext(c)));
+  assert.ok(frozen.edits.holds[0].t < 3 && frozen.edits.holds[0].t >= 2.9);
+  assert.ok(overrunOf(frozen,3) < 1/30);
+  const slowed = valid(op.fixSlow(c,'s1',overrun,fitContext(c)));
+  assert.ok(slowed.edits.speeds.length === 1 && slowed.edits.speeds[0].rate >= 0.5 && slowed.edits.speeds[0].end <= 3.0001);
+  assert.ok(overrunOf(slowed,3) < 1/30,`left ${overrunOf(slowed,3)}`);
+  assert.throws(() => op.fixFreeze(op.cutRange(base(),1,4,context),'s1',1,fitContext(op.cutRange(base(),1,4,context))),/was cut/);
+});
+test('fixSlow slows only the end of the step and never below 0.5x', () => {
+  const c = base(), overrun = overrunOf(c,3.6);
+  const fixed = valid(op.fixSlow(c,'s1',overrun,fitContext(c)));
+  const range = fixed.edits.speeds[0];
+  assert.ok(range.rate < 1 && range.rate >= 0.5 && range.end > 3.9 && range.start > 1.5,JSON.stringify(range));
+  assert.ok(overrunOf(fixed,3.6) < 1/30,`left ${overrunOf(fixed,3.6)}`);
+  assert.throws(() => op.fixSlow(c,'s1',20,fitContext(c)),/below 0.5x/);
+});
+test('cutting a range removes the holds inside it', () => {
+  let c = base(); c.edits.holds = [{t:2,duration:1},{t:6,duration:1}];
+  const cut = valid(op.cutRange(c,1.5,3,context));
+  assert.deepEqual(cut.edits.holds,[{t:6,duration:1}]);
+});

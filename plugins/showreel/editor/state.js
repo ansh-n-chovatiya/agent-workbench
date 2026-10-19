@@ -1,6 +1,12 @@
 import { changeComposition } from '../scripts/lib/compose/composition.mjs';
 import { planRender } from '../scripts/lib/compose/plan.mjs';
 
+// Where the editor fetches narration clips and music from (the export page uses relative voice/ and music/ routes instead).
+export const editorAudioUrls = {
+  clip: key => `/media/voice/${key}.wav`,
+  music: file => `/media/music/${file.split('/').map(encodeURIComponent).join('/')}`,
+};
+
 export const initialState = () => ({ project: null, composition: null, plan: null, dirty: false,
   saving: false, error: null, errors: [], past: [], future: [], lastChange: null });
 const clone = value => structuredClone(value);
@@ -32,13 +38,21 @@ export async function request(url, options = {}) {
   if (!response.ok) throw Object.assign(new Error(data.error ?? data.errors?.join('\n') ?? `Request failed (${response.status})`), { errors: data.errors ?? [] });
   return data;
 }
+// Sends raw bytes (an audio file) and reads the JSON answer, with the same error shape as request().
+export async function upload(url, body, type = 'application/octet-stream', options = {}) {
+  const response = await fetch(url, { credentials: 'same-origin', method: 'POST', body, headers: { 'content-type': type }, ...options });
+  let data = {};
+  try { data = await response.json(); } catch { /* an empty or non-JSON error body */ }
+  if (!response.ok) throw Object.assign(new Error(data.error ?? data.errors?.join('\n') ?? `Upload failed (${response.status})`), { errors: data.errors ?? [], status: response.status });
+  return data;
+}
 export function createEditorStore({ api = request, debounce = 800 } = {}) {
   let state = initialState(), sourceSize, timer, pending, disposed = false;
   const listeners = new Set();
   const publish = patch => { if (!disposed) { state = { ...state, ...patch }; listeners.forEach(fn => fn(state)); } };
   function rebuild() {
     if (!state.project || !sourceSize) return;
-    try { publish({ plan: planRender({ ...state.project, composition: state.composition, sourceSize }), error: null, errors: [] }); }
+    try { publish({ plan: planRender({ ...state.project, composition: state.composition, sourceSize, voiceClips: state.project.clips ?? null, audioUrls: editorAudioUrls }), error: null, errors: [] }); }
     catch (error) { publish({ plan: null, error: error.message, errors: error.message.split('\n') }); }
   }
   function dispatch(action) {
@@ -77,6 +91,8 @@ export function createEditorStore({ api = request, debounce = 800 } = {}) {
       catch (error) { publish({ error: error.message }); }
     },
     setSourceSize(size) { sourceSize = size; rebuild(); },
+    // Server-side facts that are not part of the composition (voice clips, engine state, last export). Not undoable.
+    setProject(patch) { if (!state.project) return; publish({ project: { ...state.project, ...patch } }); rebuild(); },
     setComposition(composition, path = null) { dispatch({ type: 'change', composition, path, now: Date.now() }); },
     change(path, value, options) { this.setComposition(changeComposition(state.composition, path, value, options), path); },
     undo: () => dispatch({ type: 'undo' }), redo: () => dispatch({ type: 'redo' }), save,

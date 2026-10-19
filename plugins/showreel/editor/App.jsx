@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { createEditorStore } from './state.js';
+import { createVoiceController } from './voice-controller.js';
 import { openFrames } from './frames.js';
 import { Preview } from './Preview.jsx';
 import { Settings } from './Settings.jsx';
@@ -22,6 +23,7 @@ function Shortcuts({ onClose }) {
 }
 export function App() {
   const [store] = useState(createEditorStore), [state, setState] = useState(store.getState());
+  const [voice] = useState(() => createVoiceController({ store }));
   const shell = useRef(), splitter = useRef();
   const [chosen, setChosen] = useState(() => Number(readPreference('timeline-height', 0)) || 0), [viewportH, setViewportH] = useState(innerHeight);
   const height = timelineHeight(chosen, viewportH);
@@ -43,12 +45,13 @@ export function App() {
       storeError.current = next.error;
     });
     store.load();
+    voice.start();
     openFrames().then(frames => {
       opened = frames;
       if (!active) { frames.close(); return; }
       setProvider(frames); store.setSourceSize(frames.sourceSize);
     }).catch(e => { if (active) setMediaError(e.message); });
-    return () => { active = false; opened?.close(); unsubscribe(); store.dispose(); };
+    return () => { active = false; opened?.close(); unsubscribe(); voice.dispose(); store.dispose(); };
   }, [store]);
   useEffect(() => {
     const beforeUnload = event => { if (store.getState().dirty) { event.preventDefault(); event.returnValue = ''; } };
@@ -92,7 +95,7 @@ export function App() {
     addEventListener('pointermove', move); addEventListener('pointerup', finish); addEventListener('pointercancel', finish);
   }
   return <TooltipProvider delayDuration={350}><div ref={shell} class="editor-shell" style={{'--timeline-height':`${height}px`}}>
-    <TopBar state={state} store={store} theme={theme} toggleTheme={() => {const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); writePreference('theme', next);}} notify={setToast} />
+    <TopBar state={state} store={store} voice={voice} theme={theme} toggleTheme={() => {const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); writePreference('theme', next);}} notify={setToast} />
     <div class="workspace"><div class="viewer">
       <div class="viewer-heading"><span>PREVIEW</span><div><Tooltip text="Keyboard shortcuts (?)"><Button size="icon" onClick={() => setShortcuts(true)} aria-label="Keyboard shortcuts"><Keyboard size={16} aria-hidden="true" /></Button></Tooltip><Tooltip text="Open composition settings"><Button class="settings-toggle" size="icon" onClick={() => setSheet(true)} aria-label="Open settings"><Settings2 size={16} aria-hidden="true" /></Button></Tooltip></div></div>
       {(state.error || mediaError) && <p class="error app-error" role="alert">{mediaError || state.error}</p>}
@@ -105,7 +108,7 @@ export function App() {
             store.setComposition(setZoomFocus(c,selection.id,sourceAt(state.plan.timemap,time).t,point.x,point.y,{duration:state.project.record.durationSec}));
           } catch(e) { setToast(e.message); }
         }} />
-    </div><div class="settings-column">{state.composition && <Settings state={state} store={store} />}</div></div>
+    </div><div class="settings-column">{state.composition && <Settings state={state} store={store} controller={voice} />}</div></div>
     <div class="splitter" role="separator" tabIndex="0" aria-label="Resize timeline" aria-orientation="horizontal" aria-valuemin={190} aria-valuemax={Math.floor(innerHeight * .6)} aria-valuenow={Math.round(height)} onPointerDown={startResize} onDblClick={() => resizeTimeline(0)} onKeyDown={e => {if(['ArrowUp','ArrowDown','Home','End','Enter'].includes(e.key)) {e.preventDefault();resizeTimeline(e.key==='Home'?190:e.key==='End'?innerHeight*.6:e.key==='Enter'?0:height+(e.key==='ArrowUp'?16:-16));}}} />
     <section id="timeline-root" aria-label="Timeline">
       {hint && <div class="hint-card"><p>Tip: drag on the Video track to select a part, then press Delete to cut it, or use Speed to fast-forward it.</p><Tooltip text="Dismiss this hint"><Button size="icon" aria-label="Dismiss editing hint" onClick={() => {setHint(false);writePreference('hint-dismissed','yes');}}><X size={14} aria-hidden="true" /></Button></Tooltip></div>}
@@ -113,6 +116,6 @@ export function App() {
     </section>
     {toast && <div class="toast" role="status">{toast}</div>}
     {shortcuts && <Shortcuts onClose={() => setShortcuts(false)} />}
-    {sheet && state.composition && <Dialog title="Settings" description="Adjust the look of your video." className="settings-sheet" onClose={() => setSheet(false)}><Settings state={state} store={store} /></Dialog>}
+    {sheet && state.composition && <Dialog title="Settings" description="Adjust the look of your video." className="settings-sheet" onClose={() => setSheet(false)}><Settings state={state} store={store} controller={voice} /></Dialog>}
   </div></TooltipProvider>;
 }

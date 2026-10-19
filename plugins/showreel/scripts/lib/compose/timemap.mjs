@@ -31,12 +31,28 @@ export function outputAt(map, tSrc) {
   if (!Number.isFinite(tSrc) || tSrc < 0 || tSrc > map.duration) return null;
   // Removed intervals are half-open; their right edge belongs to the next kept segment.
   if (map.trims.some(({ start, end }) => tSrc >= start && tSrc < end)) return null;
+  // A held (frozen) frame first appears where its hold begins.
+  const held = map.segments.find((s) => s.rate === 0 && s.start === tSrc);
+  if (held) return held.outputStart;
   const s = map.segments.find((s) => tSrc >= s.start && tSrc < s.end)
     ?? (tSrc === map.duration && map.segments.at(-1)?.end === tSrc ? map.segments.at(-1) : null);
   return s ? s.outputStart + (tSrc - s.start) / s.rate : null;
 }
 
-export function buildTimeMap({ duration, trims = [], speeds = [], lead = 0, tail = 0, fade = 0 }) {
+// Holds freeze one source frame for `duration` extra output seconds: { t, duration } in source time, sorted, one per t.
+export const MAX_HOLD_SEC = 30;
+function validateHolds(holds, trims, sourceDuration) {
+  if (!Array.isArray(holds)) throw new Error('holds must be an array');
+  holds.forEach((h, i) => {
+    if (!h || !Number.isFinite(h.t) || !Number.isFinite(h.duration) || h.t < 0 || h.t > sourceDuration
+      || h.duration <= 0 || h.duration > MAX_HOLD_SEC || (i > 0 && h.t <= holds[i - 1].t)) {
+      throw new Error(`holds[${i}] is invalid, out of range or overlaps the preceding hold`);
+    }
+    if (trims.some((r) => h.t >= r.start && h.t < r.end)) throw new Error(`holds[${i}] is inside a removed range`);
+  });
+}
+
+export function buildTimeMap({ duration, trims = [], speeds = [], holds = [], lead = 0, tail = 0, fade = 0 }) {
   for (const [key, value] of Object.entries({ duration, lead, tail, fade })) {
     if (!Number.isFinite(value) || value < 0) throw new Error(`${key} must be finite and nonnegative`);
   }
@@ -45,21 +61,30 @@ export function buildTimeMap({ duration, trims = [], speeds = [], lead = 0, tail
   speeds.forEach((s, i) => {
     if (trims.some((r) => s.start < r.end && s.end > r.start)) throw new Error(`speeds[${i}] intersects a trim`);
   });
+  validateHolds(holds, trims, duration);
   const mainStart = Math.max(0, lead - fade);
-  const points = [...new Set([0, duration, ...trims.flatMap((r) => [r.start, r.end]), ...speeds.flatMap((r) => [r.start, r.end])])].sort((a, b) => a - b);
+  const points = [...new Set([0, duration, ...trims.flatMap((r) => [r.start, r.end]), ...speeds.flatMap((r) => [r.start, r.end]), ...holds.map((h) => h.t)])].sort((a, b) => a - b);
   const segments = [];
   let output = mainStart;
+  const hold = (t) => {
+    const h = holds.find((x) => x.t === t);
+    if (!h) return;
+    segments.push({ start: t, end: t, rate: 0, hold: true, outputStart: output, outputEnd: output + h.duration });
+    output += h.duration;
+  };
   for (let i = 0; i < points.length - 1; i++) {
     const start = points[i], end = points[i + 1];
     if (trims.some((r) => start >= r.start && start < r.end)) continue;
+    hold(start);
     const rate = speeds.find((r) => start >= r.start && start < r.end)?.rate ?? 1;
     const outputEnd = output + (end - start) / rate;
     segments.push({ start, end, rate, outputStart: output, outputEnd });
     output = outputEnd;
   }
+  hold(duration); // A hold on the very last frame comes after the last segment.
   // A short/empty main or short outro cannot crossfade for longer than it exists.
   const outroStart = tail > 0 ? output - Math.min(fade, tail, output - mainStart) : null;
-  const map = { duration, trims: trims.map((r) => ({ ...r })), segments,
+  const map = { duration, trims: trims.map((r) => ({ ...r })), holds: holds.map((h) => ({ ...h })), segments,
     mainStart, mainEnd: output, titleEnd: lead, outroStart,
     outputDuration: Math.max(lead, tail > 0 ? outroStart + tail : output) };
   return { ...map, toSource: (t) => sourceAt(map, t), toOutput: (t) => outputAt(map, t) };

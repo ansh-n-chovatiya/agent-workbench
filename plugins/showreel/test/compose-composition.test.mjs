@@ -50,3 +50,17 @@ test('boundary values validate and invalid scalar ranges fail independently', ()
     assert.equal(validateComposition(c).ok, good.includes(value), `${path}=${value}`);
   }
 });
+
+test('frozen-frame holds are validated like the other timeline edits and survive a build', () => {
+  const c = buildComposition({ ...fresh(), edits: { trims: [{ start: 5, end: 6 }], speeds: [], holds: [{ t: 2, duration: 1.5 }, { t: 6, duration: 0.5 }] } });
+  assert.deepEqual(c.edits.holds, [{ t: 2, duration: 1.5 }, { t: 6, duration: 0.5 }]);
+  assert.deepEqual(buildComposition(fresh()).edits.holds, []);
+  const withHolds = holds => ({ ...c, edits: { ...c.edits, holds } });
+  assert.ok(validateComposition(withHolds([])).ok);
+  for (const [holds, pattern] of [[[{ t: 2, duration: 0 }], /holds/], [[{ t: 3, duration: 1 }, { t: 2, duration: 1 }], /holds/], [[{ t: 5.5, duration: 1 }], /removed/],
+    [[{ t: 2, duration: 1, extra: 1 }], /unknown/], [[{ t: 2 }], /holds/], [[{ t: 2, duration: 99 }], /holds/]]) {
+    const result = validateComposition(withHolds(holds));
+    assert.ok(!result.ok && pattern.test(result.errors.join(' ')), JSON.stringify(holds));
+  }
+  assert.throws(() => buildComposition({ ...fresh(), edits: { holds: [{ t: 11, duration: 1 }] } }), /holds/);
+});

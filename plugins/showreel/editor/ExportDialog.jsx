@@ -4,11 +4,36 @@ import { Dialog } from './ui/dialog.jsx';
 import { Select } from './ui/select.jsx';
 import { Label } from './ui/label.jsx';
 import { Button } from './ui/button.jsx';
-import { changeComposition } from '../scripts/lib/compose/composition.mjs';
+import { Tooltip } from './ui/tooltip.jsx';
+import { changeComposition, resolveComposition } from '../scripts/lib/compose/composition.mjs';
 import { request } from './state.js';
 import { createSSEParser } from './helpers.mjs';
+import { useController } from './use-controller.js';
+import { scriptRows, voiceSummary, needsGenerating, loudnessText } from './voice-status.mjs';
 
-export function ExportDialog({ store, onClose }) {
+// What the exported video will sound like, from the clips the editor already knows about.
+export function VoiceChecklist({ state, controller }) {
+  const ctl = useController(controller), { project, composition, plan } = state;
+  if (!composition) return null;
+  const voice = resolveComposition(composition).audio.voice;
+  if (!(voice.enabled ?? project.brief?.voice?.enabled === true)) return null;
+  const rows = scriptRows({ storyboard: project.storyboard, composition, clips: project.clips, voice: voice.voiceId, speed: voice.speed });
+  const summary = voiceSummary(rows), todo = needsGenerating(rows), warnings = plan?.audio.warnings ?? [], job = ctl.job;
+  if (!summary.total) return null;
+  return <ul class="export-checklist" aria-label="Voice-over checklist">
+    <li class={todo.length ? 'warn' : 'ok'}><span>Voice: {summary.ready} of {summary.total} steps ready</span>
+      {!!todo.length && <> <span class="setting-help">The rest will be silent or use out-of-date audio.</span>
+        {project.voice?.installed ? <Button size="sm" variant="outline" disabled={job.running} onClick={() => controller.generate({ stepIds: todo.map(r => r.id) })}>{job.running ? `Generating ${Math.min(job.total, job.done + job.failed + 1)} of ${job.total}…` : 'Generate missing'}</Button>
+          : <span class="setting-help">Install the voice engine to make them (see the Voice tab).</span>}</>}
+      {ctl.error && <span class="error">{ctl.error}</span>}</li>
+    {!!warnings.length && <li class="warn"><span>{warnings.length} narration timing {warnings.length === 1 ? 'warning' : 'warnings'}. Review {warnings.length === 1 ? 'it' : 'them'} in the Voice tab before exporting.</span></li>}
+  </ul>;
+}
+
+export function ExportDialog({ store, voice, onClose }) {
+  const [state, setState] = useState(store.getState());
+  useEffect(() => store.subscribe(setState), [store]);
+  const voiceJob = useController(voice).job;
   const initial = store.getState().composition.output;
   const [size, setSize] = useState(initial.height > 1080 ? '4k' : '1080'), [fps, setFps] = useState(initial.fps);
   const [job, setJob] = useState({ event: 'idle', data: {} }), [error, setError] = useState(''), [busy, setBusy] = useState(false);
@@ -29,6 +54,7 @@ export function ExportDialog({ store, onClose }) {
       const parse = createSSEParser(message => {
         setJob(previous => ({ ...message, data: message.event === 'log' ? { ...previous.data, ...message.data } : message.data }));
         if (message.event === 'started') { started.current = performance.now(); setEta(null); }
+        if (message.event === 'complete') store.setProject({ lastExport: message.data.audio ?? null });
         if (message.event === 'progress' && message.data.frame > 0) setEta(Math.max(0, Math.round((performance.now() - started.current) / 1000 / message.data.frame * (message.data.total - message.data.frame))));
         if (['complete', 'error', 'cancelled'].includes(message.event)) controller.abort();
       });
@@ -54,12 +80,15 @@ export function ExportDialog({ store, onClose }) {
   return <Dialog title="Export composition" description="Save your edited video as an MP4 file." onClose={onClose} locked={running}>
     <div class="export-options"><Label>Size <Select aria-label="Size" disabled={running} value={size} onValueChange={setSize} options={[{value:'1080',label:'1080p'},{value:'4k',label:'4K'}]} /></Label>
       <Label>Frame rate <Select aria-label="Frame rate" disabled={running} value={fps} onValueChange={next => setFps(+next)} options={[{value:30,label:'30 fps'},{value:60,label:'60 fps'}]} /></Label></div>
+    {!running && <VoiceChecklist state={state} controller={voice} />}
     <div aria-live="polite"><p>{job.event === 'idle' ? 'Ready to export' : job.event}</p>
       {running && <><progress aria-label="Export progress" max={job.data.total ?? 1} value={job.data.frame ?? 0} /><p>{job.data.frame ?? 0} / {job.data.total ?? '…'} frames{eta !== null ? ` · ETA ${eta}s` : ''}</p></>}
-      {job.event === 'complete' && <><p class="output-path">{job.data.finalFile}</p><Button onClick={() => request('/api/reveal', { method: 'POST' }).catch(e => setError(e.message))}>Reveal</Button></>}
+      {job.event === 'complete' && <><p class="output-path">{job.data.finalFile}</p>
+        {job.data.audio ? <p class="loudness-result" role="status"><strong>Sound:</strong> {loudnessText(job.data.audio) ?? 'could not be measured'}</p> : null}
+        {job.data.audio?.warnings?.map(w => <p class="warning">{w}</p>)}<Button onClick={() => request('/api/reveal', { method: 'POST' }).catch(e => setError(e.message))}>Reveal</Button></>}
       {job.event === 'error' && <p class="error">{job.data.message}</p>}
     </div>
     {error && <p role="alert" class="error">{error}</p>}
-    <div class="dialog-actions">{running ? <><Button onClick={cancel}>Cancel export</Button>{error && <Button onClick={() => { setError(''); watch(); }}>Reconnect progress</Button>}</> : <Button variant="default" onClick={start}>Start export</Button>}</div>
+    <div class="dialog-actions">{running ? <><Button onClick={cancel}>Cancel export</Button>{error && <Button onClick={() => { setError(''); watch(); }}>Reconnect progress</Button>}</> : <Tooltip text={voiceJob.running ? 'Wait for the voice-over to finish' : 'Render the video'}><Button variant="default" disabled={voiceJob.running} onClick={start}>Start export</Button></Tooltip>}</div>
   </Dialog>;
 }

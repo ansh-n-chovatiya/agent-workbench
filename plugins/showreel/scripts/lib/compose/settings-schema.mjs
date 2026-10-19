@@ -6,6 +6,7 @@ export const EXCLUDED = [
   { path: 'run.id', reason: 'Recording identity; selected when opening the project.' },
   { path: 'edits.trims', reason: 'Edited on the timeline.' },
   { path: 'edits.speeds', reason: 'Edited on the timeline.' },
+  { path: 'edits.holds', reason: 'Frozen frames are added from the narration fixes in the Voice tab.' },
   { path: 'zoom.regions', reason: 'Edited on the timeline and preview.' },
   { path: 'audio.narration.steps', reason: 'Per-step narration text and mute are edited in the narration list.' },
   { path: 'captions.cues', reason: 'Source-time caption overrides edited on the timeline.' },

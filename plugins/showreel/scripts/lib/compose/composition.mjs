@@ -27,7 +27,7 @@ export const DEFAULT_COMPOSITION = freeze({
     fontWeight: 600, color: '#ffffff', background: 'rgba(17,24,39,0.86)', maxLines: 2, align: 'center' },
   cards: { title: { ...cardDefaults, enabled: true, title: null, subtitle: null, durationSec: 2.2 },
     outro: { ...cardDefaults, enabled: true, text: 'Thank you', subtitle: null, durationSec: 2 }, fade: 0.4, transition: 'crossfade' },
-  edits: { trims: [], speeds: [] },
+  edits: { trims: [], speeds: [], holds: [] },
   audio: { voice: { enabled: null, voiceId: 'af_heart', speed: 1, gainDb: 0 },
     music: { enabled: false, file: null, gainDb: -18, loop: true, fadeInSec: 1, fadeOutSec: 2,
       duck: { enabled: true, depthDb: 12, attackMs: 150, releaseMs: 400 } },
@@ -203,11 +203,11 @@ export function validateComposition(c, { duration = Number.MAX_VALUE } = {}) {
     }
   }
   const regions = validateRegions(c.zoom?.regions); errors.push(...regions.errors); warnings.push(...regions.warnings);
-  for (const [k,model] of [['trims',{start:0,end:0}],['speeds',{start:0,end:0,rate:1}]]) if (Array.isArray(c.edits?.[k])) c.edits[k].forEach((v,i) => {
+  for (const [k,model] of [['trims',{start:0,end:0}],['speeds',{start:0,end:0,rate:1}],['holds',{t:0,duration:0}]]) if (Array.isArray(c.edits?.[k])) c.edits[k].forEach((v,i) => {
     walk(v,model,`edits.${k}.${i}`);
     try { buildTimeMap({ duration: Number.MAX_VALUE, [k]: [v] }); } catch (e) { fail(`edits.${k}.${i}`,e.message); }
   });
-  try { buildTimeMap({ duration: Number.MAX_VALUE, trims: c.edits?.trims, speeds: c.edits?.speeds }); } catch (e) { fail('edits',e.message); }
+  try { buildTimeMap({ duration: Number.MAX_VALUE, trims: c.edits?.trims, speeds: c.edits?.speeds, holds: c.edits?.holds }); } catch (e) { fail('edits',e.message); }
   return { ok: !errors.length, errors, warnings };
 }
 export function compositionPaths(c) {

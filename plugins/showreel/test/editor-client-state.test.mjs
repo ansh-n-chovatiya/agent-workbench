@@ -152,3 +152,24 @@ test('large real source dimensions reach the plan independently of reduced previ
     assert.deepEqual(plan.sourceSize, realSize);
   } finally { store.dispose(); }
 });
+
+test('voice clips and music reach the plan through the editor URL builders, and setProject refreshes the plan without touching history', async () => {
+  const withSteps = () => ({ ...project(), storyboard: { steps: [{ id: 's1', narration: 'Hello there' }] },
+    events: { ...project().events, steps: [{ id: 's1', tStart: 0.5, holdStart: 1, tEnd: 3 }] } });
+  const store = createEditorStore({ api: async () => withSteps(), debounce: 100000 });
+  try {
+    store.setSourceSize({ width: 1280, height: 720 }); await store.load();
+    assert.equal(store.getState().plan.audio.enabled, false);
+    store.change('audio.voice.enabled', true);
+    assert.equal(store.getState().plan.audio.narration.length, 0, 'no clip yet');
+    const past = store.getState().past.length;
+    store.setProject({ clips: { version: 1, steps: { s1: 'abc123' }, clips: { abc123: { durationSec: 1.5, source: 'tts', text: 'Hello there', voice: 'af_heart', speed: 1 } } } });
+    const audio = store.getState().plan.audio;
+    assert.deepEqual(audio.narration.map(n => n.clipUrl), ['/media/voice/abc123.wav']);
+    assert.equal(store.getState().past.length, past); assert.equal(store.getState().dirty, true);
+    store.change('audio.music.file', 'music/my song-1.mp3'); store.change('audio.music.enabled', true);
+    assert.equal(store.getState().plan.audio.music.url, '/media/music/music/my%20song-1.mp3');
+    store.setProject({ lastExport: { integratedLufs: -16 } });
+    assert.equal(store.getState().project.lastExport.integratedLufs, -16); assert.ok(store.getState().plan);
+  } finally { store.dispose(); }
+});

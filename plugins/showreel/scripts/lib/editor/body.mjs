@@ -1,4 +1,4 @@
-export function readBody(request, limit = 1024 * 1024) {
+export function readBody(request, limit = 1024 * 1024, subject = 'Composition') {
   return new Promise((resolve,reject) => {
     let length = 0, settled = false; const chunks = [];
     const cleanup = () => { request.off('data',data); request.off('end',end); request.off('error',error); request.off('aborted',aborted); };
@@ -9,7 +9,7 @@ export function readBody(request, limit = 1024 * 1024) {
       length += chunk.length;
       if (length > limit) {
         settled = true; chunks.length = 0;
-        reject(Object.assign(new Error('Composition exceeds 1 MB'),{statusCode:413}));
+        reject(Object.assign(new Error(`${subject} exceeds ${limit >= 1024 * 1024 ? Math.round(limit / (1024 * 1024)) + ' MB' : Math.round(limit / 1024) + ' KB'}`),{statusCode:413}));
       } else chunks.push(chunk);
     };
     const end = () => { cleanup(); if (!settled) resolve(Buffer.concat(chunks)); settled = true; };

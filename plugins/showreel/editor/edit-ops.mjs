@@ -1,5 +1,7 @@
 import { validateComposition, zoomOptions } from '../scripts/lib/compose/composition.mjs';
 import { suggestZoomRegions } from '../scripts/lib/compose/zoom.mjs';
+import { keptParts } from '../scripts/lib/audio/retime.mjs';
+import { MAX_HOLD_SEC } from '../scripts/lib/compose/timemap.mjs';
 
 export const snapFrame = t => Math.round(t * 60) / 60;
 const clone = c => structuredClone(c);
@@ -34,6 +36,8 @@ export function cutRange(c, start, end, context = {}) {
   next.edits.trims = merge([...next.edits.trims,r]);
   if (next.edits.trims.some(t => t.start === 0 && t.end >= context.duration)) throw new Error('Keep at least one frame of the recording.');
   next.edits.speeds = subtract(next.edits.speeds,r);
+  // A frozen frame inside a removed range goes with it.
+  if (next.edits.holds) next.edits.holds = next.edits.holds.filter(h => !(h.t >= r.start && h.t < r.end));
   return finish(next,context);
 }
 export function restoreRange(c, index, context) {
@@ -107,4 +111,39 @@ export function autoZoomRegenerate(c,events,record) {
   auto.forEach((z,i) => { z.id = uniqueId([...manual,...auto.slice(0,i)],'auto-'); });
   next.zoom.regions = [...manual,...auto].sort((a,b) => a.tStart-b.tStart);
   return finish(next,{duration:record.durationSec});
+}
+
+// Narration fixes (docs/40 section 7). `context` carries { duration, steps: events.steps, timemap: plan.timemap }.
+function lastPart(context, stepId) {
+  const step = context.steps?.find(s => s.id === stepId);
+  if (!step) throw new Error('That step no longer exists.');
+  const part = keptParts(context.timemap,step.tStart,step.tEnd).filter(p => !p.hold).at(-1);
+  if (!part) throw new Error('That step was cut, so there is nothing to adjust.');
+  return part;
+}
+// Adds (or lengthens) a hold on the last frame the step shows, so the picture waits for the voice.
+export function fixFreeze(c, stepId, overrunSec, context = {}) {
+  if (!Number.isFinite(overrunSec) || overrunSec <= 0) throw new Error('There is no overrun to fix.');
+  const part = lastPart(context,stepId), t = Math.max(part.srcStart,part.srcEnd - 1/60), extra = Math.ceil(overrunSec*100)/100;
+  const next = clone(c); next.edits.holds ??= [];
+  const existing = next.edits.holds.find(h => Math.abs(h.t-t) < 1e-9);
+  if (existing) existing.duration = +(existing.duration + extra).toFixed(3); else next.edits.holds.push({t,duration:extra});
+  next.edits.holds.sort((a,b) => a.t-b.t);
+  if (next.edits.holds.some(h => h.duration > MAX_HOLD_SEC)) throw new Error(`A frozen frame can last at most ${MAX_HOLD_SEC} seconds.`);
+  return finish(next,context);
+}
+export const MIN_FIT_RATE = 0.5;
+// Slows the end of the step's last visible part just enough that the video lasts as long as the narration.
+export function fixSlow(c, stepId, overrunSec, context = {}) {
+  if (!Number.isFinite(overrunSec) || overrunSec <= 0) throw new Error('There is no overrun to fix.');
+  // Slowing video before the narration begins would also push the narration later, so the slowed span starts at or after it.
+  const part = lastPart(context,stepId), base = part.rate, need = overrunSec + 0.02;
+  const floor = Math.min(part.srcEnd,Math.max(part.srcStart,Number.isFinite(context.narrationStartSrc) ? Math.ceil(context.narrationStartSrc*60-1e-9)/60 : part.srcStart));
+  const rateFor = length => length / (length / base + need);
+  let start = part.srcEnd - Math.min(part.srcEnd - floor,Math.max(need*3*base,1));
+  if (rateFor(part.srcEnd-snapFrame(start)) < MIN_FIT_RATE) start = floor;
+  start = Math.max(floor,snapFrame(start));
+  const end = Math.min(part.srcEnd,snapFrame(part.srcEnd)), rate = +rateFor(end-start).toFixed(3);
+  if (!(end > start) || rate < MIN_FIT_RATE) throw new Error(`Slowing this step enough would go below ${MIN_FIT_RATE}x. Freeze the last frame instead.`);
+  return setSpeed(c,start,end,rate,context);
 }

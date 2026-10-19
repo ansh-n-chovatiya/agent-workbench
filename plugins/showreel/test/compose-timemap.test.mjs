@@ -74,3 +74,33 @@ test('zero duration, fully trimmed source, trailing trim, and very short cards r
   assert.equal(short.toSource(0.8).alphaOutro, 0);
   assert.equal(buildTimeMap({ duration: 3, trims: [{ start: 2, end: 3 }] }).toOutput(3), null);
 });
+test('holds freeze one source frame for extra output time', () => {
+  const map = buildTimeMap({ duration: 10, holds: [{ t: 3, duration: 1.5 }, { t: 6, duration: 0.5 }] });
+  near(map.outputDuration, 12);
+  assert.deepEqual(map.segments.map((s) => [s.start, s.end, s.rate]), [[0, 3, 1], [3, 3, 0], [3, 6, 1], [6, 6, 0], [6, 10, 1]]);
+  near(map.toSource(2).t, 2);
+  for (const t of [3, 3.4, 4.49]) { const r = map.toSource(t); near(r.t, 3); assert.equal(r.rate, 0); }
+  near(map.toSource(4.5).t, 3); near(map.toSource(5.5).t, 4);
+  near(map.toOutput(3), 3); // the frozen frame first appears where the hold begins
+  near(map.toOutput(2), 2); near(map.toOutput(4), 5.5); near(map.toOutput(7), 9);
+  const json = JSON.parse(JSON.stringify(map));
+  assert.deepEqual(sourceAt(json, 3.7), map.toSource(3.7)); near(outputAt(json, 3), 3);
+  assert.deepEqual(map.holds, [{ t: 3, duration: 1.5 }, { t: 6, duration: 0.5 }]);
+});
+test('holds combine with trims, speeds, cards and a hold on the final frame', () => {
+  const map = buildTimeMap({ duration: 10, trims: [{ start: 1, end: 2 }], speeds: [{ start: 4, end: 6, rate: 2 }], holds: [{ t: 2, duration: 1 }, { t: 5, duration: 2 }, { t: 10, duration: 1 }], lead: 2, tail: 1, fade: 0.4 });
+  // 9 s kept, speeds save 1 s, three holds add 4 s.
+  near(map.mainEnd - map.mainStart, 9 - 1 + 4);
+  const hold = map.segments.find((s) => s.start === 5 && s.rate === 0);
+  near(hold.outputEnd - hold.outputStart, 2);
+  assert.equal(map.segments.at(-1).rate, 0); near(map.toSource(map.mainEnd - 0.2).t, 10);
+  let previous = -Infinity;
+  for (let n = 0; n <= 200; n++) { const t = map.mainStart + (map.mainEnd - map.mainStart) * n / 200; const s = map.toSource(t).t; assert.ok(s >= previous - 1e-12); previous = s; }
+  // A hold at the right edge of a trim is kept; inside one it is rejected.
+  assert.doesNotThrow(() => buildTimeMap({ duration: 10, trims: [{ start: 1, end: 2 }], holds: [{ t: 2, duration: 1 }] }));
+  assert.throws(() => buildTimeMap({ duration: 10, trims: [{ start: 1, end: 2 }], holds: [{ t: 1.5, duration: 1 }] }), /holds\[0\].*removed/);
+});
+test('invalid holds report their index', () => {
+  for (const holds of [[{ t: -1, duration: 1 }], [{ t: 11, duration: 1 }], [{ t: 1, duration: 0 }], [{ t: 1, duration: 31 }], [{ t: 1, duration: NaN }],
+    [{ t: 2, duration: 1 }, { t: 1, duration: 1 }], [{ t: 2, duration: 1 }, { t: 2, duration: 1 }], [null]]) assert.throws(() => buildTimeMap({ duration: 10, holds }), /holds\[\d+\]/, JSON.stringify(holds));
+});

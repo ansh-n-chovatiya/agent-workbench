@@ -44,3 +44,32 @@ test('warning uses a two second window, available VFR frames, and 70 percent thr
   assert.equal(previewBelowRate([{ now: 0 }, { now: 500, expected: 30, presented: 1 }], 30), false);
   assert.equal(previewBelowRate(window(120, 50), 60), false); // above 24 fps
 });
+
+import { audioClock, outputLatencySec, audioMutedAtRate, audioSignature } from '../editor/playback.mjs';
+test('audio clock follows the context time minus latency, holds before sound arrives and clamps or wraps at the end', () => {
+  const base = { startContextTime: 10, offsetSec: 2, latencySec: 0.04, duration: 20 };
+  assert.equal(audioClock({ ...base, contextTime: 10 }), 2);
+  assert.equal(audioClock({ ...base, contextTime: 10.03 }), 2); // sound has not reached the speakers yet
+  assert.ok(Math.abs(audioClock({ ...base, contextTime: 11.04 }) - 3) < 1e-9);
+  assert.equal(audioClock({ ...base, contextTime: 100 }), 20);
+  assert.ok(Math.abs(audioClock({ ...base, loop: true, contextTime: 10 + 19 + 0.04 }) - 1) < 1e-9);
+  assert.equal(audioClock({ startContextTime: 0, offsetSec: 1, contextTime: 3 }), 4);
+  assert.equal(audioClock({ ...base, offsetSec: -5, contextTime: 10 }), 0);
+});
+test('output latency adds the base and device latency and ignores unusable values', () => {
+  assert.equal(outputLatencySec({ baseLatency: 0.01, outputLatency: 0.03 }), 0.04);
+  assert.equal(outputLatencySec({ baseLatency: 0.01 }), 0.01);
+  assert.equal(outputLatencySec({ baseLatency: NaN, outputLatency: -1 }), 0);
+  assert.equal(outputLatencySec({ baseLatency: 5, outputLatency: 5 }), 1);
+  assert.equal(outputLatencySec(null), 0);
+});
+test('audio is muted at any playback rate other than one and the signature ignores unrelated changes', () => {
+  assert.equal(audioMutedAtRate(1), false); assert.equal(audioMutedAtRate(0.5), true); assert.equal(audioMutedAtRate(2), true);
+  const audio = { enabled: true, durationSec: 5, sampleRate: 48000, narration: [{ clipUrl: '/media/voice/a.wav', outStart: 1, durationSec: 2, gainDb: 0, stepId: 's1', source: 'tts' }],
+    music: null, duck: { enabled: true }, loudness: { enabled: true }, warnings: [], captionSpans: [] };
+  const sig = audioSignature(audio);
+  assert.equal(audioSignature({ ...audio, warnings: [{ stepId: 's1' }], captionSpans: [1] }), sig);
+  assert.notEqual(audioSignature({ ...audio, narration: [{ ...audio.narration[0], outStart: 1.5 }] }), sig);
+  assert.notEqual(audioSignature({ ...audio, loudness: { enabled: false } }), sig);
+  assert.equal(audioSignature({ enabled: false }), ''); assert.equal(audioSignature(undefined), '');
+});

@@ -59,7 +59,7 @@ function exportCues(cues, timemap, delimiter) {
     let end = toOutput(cue.end);
     if (end === null) {
       // End may lie in a trim: use the exact output edge, without an epsilon drift.
-      const kept = (timemap.segments ?? []).filter((s) => s.end > cue.start && s.start < cue.end).at(-1);
+      const kept = (timemap.segments ?? []).filter((s) => s.rate > 0 && s.end > cue.start && s.start < cue.end).at(-1);
       end = kept ? kept.outputStart + (Math.min(kept.end, cue.end) - kept.start) / kept.rate : null;
     }
     return end !== null && end > start ? [{ start, end, text: cue.text }] : [];

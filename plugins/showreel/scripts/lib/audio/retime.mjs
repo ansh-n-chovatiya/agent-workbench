@@ -6,10 +6,15 @@ export const CAPTION_LEAD_SEC = 0.15;
 export const MAX_VOICE_SPEEDUP = 1.1;
 export const OVERLAP_GAP_SEC = 0.1;
 
-// The parts of [start, end) that survive the edit, with their output times and playback rates.
+// The parts of [start, end) that survive the edit, with their output times and playback rates (rate 0 = frozen frame).
 export function keptParts(timemap, start, end) {
   const parts = [];
   for (const s of timemap.segments ?? []) {
+    // A held frame belongs to the step that contains its source time (start inclusive, end exclusive).
+    if (s.rate === 0) {
+      if (s.start >= start && s.start < end) parts.push({ srcStart: s.start, srcEnd: s.start, rate: 0, outStart: s.outputStart, outEnd: s.outputEnd, hold: true });
+      continue;
+    }
     const a = Math.max(s.start, start), b = Math.min(s.end, end);
     if (b <= a) continue;
     parts.push({ srcStart: a, srcEnd: b, rate: s.rate, outStart: s.outputStart + (a - s.start) / s.rate, outEnd: s.outputStart + (b - s.start) / s.rate });
