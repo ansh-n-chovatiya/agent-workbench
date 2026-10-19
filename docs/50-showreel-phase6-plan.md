@@ -1,6 +1,6 @@
 # Showreel Phase 6 plan: voice, music, loudness
 
-Status: executing from 2026-10-19. Spec: `docs/40-showreel-design.md` sections 7 (edit rules), 8, 9, 23; evidence: `docs/42` S5 (voices), S6 (loudness), S7 (sync). Owner stop rule: stop after this phase.
+Status: COMPLETE 2026-10-19 (outcome at the end of this file). Spec: `docs/40-showreel-design.md` sections 7 (edit rules), 8, 9, 23; evidence: `docs/42` S5 (voices), S6 (loudness), S7 (sync). Owner stop rule: stop after this phase.
 Operating model unchanged (Claude plans/reviews and runs everything that needs a browser, network or a real model; Codex writes code and pure tests).
 
 ## Decisions
@@ -26,3 +26,17 @@ Operating model unchanged (Claude plans/reviews and runs everything that needs a
 
 ## Exit criteria
 Voice-over of a real recording generated locally with Kokoro; every voice in the picker has a playable sample; own-voice and file clips work; music ducks under narration; the exported file measures -16 LUFS (+-0.5) with true peak at or below -1 dBTP; edits (cut, speed) keep narration, captions and video aligned with warnings and one-click fixes; editor preview audio stays within 80 ms of the video over a 60 s clip; three-OS CI green.
+
+## Outcome (2026-10-19)
+Delivered: Kokoro voice engine (`showreel voice install|list|samples|generate|status|import|clean`, worker process, content-addressed clip cache, pronunciations, pause markers, doctor checks); audio core (`scripts/lib/audio/*`: BS.1770 meter, 4x oversampled true-peak limiter, ducking, mixer, narration retime with edit-rule warnings); holds in the time map (freeze last frame); export with AAC (Opus fallback) and a printed loudness line; editor Voice and Music panels (voice picker with samples, per-step script, own-voice recording, file import, music upload, voice and music timeline tracks, preview audio on one audio clock, export checklist).
+
+Measured on this Mac with the real engine:
+- Install: 31 s, 490 MB on disk (kokoro-js 1.2.1 plus 88 MB q8 model). The model SHA-256 pin (`fbae9257...1478`) was checked against the LFS hash Hugging Face publishes for `onnx/model_quantized.onnx`.
+- Benchmark: RTF 0.46 for a 26-word sentence; real narration of the portfolio tour (4 steps, 16.6 s of audio): RTF 0.44 to 0.95 including model load.
+- Export of the real recording with narration and a synthetic music bed: **-16.0 LUFS integrated, true peak -1.0 dBTP**; retime warnings fired for narration longer than its step (0.86 s and 0.11 s) and for an overlap (shifted 0.81 s); the final line is covered by a 0.8 s freeze at the end.
+- Tests: 325 unit and 31 browser (including a real export with narration and music, re-decoded and re-measured in the browser).
+
+Defects found only by running it (all fixed): the Voice panel crashed after generation because three components used `<>` without importing `Fragment` (now guarded by a unit test); the three-voice editor tests had assumed UI shortcuts the real flow does not have.
+Environment lesson: a background Claude session whose helper process outlived the login state loses DNS, launchd and the ability to start any browser (`bootstrap_check_in` error 141); the cure is to kill that helper and start the session from a normal Terminal.
+
+Known gaps, deferred on purpose: bundled CC0 music loops (licences cannot be verified offline); Kitten draft tier; preview/export loudness parity test; A/V sync over 60 s measured by clock arithmetic only (the video follows the audio clock by construction, no external capture); voice on Windows and Linux is covered by the fake engine in CI, the real engine has run on macOS only.
