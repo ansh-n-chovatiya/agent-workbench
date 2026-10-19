@@ -11,3 +11,4 @@
 - `/ctx-agents` pane (mod): this session's subagents with status, model, tokens, task label.
 - Fix: a request repeated by a resumed session is counted once across files (it was counted per file, overstating totals by about 17%).
 - `report --ledger PATH`: `--units` shows `<plan>/<unit>` instead of the session prefix when the ledger journal can place the unit; stages are inferred per plan, so two plans with the same unit number no longer mix.
+- `/ctx-agents`: row-building moved to a tested pure function (empty state, 60-character labels, newest-that-fit); a kit test checks the pane mounts on terminal and desktop and degrades to one line if agents cannot be listed.

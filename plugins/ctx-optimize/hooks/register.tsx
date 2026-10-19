@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import { clip, line } from './format'
+import { paneLines } from './format'
 import type { AgentUse } from '../types'
 
 const PANE = 'ctx-agents'
@@ -43,17 +43,8 @@ export const register: Register = on => {
       const room = Math.max(1, (e.viewport?.rows ?? 24) - 4)
       return (
         <Box flexDirection="column">
-          {agents.length === 0 && <Text dimColor>No agents yet in this session.</Text>}
-          {agents.slice(-room).map(a => (
-            <Text dimColor={a.status === 'completed'}>
-              {line({
-                status: a.status,
-                type: a.type,
-                label: clip(a.description),
-                model: used[a.id]?.model ?? '',
-                tokens: used[a.id]?.tokens ?? 0,
-              })}
-            </Text>
+          {paneLines(agents, used, room).map(l => (
+            <Text dimColor={l.dim}>{l.text}</Text>
           ))}
         </Box>
       )
