@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# bin/ctx-optimize  (chmod +x)
 import os
 import sys
 

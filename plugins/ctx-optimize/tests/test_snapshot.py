@@ -1,4 +1,3 @@
-# tests/test_snapshot.py
 import json
 from ctx_optimize.usage import Request
 from ctx_optimize.snapshot import build_summary, write_snapshot, read_snapshot, snapshot_dir

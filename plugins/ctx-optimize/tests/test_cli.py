@@ -1,4 +1,3 @@
-# tests/test_cli.py
 import json
 from ctx_optimize.cli import main
 from test_usage import line

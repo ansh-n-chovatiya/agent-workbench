@@ -1,4 +1,3 @@
-# py/ctx_optimize/transcripts.py
 """Find Claude Code transcripts and stream their JSON lines. Read-only."""
 import json
 from dataclasses import dataclass, field

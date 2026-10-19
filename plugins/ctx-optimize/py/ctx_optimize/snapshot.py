@@ -1,4 +1,3 @@
-# py/ctx_optimize/snapshot.py
 import json
 import os
 import tempfile
