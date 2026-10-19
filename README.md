@@ -6,7 +6,15 @@ A monorepo and Claude Code marketplace of plugins for durable project context
 and demo video production. Planning and design documents live in
 [docs/00-README.md](docs/00-README.md).
 
-Add the marketplace first:
+One command sets up a machine (it shows what it would do and changes nothing until you add `--yes`; running it
+again changes nothing):
+
+```sh
+scripts/bootstrap.sh          # dry run
+scripts/bootstrap.sh --yes    # add the marketplace, install ctx and ctx-optimize, add the status line if none is set
+```
+
+Or step by step. Add the marketplace first:
 
 ```sh
 claude plugin marketplace add ansh-n-chovatiya/agent-workbench
