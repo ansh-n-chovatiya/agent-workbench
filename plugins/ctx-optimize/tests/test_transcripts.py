@@ -1,4 +1,3 @@
-# tests/test_transcripts.py
 import json
 from ctx_optimize.transcripts import find_sessions, read_jsonl
 

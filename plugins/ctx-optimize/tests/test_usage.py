@@ -1,4 +1,3 @@
-# tests/test_usage.py
 import json
 from ctx_optimize.transcripts import SessionFiles
 from ctx_optimize.usage import load_session, aggregate

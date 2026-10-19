@@ -1,4 +1,3 @@
-# py/ctx_optimize/usage.py
 """Turn transcript lines into deduped Request records and aggregate them."""
 import json
 from dataclasses import dataclass
