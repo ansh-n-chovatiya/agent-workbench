@@ -5,7 +5,7 @@ Measures where Claude Code tokens go: by session, seat (main chat or subagent) a
 
 ```
 ctx-optimize report [--root PATH] [--project NAME] [--session ID] [--day YYYY-MM-DD]
-                    [--units] [--json] [--no-snapshot] [--snapshot-dir PATH]
+                    [--units] [--json] [--no-snapshot] [--snapshot-dir PATH] [--keep N]
 ```
 
 - `--project` matches by substring of the project directory name (e.g. `agent-workbench`).
@@ -16,7 +16,8 @@ ctx-optimize report [--root PATH] [--project NAME] [--session ID] [--day YYYY-MM
 - Reports token volume only, never dollars. Context per request = input + cache read + cache write.
 - Saves a counts-only snapshot to `$CTX_OPTIMIZE_HOME` or `~/.agent-workbench/usage/` (outside the repo, since
   transcripts hold code). Transcripts are deleted after `cleanupPeriodDays`, so snapshots outlive them.
-- Unreadable or malformed lines are skipped and counted as `skipped_lines`.
+- Several runs in the same second each keep their own snapshot (`usage-<stamp>-2.json`, ...); `--keep N` then keeps only
+  the N newest. Unreadable or malformed lines are skipped and counted as `skipped_lines`.
 
 Design: `docs/60-ctx-optimize-phase1-design.md`. Tests: `pytest plugins/ctx-optimize/tests`.
 

@@ -47,3 +47,16 @@ def test_session_filter_does_not_resurrect_a_copy_from_an_earlier_session(tmp_pa
     main(["report", "--root", str(tmp_path / "proj"), "--session", "late", "--json", "--no-snapshot"])
     data = json.loads(capsys.readouterr().out)
     assert data["total"]["by_seat_model"]["main|claude-sonnet-5-5"]["requests"] == 1
+
+
+def test_keep_prunes_old_snapshots_and_rejects_nonsense(tmp_path, capsys):
+    seed(tmp_path / "proj")
+    snaps = tmp_path / "snaps"
+    snaps.mkdir()
+    for stamp in ("20200101T000000", "20200102T000000", "20200103T000000"):
+        (snaps / f"usage-{stamp}.json").write_text("{}")
+    assert main(["report", "--root", str(tmp_path / "proj"), "--json", "--snapshot-dir", str(snaps), "--keep", "2"]) == 0
+    capsys.readouterr()
+    left = sorted(p.name for p in snaps.glob("usage-*.json"))
+    assert len(left) == 2 and "usage-20200101T000000.json" not in left and "usage-20200102T000000.json" not in left
+    assert main(["report", "--root", str(tmp_path / "proj"), "--keep", "0"]) == 2
