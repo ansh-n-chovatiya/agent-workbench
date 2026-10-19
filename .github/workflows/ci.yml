@@ -441,6 +441,29 @@ jobs:
         run: >-
           node --test --test-name-pattern '^(config|layout|deliver: one|mapFromEdits|replanCaptions|parseProject|a slow-down|findProject|timeline:|edit: a phone|captions:|cursor:)' test/paths.test.mjs test/timemap.test.mjs test/edit.test.mjs
 
+  ctx-optimize:
+    name: ctx-optimize · python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.8", "3.13"]
+    defaults:
+      run:
+        working-directory: plugins/ctx-optimize
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      # The plugin itself is standard library only; pytest is the test runner and nothing else.
+      - name: Install the test runner
+        run: python -m pip install --disable-pip-version-check --quiet pytest==8.3.5
+      - name: Tests
+        run: python -m pytest tests -q
+
   # Showreel (preview plugin): unit tests plus capture, export and memory smoke tests on the three desktop
   # operating systems. The smoke tests record what each OS can do (H.264 export, screencast frame rate at each
   # capture scale, 4K export memory) as artifacts; a failed smoke is a finding, not a build failure, until
