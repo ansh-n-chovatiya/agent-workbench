@@ -175,6 +175,9 @@ DEFAULTS = {
         "small_package_bytes": 20000,
         # D18/D20: built default-off; flip only after the quality gate.
         "stop_rule": False,
+        # Add a `## Callers` section to each review package: functions and classes whose signature changed, and the
+        # files outside the change that still mention them. Computed in code, no model. Off until measured (D20).
+        "callers": False,
     },
     "auto_load": [],
     "redact": [],
@@ -852,6 +855,9 @@ def render(config):
         "# review.stop_rule stops after two reviewed rounds unless a critical\n"
         "# finding is open (hard ceiling four), and skips unchanged re-reviews.\n"
         "# Ships false; enable only after the D18/D20 quality gate.\n"
+        "# review.callers adds a `## Callers` section to each review package:\n"
+        "# changed function/class signatures and the files outside the change\n"
+        "# that still mention them (computed in code; ships false).\n"
         "# spec.failure_modes makes each new spec carry a `## Failure modes`\n"
         "# checklist (error paths, concurrency, existing data, callers, UI\n"
         "# states, cleanup) that must be answered before `ctx plan` will run.\n"

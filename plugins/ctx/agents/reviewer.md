@@ -26,6 +26,8 @@ The package is your complete view of the change. It contains:
 - a stat summary of what changed
 - a machine-computed scope-violation section
 - a unified diff at 10 lines of context
+- when the project turned it on, a `## Callers` section: functions and classes whose signature changed, and the files
+  outside the change that still mention them
 
 **Do not re-derive the diff.** No `git diff`, no `git log`, no git at all. There
 may be no repository — running git to "check" is unnecessary, and in a non-repo
@@ -42,6 +44,10 @@ it is a confusing failure that tells you nothing about the change.
    whether the tests assert real behaviour rather than the shape of a mock, and
    whether a new file is already too large to hold one idea.
 4. Report the scope-violation section as given.
+5. If the package has a `## Callers` section, check it: a removed name that is still mentioned, or a changed signature
+   whose caller was not updated, is a named concrete risk — read that caller (it is outside the diff, which is
+   allowed for exactly this) and report whether it breaks. The list is word matching, so a mention is a lead, not
+   proof; say which you found.
 
 Inspecting code *outside* the diff is allowed only to evaluate a concrete risk
 you can name. Name the risk and name what you checked. A changed contract on a

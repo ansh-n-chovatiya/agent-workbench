@@ -24,7 +24,7 @@ import json
 import re
 import subprocess
 
-from . import atomic, plan, redact, snapshot
+from . import atomic, callers, plan, redact, snapshot
 
 REVIEW_SUBDIR = "reviews"
 
@@ -452,8 +452,12 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
     if stray:
         head = snapshot.store_extra(layout, config, head_key, root, stray) or head
 
+    caller_lines = None
+    if (config.get("review") or {}).get("callers", False):
+        caller_lines = _caller_lines(layout, root, delta, base_key, head_key)
+
     text = _render(layout, config, unit, slug, delta, stray, base_key, head_key,
-                   round_number, siblings, len(ignored))
+                   round_number, siblings, len(ignored), caller_lines)
     path = package_path(layout, slug, unit.name, round_number)
     path.parent.mkdir(parents=True, exist_ok=True)
     # `newline=""` writes the string's own "\n" through untranslated. On
@@ -530,8 +534,25 @@ def dispatch_stats(layout, slug, unit, round_number=1):
     }
 
 
+def _caller_lines(layout, root, delta, base_key, head_key):
+    """The `## Callers` section: changed signatures and the files outside the change that still mention them."""
+    changed = {}
+    for path in delta.changed:
+        if snapshot.is_ledger(path):
+            continue
+        before = None if path in delta.added else snapshot.stored_text(layout, base_key, path)
+        after = None if path in delta.deleted else snapshot.stored_text(layout, head_key, path)
+        if (before is None and path not in delta.added) or (after is None and path not in delta.deleted):
+            continue  # content was never stored for this path, so there is nothing to compare
+        for name, kind in callers.changed_symbols(before, after, path).items():
+            changed[name] = "changed" if name in changed and changed[name] != kind else kind
+    paths = [p for p in snapshot.walk(root)[0] if not snapshot.is_ledger(p)]
+    found = callers.find_callers(root, paths, changed, exclude=set(delta.changed))
+    return callers.render(changed, found)
+
+
 def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
-            round_number, siblings=(), ignored=0):
+            round_number, siblings=(), ignored=0, caller_lines=None):
     patterns = config.get("redact") or []
     out = [
         f"# Review package — unit `{unit.name}` of plan `{slug}`, round {round_number}",
@@ -639,6 +660,9 @@ def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
     if ignored:
         out += ["", f"Not scope-checked: {ignored} git-ignored path(s) changed (logs, caches, "
                     "generated output). They are nobody's source and are not violations."]
+
+    if caller_lines is not None:
+        out += ["", "## Callers", "", *caller_lines]
 
     uncapped = []
     body = _diff_body(layout, delta, base_key, head_key, siblings, uncapped)

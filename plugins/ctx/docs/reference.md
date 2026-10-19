@@ -112,6 +112,8 @@ review:
                               # unchanged fix rounds write no package
   small_package_bytes: 20000  # a clean review package under this earns the
                               # reviewer one tier *cheaper* than models.reviewer
+  callers: false              # opt in after the D18/D20 quality gate: add a
+                              # `## Callers` section to each review package
 
 spec:
   failure_modes: false        # opt in after the D18/D20 quality gate: new specs
@@ -144,6 +146,12 @@ refused unless a `critical` finding remains open; round 4 is the hard ceiling.
 Remaining findings need a ruling or an owner decision (`/ctx:decide`). Fix rounds
 with no snapshot delta print an unchanged notice and exit 1 without a package
 or reviewer dispatch. Round 1 is always eligible to build a package.
+
+`review.callers` is a boolean, default `false`. When enabled, each review package gains a `## Callers` section computed
+in code (no model): functions and classes in Python, JavaScript and TypeScript files whose signature was added, removed
+or changed, and the files outside the change that still mention the name as a whole word, with line numbers (a name in
+more than twelve files is summarised). It is a lead for the reviewer to read, not proof of a call; a removed name that is
+still mentioned is the likeliest breakage. Ledger files are never searched. With the key off the package is unchanged.
 
 `spec.failure_modes` is a boolean, default `false`. When enabled, `ctx spec` adds a `## Failure modes` checklist
 (input boundaries, error and timeout paths, permissions and ownership, concurrency and repeated calls, existing data and
