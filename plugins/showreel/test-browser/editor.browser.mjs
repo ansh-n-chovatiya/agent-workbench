@@ -224,7 +224,9 @@ test('real editor: load, edit, undo, autosave, play and export', { timeout: 2400
       // Import a WAV file for the step.
       const wavFile = path.join(directory, 'import.wav');
       await writeFile(wavFile, encodeWav(Float32Array.from({ length: 24000 }, (_, i) => 0.3 * Math.sin(i / 12)), 24000));
-      await page.getByLabel('Choose an audio file').setInputFiles(wavFile);
+      const chooser = page.waitForEvent('filechooser');
+      await page.getByRole('button', { name: /^Import file, / }).first().click();
+      await (await chooser).setFiles(wavFile);
       await until(async () => (await rows.first().locator('.status').innerText()).trim() === 'Imported file', 'imported file used', 30000);
       // Record my own voice with the fake microphone.
       await page.getByRole('button', { name: /^Record my voice, Open the report/ }).click();
@@ -281,7 +283,9 @@ test('real editor: load, edit, undo, autosave, play and export', { timeout: 2400
       await page.getByRole('button', { name: 'Export' }).click();
       await page.getByRole('list', { name: 'Voice-over checklist' }).waitFor({ timeout: 10000 });
       assert.match(await page.getByRole('list', { name: 'Voice-over checklist' }).innerText(), /Voice: 1 of 1 steps ready/);
-      await page.getByRole('button', { name: /^(Start|Export)( export)?$/ }).last().click();
+      const start = page.getByRole('button', { name: /^(Start|Export)( export)?$/ }).last();
+      await until(() => start.isEnabled(), 'Start export enabled once the voice job has finished', 10000);
+      await start.click();
       await page.locator('.loudness-result').first().waitFor({ timeout: 150000 });
       assert.match((await page.locator('.loudness-result').first().innerText()).trim(), /LUFS, true peak .* dBTP/);
       await page.keyboard.press('Escape');

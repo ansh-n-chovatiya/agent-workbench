@@ -70,13 +70,15 @@ export function createVoiceController({ store, api = request, send = upload, fet
       publish({ error: '' });
       try {
         await store.save();
-        // Own recordings stay unless the person says otherwise, so the caller sets force only for an explicit "use generated voice".
-        await api('/api/voice/generate', { method: 'POST', body: JSON.stringify(options) });
+        // Mark the job running BEFORE the request: with every clip cached the server can finish (and announce 'complete')
+        // before this POST returns, and only the server's events may clear the flag afterwards.
         announced = true;
         publish({ job: { ...idle(), running: true, total: options.stepIds?.length ?? 0 } });
         watch();
+        // Own recordings stay unless the person says otherwise, so the caller sets force only for an explicit "use generated voice".
+        await api('/api/voice/generate', { method: 'POST', body: JSON.stringify(options) });
         return true;
-      } catch (error) { fail(error); return false; }
+      } catch (error) { publish({ job: idle() }); fail(error); return false; }
     },
     async cancel() { publish({ job: { ...state.job, cancelling: true } }); try { await api('/api/voice/cancel', { method: 'POST' }); } catch (error) { fail(error); } },
     async playSample(voice) {

@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, statfs, stat, readdir } from 'node:fs/promises';
+import { mkdir, statfs, stat, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { HOME_DIR } from '../paths.mjs';
 import { engineDir, modelDir } from './paths.mjs';
@@ -61,7 +61,20 @@ export function formatCheck(s) {
 
 export async function installEngine({ yes = false, say = (m) => console.log(m) } = {}) {
   const before = await engineStatus();
-  if (before.installed && !before.fake) { say('Voice engine is already installed.'); say(formatCheck(before)); return { alreadyInstalled: true, ...before }; }
+  if (before.installed && !before.fake) {
+    say('Voice engine is already installed.');
+    // Re-check the model against the pin when an older install only recorded its hash.
+    if (before.hashPinned && !before.hashVerified && before.modelHash === KOKORO_Q8_SHA256) {
+      const modelFile = await findModelFile();
+      if (modelFile && await sha256File(modelFile) === KOKORO_Q8_SHA256) {
+        const info = JSON.parse(await readFile(path.join(engineDir(), 'engine.json'), 'utf8'));
+        await atomicWriteJson(path.join(engineDir(), 'engine.json'), { ...info, hashVerified: true });
+        say('model hash verified');
+        return { alreadyInstalled: true, ...(await engineStatus()) };
+      }
+    }
+    say(formatCheck(before)); return { alreadyInstalled: true, ...before };
+  }
   const disk = await checkVoiceDisk();
   say(`Disk: ${(disk.freeBytes / MB / 1024).toFixed(1)} GB free, about ${(disk.requiredBytes / MB).toFixed(0)} MB needed (kokoro-js ${KOKORO_JS_VERSION} plus the Kokoro-82M q8 model, about 100 MB download).`);
   if (!disk.ok) throw new Error(`Not enough free disk space for the voice engine (need ${(disk.requiredBytes / MB).toFixed(0)} MB)`);

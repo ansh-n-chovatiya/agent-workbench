@@ -1,4 +1,4 @@
-import { h } from 'preact';
+import { h, Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Mic, Square, Check, RotateCcw, X } from 'lucide-preact';
 import { Button } from './ui/button.jsx';

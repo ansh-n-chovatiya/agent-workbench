@@ -1,4 +1,4 @@
-import { h } from 'preact';
+import { h, Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { drawFrame, loadFonts, loadAssets } from '../scripts/lib/compose/draw.js';
 import { stateAt } from '../scripts/lib/compose/plan.mjs';
