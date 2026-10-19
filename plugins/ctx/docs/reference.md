@@ -113,6 +113,11 @@ review:
   small_package_bytes: 20000  # a clean review package under this earns the
                               # reviewer one tier *cheaper* than models.reviewer
 
+spec:
+  failure_modes: false        # opt in after the D18/D20 quality gate: new specs
+                              # carry a `## Failure modes` checklist that must be
+                              # answered before `ctx plan` will run
+
 auto_load: []                 # bundles injected into every session
 redact: []                    # extra regexes scrubbed before any write
 verify_candidates: []         # extra commands `init` should consider, for a
@@ -139,6 +144,14 @@ refused unless a `critical` finding remains open; round 4 is the hard ceiling.
 Remaining findings need a ruling or an owner decision (`/ctx:decide`). Fix rounds
 with no snapshot delta print an unchanged notice and exit 1 without a package
 or reviewer dispatch. Round 1 is always eligible to build a package.
+
+`spec.failure_modes` is a boolean, default `false`. When enabled, `ctx spec` adds a `## Failure modes` checklist
+(input boundaries, error and timeout paths, permissions and ownership, concurrency and repeated calls, existing data and
+backward compatibility, callers of anything changed, async UI states, cleanup of resources) and records the requirement in
+the spec's own frontmatter, so enabling or disabling the key later never changes an existing spec. Each item is ticked
+with what covers it (`- [x] error and timeout paths: criterion 3`) or `n/a — <reason>`. An unticked item, a tick with no
+answer, an `n/a` with no reason, or a deleted section all block `ctx plan` and `ctx spec-ready`, listed with the open
+questions.
 
 Three more `review` keys are honoured but not rendered by `init`, because their
 defaults live in `ctx/snapshot.py` and almost nobody needs to move them:

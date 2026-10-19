@@ -167,8 +167,12 @@ def questions_path(layout, slug):
     return spec_dir(layout, slug) / "questions.md"
 
 
-def create(layout, slug, intent="", verify=None):
-    """Scaffold a spec and its questions file. Both are safe to re-run."""
+def create(layout, slug, intent="", verify=None, failure_modes=False):
+    """Scaffold a spec and its questions file. Both are safe to re-run.
+
+    `failure_modes=True` adds a `## Failure modes` checklist and records the requirement in the spec's own
+    frontmatter, so the gate follows the spec and not whatever the config says later.
+    """
     # Capped here as well as in `spec_dir`, so the `spec:` recorded in both
     # files' frontmatter names the directory they actually live in.
     slug = normalise_slug(slug)
@@ -181,12 +185,15 @@ def create(layout, slug, intent="", verify=None):
             "created": datetime.date.today().isoformat(),
             "verify": list(verify or []),
         }
+        if failure_modes:
+            meta["failure_modes"] = True
         body = (
             "## Intent\n"
             f"{intent or '<one paragraph: the observable outcome, and why it matters>'}\n\n"
             "## Acceptance criteria\n"
             "1. <checkable — name the observable, not the implementation>\n\n"
-            "## Out of scope\n"
+            + (_failure_modes_section() if failure_modes else "")
+            + "## Out of scope\n"
             "- <what this deliberately does not cover>\n\n"
             "## Notes\n"
         )
@@ -205,6 +212,46 @@ def create(layout, slug, intent="", verify=None):
         )
         frontmatter.Document(meta, body).write(qpath)
     return path, qpath
+
+
+def _failure_modes_section():
+    lines = [
+        f"## {FAILURE_MODES_HEADING}\n",
+        "<!-- Tick each item with what covers it: `- [x] error and timeout paths: criterion 3`, or\n"
+        "     `- [x] async UI states: n/a — no UI in this change`. An unticked item, a tick with no answer and an\n"
+        "     n/a with no reason all block planning. -->\n",
+    ]
+    lines += [f"- [ ] {name}\n" for name in FAILURE_MODES]
+    return "".join(lines) + "\n"
+
+
+def failure_modes_open(layout, slug):
+    """The failure-mode items still blocking this spec; empty when the spec does not require the pass.
+
+    A tick counts only with an answer, and an `n/a` only with a reason: an empty answer would satisfy the gate
+    as well as a real one (the same reasoning as `record_inferred`). A section that was deleted or emptied is
+    itself blocking, so removing the section never opens the gate.
+    """
+    doc = frontmatter.read(spec_path(layout, slug))
+    if doc is None or not doc.meta.get("failure_modes"):
+        return []
+    body = doc.body
+    marker = f"## {FAILURE_MODES_HEADING}"
+    if marker not in body:
+        return [f"failure mode: add a '## {FAILURE_MODES_HEADING}' section (the checklist is in /ctx:spec)"]
+    section = body.split(marker, 1)[1].split("\n## ", 1)[0]
+    items = [m for m in map(_FAILURE_ITEM.match, section.splitlines()) if m]
+    if not items:
+        return [f"failure mode: the '## {FAILURE_MODES_HEADING}' section lists no items"]
+    open_items = []
+    for m in items:
+        answer = (m.group("answer") or "").strip()
+        reason = re.sub(r"^n/a\s*[—:\-–]*\s*", "", answer, flags=re.IGNORECASE).strip() if answer.lower().startswith("n/a") else answer
+        if m.group("mark") == " " or not answer or len(reason) < 3:
+            open_items.append(
+                f"failure mode not addressed: {m.group('name')} — name the criterion that covers it, "
+                "or `n/a — <reason>`")
+    return open_items
 
 
 def questions(layout, slug):
@@ -342,6 +389,21 @@ def resolve(layout, slug, question, answer):
 
 INTAKE_CATEGORIES = ("why now", "what could go wrong", "what changes for you")
 
+# The classes of defect a change's reviews keep finding after the code exists (docs/22): naming them while the spec is
+# written is cheaper than finding them in review round three. Opt-in: see `create(failure_modes=...)`.
+FAILURE_MODES_HEADING = "Failure modes"
+FAILURE_MODES = (
+    "input boundaries",
+    "error and timeout paths",
+    "permissions and ownership",
+    "concurrency and repeated calls",
+    "existing data and backward compatibility",
+    "callers of anything changed",
+    "async UI states",
+    "cleanup of resources",
+)
+_FAILURE_ITEM = re.compile(r"^- \[(?P<mark>[ xX])\]\s*(?P<name>[^:\n]+?)\s*(?::\s*(?P<answer>.*))?$")
+
 
 def record_inferred(layout, slug, category, answer, rationale):
     """Append an inferred (never asked) intake answer straight into Resolved.
@@ -417,6 +479,7 @@ def ready(layout, slug):
     something `ctx plan` then refused.
     """
     blocking, _non, _resolved = questions(layout, slug)
+    blocking = list(blocking) + failure_modes_open(layout, slug)
     return (not blocking), blocking
 
 

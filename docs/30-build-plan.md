@@ -86,6 +86,8 @@ session; `_FORCE=1` produces a logged mismatch; any thrown error passes the call
 
 ## Phase 4: review system (22)
 
+**Status 2026-10-19: slice 1 built** (`spec.failure_modes`, default off): a spec created with the switch on carries a `## Failure modes` checklist that must be answered before `ctx plan` runs; 9 tests including controls (empty answer, `n/a` with no reason, deleted section); full ctx suite 2298 passed. Not built yet: units carrying failure modes and risk tags, caller list and test-to-failure-mode table in the review package, reviewer and builder prompt changes, confidence filter, `ctx rules`, round cap of two (D17 exists), PR-level pass.
+
 Order: failure-mode section in `/ctx:spec` and plan blocking; caller list and test table in the package; reviewer
 and builder prompt changes; confidence filter; `ctx rules`; round cap of two; PR-level pass.
 Acceptance (A/B on 3 to 5 real changes): rounds to approval at or below two; findings per category recorded;
