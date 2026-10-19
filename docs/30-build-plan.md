@@ -56,6 +56,8 @@ unit-runners ran on Opus) is answered first because it changes what the baseline
 
 ## Phase 1: measure (D11)
 
+**Status 2026-10-19: built and run** (`plugins/ctx-optimize`, plan 61, findings in 16). H1 confirmed, H2 not decidable until phase 2. Open: reconcile one session with `/usage` (needs the owner's figures).
+
 Main-chat context and model first (D18), then subagents. Include a what-if table from real transcripts: how many
 main requests would have run on each model and at what context size.
 
@@ -66,6 +68,8 @@ separates main chat from subagents; a snapshot is saved. **Output: confirm or re
 No routing is built until this is read.
 
 ## Phase 2: join to the ledger and show it
+
+**Status 2026-10-19: built** (`plugins/ctx-optimize` 0.2.0): `report --units` (tokens per unit, stage, review round), `statusline` command, `/ctx-agents` pane mod. Not yet checked in a live session: the pane and the status line (enable `statusLine` per the plugin README). Plan names are not joined (units keyed by session).
 
 Ledger join (stage, unit, round), `/agents` pane, one status line.
 Acceptance: for one real ctx plan the report lists tokens per unit and per review round; `/agents` draws nothing

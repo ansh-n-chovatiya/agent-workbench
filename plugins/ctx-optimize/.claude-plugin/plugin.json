@@ -1,0 +1,16 @@
+{
+  "name": "ctx-optimize",
+  "displayName": "Context Ledger Optimize",
+  "version": "0.2.0",
+  "description": "Measures where Claude Code tokens go (report CLI, status line) and shows a pane of session agents.",
+  "author": {
+    "name": "Ansh Chovatiya"
+  },
+  "keywords": [
+    "tokens",
+    "usage",
+    "report"
+  ],
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

@@ -15,6 +15,7 @@ claude plugin marketplace add ansh-n-chovatiya/agent-workbench
 | Plugin | Purpose | Install |
 | --- | --- | --- |
 | [ctx](plugins/ctx) | Context Ledger: durable project state, stdlib Python | `claude plugin install ctx@agent-workbench` |
+| [ctx-optimize](plugins/ctx-optimize) | Token usage report per session, unit and review round; status line; agents pane | `claude plugin install ctx-optimize@agent-workbench` |
 | [skills-demo](plugins/skills-demo) | Node skill for demo videos from Playwright tests | `claude plugin install skills-demo@agent-workbench` |
 | [showreel](plugins/showreel) (preview) | Web-flow demo videos | `claude plugin install showreel@agent-workbench` |
 

@@ -52,3 +52,34 @@ Sources: Anthropic docs `costs` and `prompt-caching` (fetched 2026-10-17) and th
 Per-token prices are **not** recorded here. They are not in the transcripts; Claude Code computes cost from list
 prices locally. Use `/usage` or the pricing page when a dollar figure is needed. Never quote savings in dollars
 without the log.
+
+## Phase 1 findings (2026-10-19, `ctx-optimize report` over three projects)
+
+Volume only, no prices. Source: transcripts in `~/.claude/projects` for the ctx (`context-ledger`), Hark and DevFlow
+projects; 14 sessions, 0 skipped lines. Totals of this tool match an independent count exactly on one session
+(31 requests, identical input, output, cache read, cache write). **Not yet reconciled with `/usage`** (needs the
+owner's figures for one session; target within 5%).
+
+| Project | Sessions | Main requests | Subagent requests | Main share of cache read | Mean main context / request | Mean subagent context / request |
+|---|---|---|---|---|---|---|
+| ctx | 2 | 207 | 340 | 82% | 226k | 35k |
+| Hark | 7 | 997 | 39 | 99% | 358k | 76k |
+| DevFlow | 5 | 242 | 9 | 99% | 150k | 36k |
+
+- **H1: confirmed on this data.** The main chat accounts for 82% to 99% of cache-read volume and its mean context per
+  request is 4 to 6 times a subagent's. Even in the ctx project, which has 340 subagent requests, subagents are 18%.
+  Routing subagents to cheaper models can save at most that share; keeping the main context small matters more.
+- **H2: not decidable yet.** In ctx, 201 of 340 subagent requests ran on Opus (7.4M cache read), but per-round numbers
+  need the ledger join (phase 2). Hark and DevFlow have almost no subagent activity, so they say nothing about review
+  rounds.
+- Caveats: three projects, one owner, small subagent counts outside ctx. Hark main context reaches 966k tokens at
+  the maximum, a lead worth checking in phase 2. Synthetic (`<synthetic>`) messages carry no usage and are harmless.
+
+## Phase 2 findings (2026-10-19, one ctx plan, 9 units, `report --units`)
+
+Rounds are inferred from spawn order (see ctx-optimize README); one plan, so treat as a first read.
+
+- Of 8.8M cache-read tokens in unit subagents: build 59%, fix rounds 15%, review 26%. Review round 1 is 96% of review volume; round 2 is 4%.
+- **H2: not supported by this plan.** The review loop did not multiply cost: only two units got a round 2 and it was cheap (Sonnet, 92k vs 2.2M for round 1). The expensive review was one unit (09) whose single round 1 used 28 requests.
+- **Q17 answered in part:** 115 of 169 build requests and 24 of 62 fix requests ran on Opus although `models.runner` is sonnet; units 01, 07, 08, 09 built entirely on Opus. Moving those to Sonnet is the larger saving than any review change. Still to confirm: whether those units carry their own `model:`.
+- 39 non-ctx subagents (general-purpose and similar) were unattributed: 1.6M cache read.
