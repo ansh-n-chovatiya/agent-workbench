@@ -39,9 +39,11 @@ export function planRender({ composition, brief, storyboard, events, record, sou
   composition = resolveComposition(composition);
   const { output, cards } = composition;
   const layout = layoutFor({ output, source: sourceSize, composition });
-  const timemap = buildTimeMap({ duration: record.durationSec, ...composition.edits,
+  const timeArgs = (extraHold) => ({ duration: record.durationSec, ...composition.edits,
+    holds: extraHold ? [...(composition.edits.holds ?? []), extraHold] : composition.edits.holds,
     lead: cards.title.enabled ? cards.title.durationSec : 0,
     tail: cards.outro.enabled ? cards.outro.durationSec : 0, fade: cards.transition === 'cut' ? 0 : cards.fade });
+  let timemap = buildTimeMap(timeArgs(null));
   const savedRegions = validateRegions(composition.zoom.regions, { duration: record.durationSec });
   if (!savedRegions.ok) throw new Error(savedRegions.errors.join('\n'));
   const auto = composition.zoom.autoSuggest && composition.zoom.regions.every((r) => r.source === 'auto');
@@ -53,7 +55,18 @@ export function planRender({ composition, brief, storyboard, events, record, sou
   const cssSource = { width: sourceSize.width / record.scale.used, height: sourceSize.height / record.scale.used };
   const clone = (v) => JSON.parse(JSON.stringify(v));
   let cues = !composition.captions.enabled ? [] : composition.captions.cues !== undefined ? clone(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true });
-  const audio = planAudio({ composition, brief, events, timemap, cues, voiceClips, audioUrls });
+  let audio = planAudio({ composition, brief, events, timemap, cues, voiceClips, audioUrls });
+  // Narration that would run past the end of the video is never cut off: hold the last frame until the voice has finished.
+  const narrationEnd = Math.max(0, ...audio.narration.map((n) => n.outStart + n.durationSec));
+  if (narrationEnd > timemap.mainEnd + 0.05) {
+    const extra = +(narrationEnd - timemap.mainEnd + 0.3).toFixed(3), last = timemap.segments.filter((x) => x.rate > 0).at(-1);
+    try {
+      const held = buildTimeMap(timeArgs({ t: Math.max(last.start, last.end - 1 / composition.output.fps), duration: extra }));
+      const retimed = planAudio({ composition, brief, events, timemap: held, cues, voiceClips, audioUrls });
+      timemap = held; audio = retimed;
+      audio.warnings = [...audio.warnings, { stepId: null, code: 'tail-hold', message: `The last frame is held for ${extra.toFixed(1)} s so the narration can finish.`, overrunSec: extra, fixes: [] }];
+    } catch { /* an existing hold or edit blocks an automatic hold: the overrun warnings already tell the person */ }
+  }
   if (audio.captionSpans.length) cues = extendCues(cues, audio.captionSpans, timemap);
   return { output: clone(output), layout, theme: THEMES[composition.theme], frame: clone(composition.frame), timemap,
     regions: clone(regions),

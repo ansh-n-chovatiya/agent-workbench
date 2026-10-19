@@ -135,3 +135,17 @@ test('the render server serves project audio only through safe routes', async ()
     try { assert.equal((await fetch(without.url + 'voice/k1.wav')).status, 404); } finally { await without.close(); }
   } finally { await server?.close(); await rm(base, { recursive: true, force: true }); }
 });
+
+test('narration that would run past the end of the video holds the last frame instead of being cut off', () => {
+  const input = run({ audio: { voice: { enabled: true } }, cards: { title: { enabled: false }, outro: { enabled: false } } });
+  const longClips = { version: 1, clips: { k1: { key: 'k1', durationSec: 2, source: 'tts' }, k2: { key: 'k2', durationSec: 6, source: 'tts' } }, steps: { s1: 'k1', s2: 'k2' } };
+  const plan = planRender({ ...input, voiceClips: longClips });
+  const end = Math.max(...plan.audio.narration.map((n) => n.outStart + n.durationSec));
+  assert.ok(plan.timemap.outputDuration >= end, `video ${plan.timemap.outputDuration} must cover narration end ${end}`);
+  assert.ok(plan.audio.warnings.some((w) => w.code === 'tail-hold'), 'a tail-hold notice is reported');
+  assert.equal(plan.audio.durationSec, plan.timemap.outputDuration);
+  // Narration that fits changes nothing.
+  const fits = planRender({ ...input, voiceClips: { ...longClips, clips: { ...longClips.clips, k2: { key: 'k2', durationSec: 2, source: 'tts' } } } });
+  assert.ok(!fits.audio.warnings.some((w) => w.code === 'tail-hold'));
+  assert.equal(fits.timemap.outputDuration, 7);
+});
