@@ -10,7 +10,7 @@ from typing import List, Optional
 from .plans import load_windows
 from .report import render_text, render_units
 from .status import render as render_status
-from .snapshot import build_summary, snapshot_dir, write_snapshot
+from .snapshot import build_summary, prune_snapshots, snapshot_dir, write_snapshot
 from .transcripts import find_sessions
 from .usage import dedupe_across, load_session
 
@@ -28,6 +28,7 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--json", action="store_true")
     r.add_argument("--no-snapshot", action="store_true")
     r.add_argument("--snapshot-dir")
+    r.add_argument("--keep", type=int, metavar="N", help="after saving, keep only the N newest snapshots")
     sub.add_parser("statusline", help="one-line status for Claude Code's statusLine setting (reads JSON on stdin)")
     return p
 
@@ -43,6 +44,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         except Exception:
             print("")
         return 0
+    if args.keep is not None and args.keep < 1:
+        print("--keep must be at least 1", file=sys.stderr)
+        return 2
     if args.day and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args.day):
         print("--day must look like 2026-10-19", file=sys.stderr)
         return 2
@@ -73,8 +77,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(json.dumps(summary, indent=2, sort_keys=True) if args.json else text, end="\n" if args.json else "")
     if not args.no_snapshot and per_session:
         stamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+        target = Path(args.snapshot_dir) if args.snapshot_dir else snapshot_dir()
         try:
-            write_snapshot(summary, Path(args.snapshot_dir) if args.snapshot_dir else snapshot_dir(), stamp)
+            write_snapshot(summary, target, stamp)
+            if args.keep is not None:
+                prune_snapshots(target, args.keep)
         except OSError as e:
             print(f"snapshot not saved: {e}", file=sys.stderr)
     return 0
