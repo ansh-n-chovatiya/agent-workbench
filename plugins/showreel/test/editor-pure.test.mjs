@@ -19,7 +19,7 @@ test('schema covers default and optional paths with documented exclusions', () =
     for (const p of Object.keys(compositionPaths(c))) assert.ok(covered.has(p),p);
   for (const s of SETTINGS) {
     assert.equal(settingFor(s.path),s); assert.ok(s.label.trim()); assert.ok(s.help.trim());
-    assert.ok(['look','cursor','zoom','captions','cards','output'].includes(s.group),s.path);
+    assert.ok(['look','cursor','zoom','captions','cards','output','audio'].includes(s.group),s.path);
     assert.ok(['number','slider','toggle','select','color','text','image','gradient'].includes(s.control));
     assert.equal(typeof s.advanced,'boolean');
   }

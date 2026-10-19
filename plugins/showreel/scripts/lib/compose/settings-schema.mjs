@@ -7,6 +7,7 @@ export const EXCLUDED = [
   { path: 'edits.trims', reason: 'Edited on the timeline.' },
   { path: 'edits.speeds', reason: 'Edited on the timeline.' },
   { path: 'zoom.regions', reason: 'Edited on the timeline and preview.' },
+  { path: 'audio.narration.steps', reason: 'Per-step narration text and mute are edited in the narration list.' },
   { path: 'captions.cues', reason: 'Source-time caption overrides edited on the timeline.' },
   { path: 'cursor.custom', reason: 'Container; use the individual image and hotspot settings.' },
   ...['arrow','hand','text'].flatMap(shape => ['', '.hotspot'].map(suffix => ({
@@ -123,21 +124,39 @@ const copy = {
   "cursor.custom.text.image": ["Text cursor image", "Use your own pointer image when the cursor is over a text field."],
   "cursor.custom.text.hotspot.x": ["Text cursor click point across", "Position the text pointer across its image; zero aligns its left edge and one its right edge."],
   "cursor.custom.text.hotspot.y": ["Text cursor click point down", "Position the text pointer down its image; zero aligns its top edge and one its bottom edge."],
+  "audio.voice.enabled": ["Voice-over", "Speak each step's narration; leave unset to follow the voice-over choice made when the project was planned."],
+  "audio.voice.voiceId": ["Voice", "Choose which voice reads the narration."],
+  "audio.voice.speed": ["Voice speed", "How fast the narrator speaks; one is the natural pace."],
+  "audio.voice.gainDb": ["Voice volume", "Make the narration louder or quieter before the final loudness is set, in decibels."],
+  "audio.music.enabled": ["Background music", "Play a music track under the video."],
+  "audio.music.file": ["Music file", "A WAV, MP3, M4A or OGG file inside the project to use as background music."],
+  "audio.music.gainDb": ["Music volume", "How loud the music is compared with the voice, in decibels; lower numbers are quieter."],
+  "audio.music.loop": ["Repeat music", "Start the track again when it ends so it lasts as long as the video."],
+  "audio.music.fadeInSec": ["Music fade in", "How many seconds the music takes to rise to full volume at the start."],
+  "audio.music.fadeOutSec": ["Music fade out", "How many seconds the music takes to fade away at the end."],
+  "audio.music.duck.enabled": ["Lower music under voice", "Turn the music down automatically while the narrator is speaking."],
+  "audio.music.duck.depthDb": ["Ducking amount", "How far the music drops while someone is speaking, in decibels."],
+  "audio.music.duck.attackMs": ["Ducking speed", "How quickly the music drops before the voice starts, in milliseconds."],
+  "audio.music.duck.releaseMs": ["Music recovery time", "How long the music takes to come back after the voice stops, in milliseconds."],
+  "audio.loudness.enabled": ["Level the sound", "Adjust the total volume so every export is equally loud."],
+  "audio.loudness.targetLufs": ["Target loudness", "The overall loudness to aim for; minus sixteen suits online video."],
+  "audio.loudness.truePeakDb": ["Peak limit", "The loudest any moment may get, in decibels below the maximum, so the sound never distorts."],
   "cursor.custom.heightPct": ["Custom cursor height", "Set the height of your pointer images as a percentage of the video height."],
 };
+const audioSections = { voice: 'Voice', music: 'Music', loudness: 'Loudness' };
 const sections = { shadow: 'Frame shadow', border: 'Frame border', background: 'Background', followThrough: 'Movement after clicks',
   clickEffect: 'Click effect', accent: 'Accent', logo: 'Logo', arrow: 'Arrow cursor', hand: 'Hand cursor', text: 'Text cursor' };
 const unitFor = path => /Pct$/.test(path) ? '%' : /Px$|output\.(width|height)$/.test(path) ? 'px'
-  : /Sec$|cards.fade$/.test(path) ? 's' : /Mult$|pressScale$|zoom.depth$/.test(path) ? 'x' : undefined;
+  : /Sec$|cards.fade$/.test(path) ? 's' : /Db$/.test(path) ? 'dB' : /Ms$/.test(path) ? 'ms' : /Lufs$/.test(path) ? 'LUFS' : /Mult$|pressScale$|zoom.depth$/.test(path) ? 'x' : undefined;
 export const SETTINGS = Object.entries(compositionPaths({})).filter(([path]) => !excluded.has(path)).map(([path,value]) => {
   const [label, help] = copy[path];
   const group = /^(frame\.|theme$)/.test(path) ? 'look' : path.split('.')[0];
   const options = SETTING_ENUMS[path];
   const range = SETTING_RANGES[path];
-  const control = options ? 'select' : range ? 'number' : typeof value === 'boolean' ? 'toggle'
+  const control = path === 'audio.voice.enabled' ? 'toggle' : options ? 'select' : range ? 'number' : typeof value === 'boolean' ? 'toggle'
     : path.endsWith('.colors') ? 'gradient' : path.endsWith('.image') ? 'image'
       : /(?:color|Color|fill|stroke|captions.background)$/.test(path) ? 'color' : 'text';
-  return { path, group, section: path.startsWith('cards.') ? `${path.split('.')[1]} card · ${sections[path.split('.')[2]] ?? 'Text and timing'}` : sections[path.split('.')[1]] ?? 'General', label,
+  return { path, group, section: path.startsWith('audio.') ? (path.includes('.duck.') ? 'Music ducking' : audioSections[path.split('.')[1]]) : path.startsWith('cards.') ? `${path.split('.')[1]} card · ${sections[path.split('.')[2]] ?? 'Text and timing'}` : sections[path.split('.')[1]] ?? 'General', label,
     help, unit: unitFor(path),
     control, ...(range ?? {}), ...(options ? { options } : {}),
     advanced: /custom|hotspot|followThrough|pressScale|microCorrection|paddingPct/.test(path),

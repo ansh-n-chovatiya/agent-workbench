@@ -28,6 +28,11 @@ export const DEFAULT_COMPOSITION = freeze({
   cards: { title: { ...cardDefaults, enabled: true, title: null, subtitle: null, durationSec: 2.2 },
     outro: { ...cardDefaults, enabled: true, text: 'Thank you', subtitle: null, durationSec: 2 }, fade: 0.4, transition: 'crossfade' },
   edits: { trims: [], speeds: [] },
+  audio: { voice: { enabled: null, voiceId: 'af_heart', speed: 1, gainDb: 0 },
+    music: { enabled: false, file: null, gainDb: -18, loop: true, fadeInSec: 1, fadeOutSec: 2,
+      duck: { enabled: true, depthDb: 12, attackMs: 150, releaseMs: 400 } },
+    loudness: { enabled: true, targetLufs: -16, truePeakDb: -1 },
+    narration: { steps: {} } },
 });
 export const COMPOSITION_RANGES = [
     ['output.width',2,7680,true],['output.height',2,4320,true],['frame.paddingXPct',0,25],['frame.paddingYPct',0,25],
@@ -35,6 +40,9 @@ export const COMPOSITION_RANGES = [
     ['cursor.followThrough.distancePx',0,500],['cursor.followThrough.durationSec',0.1,5],['cursor.followThrough.startAfterClickSec',0,5],
     ['cursor.sizePct',1,8],['cursor.hideWhenIdleSec',0,60],['cursor.pressScale',0.1,1],['cursor.clickEffect.sizeMult',0.1,10],['cursor.clickEffect.durationSec',0.05,5],
     ['zoom.holdAfterClickSec',0,30],['zoom.leadInSec',0,5],['captions.bandHeightPct',6,25],['captions.fontSizePct',1,10],['cards.fade',0,1.5],
+    ['audio.voice.speed',0.5,2],['audio.voice.gainDb',-24,12],['audio.music.gainDb',-60,6],['audio.music.fadeInSec',0,30],['audio.music.fadeOutSec',0,30],
+    ['audio.music.duck.depthDb',0,30],['audio.music.duck.attackMs',10,2000],['audio.music.duck.releaseMs',50,5000],
+    ['audio.loudness.targetLufs',-30,-8],['audio.loudness.truePeakDb',-6,0],
   ];
 export const COMPOSITION_ENUMS = { 'cursor.style':['arrow','pointer','dot','ring','crosshair','custom'], 'cursor.clickEffect.style':['ripple','pulse','none'],
     'zoom.speed':['slow','normal','fast'], 'captions.mode':['band','overlay'], 'captions.position':['top','bottom'],
@@ -64,6 +72,9 @@ function copy(value) {
 // Lexical containment is portable to the editor; realpath containment is checked by the server too.
 export const safeImagePath = (v) => typeof v === 'string' && !!v.trim() && !/^(?:[\\/]|[a-z][a-z0-9+.-]*:)/i.test(v)
   && !v.split(/[\\/]/).some((part) => part === '..' || part === '') && !/[?#%\x00-\x1f]/.test(v);
+export const MUSIC_EXTENSIONS = ['wav', 'mp3', 'm4a', 'ogg'];
+export const safeMusicPath = (v) => safeImagePath(v) && new RegExp(`\\.(${MUSIC_EXTENSIONS.join('|')})$`, 'i').test(v);
+const narrationStepModel = { text: '', muted: false };
 export function resolveComposition(input) {
   const theme = typeof input.theme === 'string' && Object.hasOwn(THEMES, input.theme) ? THEMES[input.theme] : THEMES.clean;
   const themed = merge(DEFAULT_COMPOSITION, { frame: { background: { colors: theme.background.colors, angle: theme.background.angle }, radiusPx: theme.frame.radiusPx, shadow: { blurPx: theme.frame.shadow.blurPx, offsetYPx: theme.frame.shadow.offsetYPx } }, cursor: theme.cursor, captions: theme.caption,
@@ -98,7 +109,7 @@ export function validateComposition(c, { duration = Number.MAX_VALUE } = {}) {
     for (const [k, x] of Object.entries(v)) {
       const key = p ? `${p}.${k}` : k;
       if ((p === 'frame' && k === 'paddingPct') || (/^cards\.(title|outro)$/.test(p) && k === 'duration')) { range(key, x, 0, k === 'duration' ? 30 : 25); continue; }
-      if (key === 'captions.cues') continue;
+      if (key === 'captions.cues' || key === 'audio.narration.steps') continue;
       if (!Object.hasOwn(model, k)) { fail(key, 'is an unknown key'); continue; }
       if (key === 'cursor.clickEffect' && typeof x === 'boolean') continue;
       if (key === 'cursor.custom') {
@@ -175,6 +186,22 @@ export function validateComposition(c, { duration = Number.MAX_VALUE } = {}) {
       if (i && cue?.start < cues[i-1]?.end) fail(p,'overlaps the previous cue or is unsorted');
     });
   }
+  if (typeof d.audio?.voice?.enabled !== 'boolean' && d.audio?.voice?.enabled !== null) fail('audio.voice.enabled', 'must be true, false or null');
+  if (typeof d.audio?.voice?.voiceId !== 'string' || !/^[A-Za-z0-9_.-]{1,64}$/.test(d.audio.voice.voiceId)) fail('audio.voice.voiceId', 'must be a voice name of 1 to 64 letters, digits, dots, dashes or underscores');
+  const musicFile = d.audio?.music?.file;
+  if (musicFile !== null && !safeMusicPath(musicFile)) fail('audio.music.file', `must be a local ${MUSIC_EXTENSIONS.join(', ')} file path inside the project`);
+  else if (d.audio?.music?.enabled === true && musicFile === null) warnings.push('audio.music is enabled but no music file is chosen, so no music will play');
+  if (c.audio?.narration?.steps !== undefined) {
+    const steps = c.audio.narration.steps;
+    if (!object(steps) || Object.keys(steps).length > 200) fail('audio.narration.steps', 'must be an object with at most 200 steps');
+    else for (const [id, entry] of Object.entries(steps)) {
+      const p = `audio.narration.steps.${id}`;
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || ['__proto__', 'constructor', 'prototype'].includes(id)) { fail(p, 'is not a valid step ID'); continue; }
+      walk(entry, narrationStepModel, p);
+      if (entry?.text !== undefined && (typeof entry.text !== 'string' || !entry.text.trim() || entry.text.length > 280)) fail(`${p}.text`, 'must contain 1 to 280 characters');
+      if (entry?.muted !== undefined && typeof entry.muted !== 'boolean') fail(`${p}.muted`, 'must be boolean');
+    }
+  }
   const regions = validateRegions(c.zoom?.regions); errors.push(...regions.errors); warnings.push(...regions.warnings);
   for (const [k,model] of [['trims',{start:0,end:0}],['speeds',{start:0,end:0,rate:1}]]) if (Array.isArray(c.edits?.[k])) c.edits[k].forEach((v,i) => {
     walk(v,model,`edits.${k}.${i}`);
@@ -188,7 +215,7 @@ export function compositionPaths(c) {
   function visit(v,p = '') {
     for (const [k,x] of Object.entries(v)) {
       const key = p ? `${p}.${k}` : k;
-      if (object(x)) visit(x,key); else result[key] = x;
+      if (object(x) && key !== 'audio.narration.steps') visit(x,key); else result[key] = x;
     }
   }
   visit(value);
@@ -247,6 +274,9 @@ export function buildComposition({ brief, storyboard, events, record, edits = {}
     run: { id: record.runId }, theme: brief.theme,
     captions: brief.captions,
     cards: { title: { ...brief.titleCard, title: brief.titleCard.title ?? brief.topic }, outro: brief.outroCard }, edits,
+    // Choices made at intake seed the audio settings; overrides still win.
+    audio: { ...(/^[A-Za-z0-9_.-]{1,64}$/.test(brief.voice?.name ?? '') ? { voice: { voiceId: brief.voice.name } } : {}),
+      ...(brief.music?.mode === 'file' && safeMusicPath(brief.music.file) ? { music: { enabled: true, file: brief.music.file } } : {}) },
   }, overrides));
   const schema = validateComposition(c, { duration: record.durationSec });
   if (!schema.ok) throw new Error(schema.errors.join('\n'));

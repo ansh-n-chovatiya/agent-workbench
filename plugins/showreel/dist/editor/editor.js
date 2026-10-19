@@ -1,4 +1,4 @@
-// showreel editor sources sha256: 6429f30006f787cc372d45daeebca83b2201c0edb4f1f02fbb902314f12e28b2
+// showreel editor sources sha256: adac748512d714f563c1509e6069570011cf9f070a23a8b3a409e3b8a8cc482c
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -730,7 +730,21 @@
       fade: 0.4,
       transition: "crossfade"
     },
-    edits: { trims: [], speeds: [] }
+    edits: { trims: [], speeds: [] },
+    audio: {
+      voice: { enabled: null, voiceId: "af_heart", speed: 1, gainDb: 0 },
+      music: {
+        enabled: false,
+        file: null,
+        gainDb: -18,
+        loop: true,
+        fadeInSec: 1,
+        fadeOutSec: 2,
+        duck: { enabled: true, depthDb: 12, attackMs: 150, releaseMs: 400 }
+      },
+      loudness: { enabled: true, targetLufs: -16, truePeakDb: -1 },
+      narration: { steps: {} }
+    }
   });
   var COMPOSITION_RANGES = [
     ["output.width", 2, 7680, true],
@@ -754,7 +768,17 @@
     ["zoom.leadInSec", 0, 5],
     ["captions.bandHeightPct", 6, 25],
     ["captions.fontSizePct", 1, 10],
-    ["cards.fade", 0, 1.5]
+    ["cards.fade", 0, 1.5],
+    ["audio.voice.speed", 0.5, 2],
+    ["audio.voice.gainDb", -24, 12],
+    ["audio.music.gainDb", -60, 6],
+    ["audio.music.fadeInSec", 0, 30],
+    ["audio.music.fadeOutSec", 0, 30],
+    ["audio.music.duck.depthDb", 0, 30],
+    ["audio.music.duck.attackMs", 10, 2e3],
+    ["audio.music.duck.releaseMs", 50, 5e3],
+    ["audio.loudness.targetLufs", -30, -8],
+    ["audio.loudness.truePeakDb", -6, 0]
   ];
   var COMPOSITION_ENUMS = {
     "cursor.style": ["arrow", "pointer", "dot", "ring", "crosshair", "custom"],
@@ -797,6 +821,9 @@
     return value;
   }
   var safeImagePath = (v3) => typeof v3 === "string" && !!v3.trim() && !/^(?:[\\/]|[a-z][a-z0-9+.-]*:)/i.test(v3) && !v3.split(/[\\/]/).some((part) => part === ".." || part === "") && !/[?#%\x00-\x1f]/.test(v3);
+  var MUSIC_EXTENSIONS = ["wav", "mp3", "m4a", "ogg"];
+  var safeMusicPath = (v3) => safeImagePath(v3) && new RegExp(`\\.(${MUSIC_EXTENSIONS.join("|")})$`, "i").test(v3);
+  var narrationStepModel = { text: "", muted: false };
   function resolveComposition(input) {
     const theme = typeof input.theme === "string" && Object.hasOwn(THEMES, input.theme) ? THEMES[input.theme] : THEMES.clean;
     const themed = merge(DEFAULT_COMPOSITION, {
@@ -849,7 +876,7 @@
           range2(key, x4, 0, k4 === "duration" ? 30 : 25);
           continue;
         }
-        if (key === "captions.cues") continue;
+        if (key === "captions.cues" || key === "audio.narration.steps") continue;
         if (!Object.hasOwn(model, k4)) {
           fail(key, "is an unknown key");
           continue;
@@ -936,6 +963,25 @@
         if (i3 && cue?.start < cues[i3 - 1]?.end) fail(p3, "overlaps the previous cue or is unsorted");
       });
     }
+    if (typeof d3.audio?.voice?.enabled !== "boolean" && d3.audio?.voice?.enabled !== null) fail("audio.voice.enabled", "must be true, false or null");
+    if (typeof d3.audio?.voice?.voiceId !== "string" || !/^[A-Za-z0-9_.-]{1,64}$/.test(d3.audio.voice.voiceId)) fail("audio.voice.voiceId", "must be a voice name of 1 to 64 letters, digits, dots, dashes or underscores");
+    const musicFile = d3.audio?.music?.file;
+    if (musicFile !== null && !safeMusicPath(musicFile)) fail("audio.music.file", `must be a local ${MUSIC_EXTENSIONS.join(", ")} file path inside the project`);
+    else if (d3.audio?.music?.enabled === true && musicFile === null) warnings.push("audio.music is enabled but no music file is chosen, so no music will play");
+    if (c3.audio?.narration?.steps !== void 0) {
+      const steps = c3.audio.narration.steps;
+      if (!object(steps) || Object.keys(steps).length > 200) fail("audio.narration.steps", "must be an object with at most 200 steps");
+      else for (const [id, entry] of Object.entries(steps)) {
+        const p3 = `audio.narration.steps.${id}`;
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || ["__proto__", "constructor", "prototype"].includes(id)) {
+          fail(p3, "is not a valid step ID");
+          continue;
+        }
+        walk(entry, narrationStepModel, p3);
+        if (entry?.text !== void 0 && (typeof entry.text !== "string" || !entry.text.trim() || entry.text.length > 280)) fail(`${p3}.text`, "must contain 1 to 280 characters");
+        if (entry?.muted !== void 0 && typeof entry.muted !== "boolean") fail(`${p3}.muted`, "must be boolean");
+      }
+    }
     const regions = validateRegions(c3.zoom?.regions);
     errors.push(...regions.errors);
     warnings.push(...regions.warnings);
@@ -959,7 +1005,7 @@
     function visit(v3, p3 = "") {
       for (const [k4, x4] of Object.entries(v3)) {
         const key = p3 ? `${p3}.${k4}` : k4;
-        if (object(x4)) visit(x4, key);
+        if (object(x4) && key !== "audio.narration.steps") visit(x4, key);
         else result[key] = x4;
       }
     }
@@ -1324,9 +1370,119 @@
     return { canvas: { width, height }, frame, caption, scaleFramePx: w4 / source.width };
   }
 
+  // scripts/lib/audio/retime.mjs
+  var CAPTION_LEAD_SEC = 0.15;
+  var MAX_VOICE_SPEEDUP = 1.1;
+  var OVERLAP_GAP_SEC = 0.1;
+  function keptParts(timemap, start, end) {
+    const parts = [];
+    for (const s3 of timemap.segments ?? []) {
+      const a3 = Math.max(s3.start, start), b3 = Math.min(s3.end, end);
+      if (b3 <= a3) continue;
+      parts.push({ srcStart: a3, srcEnd: b3, rate: s3.rate, outStart: s3.outputStart + (a3 - s3.start) / s3.rate, outEnd: s3.outputStart + (b3 - s3.start) / s3.rate });
+    }
+    return parts;
+  }
+  var fixesFor = { "voice-overruns-video": ["freeze", "slow"], "voice-over-sped-video": ["slow"], "overlap-shifted": [], "step-removed": [] };
+  var warn = (stepId, code, message, overrunSec = 0) => ({ stepId, code, message, overrunSec, fixes: [...fixesFor[code]] });
+  var seconds = (v3) => `${v3.toFixed(2)} s`;
+  function placeNarration({ steps, clips, timemap, cues = [], muted = {}, fps = 30 }) {
+    const warnings = [], candidates = [], tolerance = 1 / Math.max(1, fps);
+    for (const step of steps) {
+      const clip = clips?.[step.id];
+      if (!clip || !(clip.durationSec > 0) || muted?.[step.id]) continue;
+      const parts = keptParts(timemap, step.tStart, step.tEnd);
+      if (!parts.length) {
+        warnings.push(warn(step.id, "step-removed", `Step ${step.id} is cut, so its narration was removed.`));
+        continue;
+      }
+      const cue = cues.find((c3) => c3.id === step.id), captionStart = cue?.start ?? step.tStart + CAPTION_LEAD_SEC;
+      const inside = parts.find((p3) => captionStart >= p3.srcStart && captionStart < p3.srcEnd);
+      candidates.push({ step, clip, parts, start: inside ? inside.outStart + (captionStart - inside.srcStart) / inside.rate : parts[0].outStart });
+    }
+    candidates.sort((a3, b3) => a3.start - b3.start || a3.parts[0].srcStart - b3.parts[0].srcStart);
+    const placements2 = [], captionSpans = [];
+    let previousEnd = -Infinity;
+    for (const { step, clip, parts, start: wanted } of candidates) {
+      let start = wanted;
+      if (start < previousEnd - 1e-9) {
+        start = previousEnd + OVERLAP_GAP_SEC;
+        warnings.push(warn(step.id, "overlap-shifted", `Narration for step ${step.id} starts ${seconds(start - wanted)} later because the previous narration is still playing.`));
+      }
+      const end = start + clip.durationSec, videoEnd = parts.at(-1).outEnd, overrun = end - videoEnd;
+      const rate = (parts.find((p3) => start >= p3.outStart && start < p3.outEnd) ?? parts[0]).rate;
+      if (overrun > tolerance) warnings.push(warn(step.id, "voice-overruns-video", `Narration for step ${step.id} is ${seconds(overrun)} longer than the video that remains in the step.`, overrun));
+      if (parts.some((p3) => p3.rate > MAX_VOICE_SPEEDUP && p3.outStart < end && p3.outEnd > start)) {
+        warnings.push(warn(step.id, "voice-over-sped-video", `Step ${step.id} is sped up more than ${MAX_VOICE_SPEEDUP}x while its narration plays; the voice is never sped up.`));
+      }
+      placements2.push({ stepId: step.id, outStart: start, outEnd: end, rate });
+      captionSpans.push({ stepId: step.id, outStart: start, outEnd: end });
+      previousEnd = end;
+    }
+    return { placements: placements2, warnings, captionSpans };
+  }
+  function extendCues(cues, spans, timemap, { gapSec = 0.05, minSec = 0.5 } = {}) {
+    const sorted = cues.map((c3) => ({ ...c3 })).sort((a3, b3) => a3.start - b3.start);
+    for (const cue of sorted) {
+      const span = spans.find((s3) => s3.stepId === cue.id);
+      if (!span) continue;
+      cue.start = Math.min(cue.start, sourceAt(timemap, span.outStart).t);
+      cue.end = Math.max(cue.end, sourceAt(timemap, span.outEnd).t);
+    }
+    for (let i3 = 1; i3 < sorted.length; i3++) {
+      const before = sorted[i3 - 1], cue = sorted[i3];
+      if (cue.start >= before.end + gapSec) continue;
+      cue.start = before.end + gapSec;
+      if (cue.end < cue.start + minSec) cue.end = cue.start + minSec;
+    }
+    return sorted;
+  }
+
   // scripts/lib/compose/plan.mjs
-  function planRender({ composition, brief, storyboard, events, record, sourceSize: sourceSize2, assetWarnings = [] }) {
-    void brief;
+  var exportAudioUrls = {
+    clip: (key) => `voice/${key}.wav`,
+    music: (file) => `music/${file.split("/").map(encodeURIComponent).join("/")}`
+  };
+  function planAudio({ composition, brief, events, timemap, cues, voiceClips = null, audioUrls = exportAudioUrls }) {
+    const { voice, music, loudness } = composition.audio, urls = { ...exportAudioUrls, ...audioUrls };
+    const voiceEnabled = voice.enabled ?? brief?.voice?.enabled === true;
+    const clips = {};
+    if (voiceEnabled) for (const step of events.steps ?? []) {
+      const key = voiceClips?.steps?.[step.id], clip = key ? voiceClips.clips?.[key] : null;
+      if (clip && Number.isFinite(clip.durationSec) && clip.durationSec > 0) clips[step.id] = { durationSec: clip.durationSec, source: clip.source ?? "tts", key };
+    }
+    const muted = Object.fromEntries(Object.entries(composition.audio.narration.steps).filter(([, v3]) => v3?.muted === true).map(([id]) => [id, true]));
+    const placed = placeNarration({ steps: events.steps ?? [], clips, timemap, cues, muted, fps: composition.output.fps });
+    const narration = placed.placements.map((p3) => ({
+      stepId: p3.stepId,
+      clipUrl: urls.clip(clips[p3.stepId].key),
+      outStart: p3.outStart,
+      durationSec: clips[p3.stepId].durationSec,
+      gainDb: voice.gainDb,
+      source: clips[p3.stepId].source
+    }));
+    const musicPlan = music.enabled && music.file ? {
+      url: urls.music(music.file),
+      gainDb: music.gainDb,
+      loop: music.loop,
+      fadeInSec: music.fadeInSec,
+      fadeOutSec: music.fadeOutSec,
+      startSec: 0,
+      endSec: timemap.outputDuration
+    } : null;
+    return {
+      enabled: narration.length > 0 || musicPlan !== null,
+      sampleRate: 48e3,
+      durationSec: timemap.outputDuration,
+      narration,
+      music: musicPlan,
+      duck: { ...music.duck },
+      loudness: { ...loudness },
+      warnings: placed.warnings,
+      captionSpans: placed.captionSpans
+    };
+  }
+  function planRender({ composition, brief, storyboard, events, record, sourceSize: sourceSize2, assetWarnings = [], voiceClips = null, audioUrls }) {
     const validation = validateComposition(composition, { duration: record.durationSec });
     if (!validation.ok) throw new Error(validation.errors.join("\n"));
     if (![sourceSize2.width, sourceSize2.height, record.scale.used].every((v3) => Number.isFinite(v3) && v3 > 0)) throw new Error("Invalid source size or capture scale");
@@ -1351,6 +1507,9 @@
     if (!regionValidation.ok) throw new Error(regionValidation.errors.join("\n"));
     const cssSource = { width: sourceSize2.width / record.scale.used, height: sourceSize2.height / record.scale.used };
     const clone3 = (v3) => JSON.parse(JSON.stringify(v3));
+    let cues = !composition.captions.enabled ? [] : composition.captions.cues !== void 0 ? clone3(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true });
+    const audio = planAudio({ composition, brief, events, timemap, cues, voiceClips, audioUrls });
+    if (audio.captionSpans.length) cues = extendCues(cues, audio.captionSpans, timemap);
     return {
       output: clone3(output),
       layout,
@@ -1359,7 +1518,8 @@
       timemap,
       regions: clone3(regions),
       camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
-      cues: !composition.captions.enabled ? [] : composition.captions.cues !== void 0 ? clone3(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true }),
+      cues,
+      audio,
       captions: clone3(composition.captions),
       cursor: {
         ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }),
@@ -14953,8 +15113,8 @@
   }
 
   // editor/helpers.mjs
-  function timecode(seconds, fps = 30) {
-    const frames = Math.max(0, Math.floor((Number.isFinite(seconds) ? seconds : 0) * fps + 1e-7));
+  function timecode(seconds2, fps = 30) {
+    const frames = Math.max(0, Math.floor((Number.isFinite(seconds2) ? seconds2 : 0) * fps + 1e-7));
     return [
       Math.floor(frames / fps / 3600),
       Math.floor(frames / fps / 60) % 60,
@@ -27160,10 +27320,10 @@
   }
   function previewBelowRate(samples, averageFrameRate) {
     if (samples.length < 2 || !(averageFrameRate > 0)) return false;
-    const seconds = (samples.at(-1).now - samples[0].now) / 1e3;
+    const seconds2 = (samples.at(-1).now - samples[0].now) / 1e3;
     const expected = samples.slice(1).reduce((sum, s3) => sum + s3.expected, 0);
     const presented = samples.slice(1).reduce((sum, s3) => sum + s3.presented, 0);
-    return seconds >= 1.8 && expected > 0 && presented / seconds < 24 && presented < expected * 0.7;
+    return seconds2 >= 1.8 && expected > 0 && presented / seconds2 < 24 && presented < expected * 0.7;
   }
 
   // editor/Preview.jsx
@@ -27403,6 +27563,7 @@
     { path: "edits.trims", reason: "Edited on the timeline." },
     { path: "edits.speeds", reason: "Edited on the timeline." },
     { path: "zoom.regions", reason: "Edited on the timeline and preview." },
+    { path: "audio.narration.steps", reason: "Per-step narration text and mute are edited in the narration list." },
     { path: "captions.cues", reason: "Source-time caption overrides edited on the timeline." },
     { path: "cursor.custom", reason: "Container; use the individual image and hotspot settings." },
     ...["arrow", "hand", "text"].flatMap((shape) => ["", ".hotspot"].map((suffix) => ({
@@ -27519,8 +27680,26 @@
     "cursor.custom.text.image": ["Text cursor image", "Use your own pointer image when the cursor is over a text field."],
     "cursor.custom.text.hotspot.x": ["Text cursor click point across", "Position the text pointer across its image; zero aligns its left edge and one its right edge."],
     "cursor.custom.text.hotspot.y": ["Text cursor click point down", "Position the text pointer down its image; zero aligns its top edge and one its bottom edge."],
+    "audio.voice.enabled": ["Voice-over", "Speak each step's narration; leave unset to follow the voice-over choice made when the project was planned."],
+    "audio.voice.voiceId": ["Voice", "Choose which voice reads the narration."],
+    "audio.voice.speed": ["Voice speed", "How fast the narrator speaks; one is the natural pace."],
+    "audio.voice.gainDb": ["Voice volume", "Make the narration louder or quieter before the final loudness is set, in decibels."],
+    "audio.music.enabled": ["Background music", "Play a music track under the video."],
+    "audio.music.file": ["Music file", "A WAV, MP3, M4A or OGG file inside the project to use as background music."],
+    "audio.music.gainDb": ["Music volume", "How loud the music is compared with the voice, in decibels; lower numbers are quieter."],
+    "audio.music.loop": ["Repeat music", "Start the track again when it ends so it lasts as long as the video."],
+    "audio.music.fadeInSec": ["Music fade in", "How many seconds the music takes to rise to full volume at the start."],
+    "audio.music.fadeOutSec": ["Music fade out", "How many seconds the music takes to fade away at the end."],
+    "audio.music.duck.enabled": ["Lower music under voice", "Turn the music down automatically while the narrator is speaking."],
+    "audio.music.duck.depthDb": ["Ducking amount", "How far the music drops while someone is speaking, in decibels."],
+    "audio.music.duck.attackMs": ["Ducking speed", "How quickly the music drops before the voice starts, in milliseconds."],
+    "audio.music.duck.releaseMs": ["Music recovery time", "How long the music takes to come back after the voice stops, in milliseconds."],
+    "audio.loudness.enabled": ["Level the sound", "Adjust the total volume so every export is equally loud."],
+    "audio.loudness.targetLufs": ["Target loudness", "The overall loudness to aim for; minus sixteen suits online video."],
+    "audio.loudness.truePeakDb": ["Peak limit", "The loudest any moment may get, in decibels below the maximum, so the sound never distorts."],
     "cursor.custom.heightPct": ["Custom cursor height", "Set the height of your pointer images as a percentage of the video height."]
   };
+  var audioSections = { voice: "Voice", music: "Music", loudness: "Loudness" };
   var sections = {
     shadow: "Frame shadow",
     border: "Frame border",
@@ -27533,17 +27712,17 @@
     hand: "Hand cursor",
     text: "Text cursor"
   };
-  var unitFor = (path) => /Pct$/.test(path) ? "%" : /Px$|output\.(width|height)$/.test(path) ? "px" : /Sec$|cards.fade$/.test(path) ? "s" : /Mult$|pressScale$|zoom.depth$/.test(path) ? "x" : void 0;
+  var unitFor = (path) => /Pct$/.test(path) ? "%" : /Px$|output\.(width|height)$/.test(path) ? "px" : /Sec$|cards.fade$/.test(path) ? "s" : /Db$/.test(path) ? "dB" : /Ms$/.test(path) ? "ms" : /Lufs$/.test(path) ? "LUFS" : /Mult$|pressScale$|zoom.depth$/.test(path) ? "x" : void 0;
   var SETTINGS = Object.entries(compositionPaths({})).filter(([path]) => !excluded.has(path)).map(([path, value]) => {
     const [label, help] = copy2[path];
     const group = /^(frame\.|theme$)/.test(path) ? "look" : path.split(".")[0];
     const options = SETTING_ENUMS[path];
     const range2 = SETTING_RANGES[path];
-    const control = options ? "select" : range2 ? "number" : typeof value === "boolean" ? "toggle" : path.endsWith(".colors") ? "gradient" : path.endsWith(".image") ? "image" : /(?:color|Color|fill|stroke|captions.background)$/.test(path) ? "color" : "text";
+    const control = path === "audio.voice.enabled" ? "toggle" : options ? "select" : range2 ? "number" : typeof value === "boolean" ? "toggle" : path.endsWith(".colors") ? "gradient" : path.endsWith(".image") ? "image" : /(?:color|Color|fill|stroke|captions.background)$/.test(path) ? "color" : "text";
     return {
       path,
       group,
-      section: path.startsWith("cards.") ? `${path.split(".")[1]} card \xB7 ${sections[path.split(".")[2]] ?? "Text and timing"}` : sections[path.split(".")[1]] ?? "General",
+      section: path.startsWith("audio.") ? path.includes(".duck.") ? "Music ducking" : audioSections[path.split(".")[1]] : path.startsWith("cards.") ? `${path.split(".")[1]} card \xB7 ${sections[path.split(".")[2]] ?? "Text and timing"}` : sections[path.split(".")[1]] ?? "General",
       label,
       help,
       unit: unitFor(path),

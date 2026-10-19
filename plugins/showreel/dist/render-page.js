@@ -1,4 +1,4 @@
-// showreel render sources sha256: 3b475164f9e05a8d68db0cc3de3add5a42f95075e60cd3dd92212cb6db5ea559
+// showreel render sources sha256: 505b86f9ba83a72773fc47f041339f94ae8fb0707db47ad3f0d6b9367106d28c
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -484,6 +484,13 @@
       view2.setUint8(byteOffset + 1, value >>> 8 & 255);
       view2.setUint8(byteOffset + 2, value & 255);
     }
+  };
+  var setInt24 = (view2, byteOffset, value, littleEndian) => {
+    value = clamp(value, -8388608, 8388607);
+    if (value < 0) {
+      value = value + 16777216 & 16777215;
+    }
+    setUint24(view2, byteOffset, value, littleEndian);
   };
   var mapAsyncGenerator = (generator, map) => {
     return {
@@ -4603,6 +4610,34 @@
       fullRange: void 0
     };
   };
+  var buildAudioCodecString = (codec, numberOfChannels, sampleRate) => {
+    if (codec === "aac") {
+      if (numberOfChannels >= 2 && sampleRate <= 24e3) {
+        return "mp4a.40.29";
+      }
+      if (sampleRate <= 24e3) {
+        return "mp4a.40.5";
+      }
+      return "mp4a.40.2";
+    } else if (codec === "mp3") {
+      return "mp3";
+    } else if (codec === "opus") {
+      return "opus";
+    } else if (codec === "vorbis") {
+      return "vorbis";
+    } else if (codec === "flac") {
+      return "flac";
+    } else if (codec === "ac3") {
+      return "ac-3";
+    } else if (codec === "eac3") {
+      return "ec-3";
+    } else if (codec === "dts") {
+      return "dtsc";
+    } else if (PCM_AUDIO_CODECS.includes(codec)) {
+      return codec;
+    }
+    throw new TypeError(`Unhandled codec '${codec}'.`);
+  };
   var extractAudioCodecString = (trackInfo) => {
     const { codec, codecDescription, aacCodecInfo, dtsFormat } = trackInfo;
     if (codec === "aac") {
@@ -4719,6 +4754,23 @@
         hevc: {
           format: "hevc"
           // Ensure the format is not Annex B
+        }
+      };
+    }
+    return {};
+  };
+  var getAudioEncoderConfigExtension = (codec) => {
+    if (codec === "aac") {
+      return {
+        aac: {
+          format: "aac"
+          // Ensure the format is not ADTS
+        }
+      };
+    } else if (codec === "opus") {
+      return {
+        opus: {
+          format: "opus"
         }
       };
     }
@@ -20558,9 +20610,730 @@
       computedLayouts
     };
   };
+  var AUDIO_SAMPLE_FORMATS = /* @__PURE__ */ new Set(["f32", "f32-planar", "s16", "s16-planar", "s32", "s32-planar", "u8", "u8-planar"]);
+  var AudioSampleResource = class {
+    constructor() {
+      this._referenceCount = 0;
+    }
+  };
+  var AudioSample = class _AudioSample {
+    /** The presentation timestamp of the sample in microseconds. */
+    get microsecondTimestamp() {
+      return Math.trunc(SECOND_TO_MICROSECOND_FACTOR * this.timestamp);
+    }
+    /** The duration of the sample in microseconds. */
+    get microsecondDuration() {
+      return Math.trunc(SECOND_TO_MICROSECOND_FACTOR * this.duration);
+    }
+    constructor(init) {
+      this._closed = false;
+      if (isAudioData(init)) {
+        if (init.format === null) {
+          throw new TypeError("AudioData with null format is not supported.");
+        }
+        this._data = init;
+        this.format = init.format;
+        this.sampleRate = init.sampleRate;
+        this.numberOfFrames = init.numberOfFrames;
+        this.numberOfChannels = init.numberOfChannels;
+        this.timestamp = init.timestamp / 1e6;
+        this.duration = init.numberOfFrames / init.sampleRate;
+      } else if (init instanceof AudioSampleResource) {
+        this._data = init;
+        init._referenceCount++;
+        this.format = init.getFormat();
+        if (!AUDIO_SAMPLE_FORMATS.has(this.format)) {
+          throw new TypeError("getFormat() must return an AudioSampleFormat.");
+        }
+        this.sampleRate = init.getSampleRate();
+        if (!Number.isInteger(this.sampleRate) || this.sampleRate <= 0) {
+          throw new TypeError("getSampleRate() must return a positive integer.");
+        }
+        this.numberOfFrames = init.getNumberOfFrames();
+        if (!Number.isInteger(this.numberOfFrames) || this.numberOfFrames < 0) {
+          throw new TypeError("getNumberOfFrames() must return a non-negative integer.");
+        }
+        this.numberOfChannels = init.getNumberOfChannels();
+        if (!Number.isInteger(this.numberOfChannels) || this.numberOfChannels <= 0) {
+          throw new TypeError("getNumberOfChannels() must return a positive integer.");
+        }
+        this.timestamp = init.getTimestamp();
+        if (!Number.isFinite(this.timestamp)) {
+          throw new TypeError("getTimestamp() must return a finite number.");
+        }
+        this.duration = this.numberOfFrames / this.sampleRate;
+      } else {
+        if (!init || typeof init !== "object") {
+          throw new TypeError("Invalid AudioDataInit: must be an object.");
+        }
+        if (!AUDIO_SAMPLE_FORMATS.has(init.format)) {
+          throw new TypeError("Invalid AudioDataInit: invalid format.");
+        }
+        if (!Number.isFinite(init.sampleRate) || init.sampleRate <= 0) {
+          throw new TypeError("Invalid AudioDataInit: sampleRate must be > 0.");
+        }
+        if (!Number.isInteger(init.numberOfChannels) || init.numberOfChannels === 0) {
+          throw new TypeError("Invalid AudioDataInit: numberOfChannels must be an integer > 0.");
+        }
+        if (!Number.isFinite(init?.timestamp)) {
+          throw new TypeError("init.timestamp must be a number.");
+        }
+        const numberOfFrames = init.data.byteLength / (getBytesPerSample(init.format) * init.numberOfChannels);
+        if (!Number.isInteger(numberOfFrames)) {
+          throw new TypeError("Invalid AudioDataInit: data size is not a multiple of frame size.");
+        }
+        this.format = init.format;
+        this.sampleRate = init.sampleRate;
+        this.numberOfFrames = numberOfFrames;
+        this.numberOfChannels = init.numberOfChannels;
+        this.timestamp = init.timestamp;
+        this.duration = numberOfFrames / init.sampleRate;
+        let dataBuffer;
+        if (init.data instanceof ArrayBuffer) {
+          dataBuffer = new Uint8Array(init.data);
+        } else if (ArrayBuffer.isView(init.data)) {
+          dataBuffer = new Uint8Array(init.data.buffer, init.data.byteOffset, init.data.byteLength);
+        } else {
+          throw new TypeError("Invalid AudioDataInit: data is not a BufferSource.");
+        }
+        const expectedSize = this.numberOfFrames * this.numberOfChannels * getBytesPerSample(this.format);
+        if (dataBuffer.byteLength < expectedSize) {
+          throw new TypeError("Invalid AudioDataInit: insufficient data size.");
+        }
+        this._data = dataBuffer;
+      }
+      finalizationRegistry?.register(this, { type: "audio", data: this._data }, this);
+    }
+    /** Returns the number of bytes required to hold the audio sample's data as specified by the given options. */
+    allocationSize(options) {
+      if (!options || typeof options !== "object") {
+        throw new TypeError("options must be an object.");
+      }
+      if (!Number.isInteger(options.planeIndex) || options.planeIndex < 0) {
+        throw new TypeError("planeIndex must be a non-negative integer.");
+      }
+      if (options.format !== void 0 && !AUDIO_SAMPLE_FORMATS.has(options.format)) {
+        throw new TypeError("Invalid format.");
+      }
+      if (options.frameOffset !== void 0 && (!Number.isInteger(options.frameOffset) || options.frameOffset < 0)) {
+        throw new TypeError("frameOffset must be a non-negative integer.");
+      }
+      if (options.frameCount !== void 0 && (!Number.isInteger(options.frameCount) || options.frameCount < 0)) {
+        throw new TypeError("frameCount must be a non-negative integer.");
+      }
+      if (this._closed) {
+        throw new Error("AudioSample is closed.");
+      }
+      const destFormat = options.format ?? this.format;
+      const frameOffset = options.frameOffset ?? 0;
+      if (frameOffset >= this.numberOfFrames) {
+        throw new RangeError("frameOffset out of range");
+      }
+      const copyFrameCount = options.frameCount !== void 0 ? options.frameCount : this.numberOfFrames - frameOffset;
+      if (copyFrameCount > this.numberOfFrames - frameOffset) {
+        throw new RangeError("frameCount out of range");
+      }
+      const bytesPerSample = getBytesPerSample(destFormat);
+      const isPlanar = formatIsPlanar(destFormat);
+      if (isPlanar && options.planeIndex >= this.numberOfChannels) {
+        throw new RangeError("planeIndex out of range");
+      }
+      if (!isPlanar && options.planeIndex !== 0) {
+        throw new RangeError("planeIndex out of range");
+      }
+      const elementCount = isPlanar ? copyFrameCount : copyFrameCount * this.numberOfChannels;
+      return elementCount * bytesPerSample;
+    }
+    /** Copies the audio sample's data to an ArrayBuffer or ArrayBufferView as specified by the given options. */
+    copyTo(destination, options) {
+      if (!isAllowSharedBufferSource(destination)) {
+        throw new TypeError("destination must be an ArrayBuffer or an ArrayBuffer view.");
+      }
+      if (!options || typeof options !== "object") {
+        throw new TypeError("options must be an object.");
+      }
+      if (!Number.isInteger(options.planeIndex) || options.planeIndex < 0) {
+        throw new TypeError("planeIndex must be a non-negative integer.");
+      }
+      if (options.format !== void 0 && !AUDIO_SAMPLE_FORMATS.has(options.format)) {
+        throw new TypeError("Invalid format.");
+      }
+      if (options.frameOffset !== void 0 && (!Number.isInteger(options.frameOffset) || options.frameOffset < 0)) {
+        throw new TypeError("frameOffset must be a non-negative integer.");
+      }
+      if (options.frameCount !== void 0 && (!Number.isInteger(options.frameCount) || options.frameCount < 0)) {
+        throw new TypeError("frameCount must be a non-negative integer.");
+      }
+      if (this._closed) {
+        throw new Error("AudioSample is closed.");
+      }
+      const { format, frameCount: optFrameCount, frameOffset: optFrameOffset } = options;
+      let { planeIndex } = options;
+      let srcFormat = this.format;
+      const destFormat = format ?? this.format;
+      if (!destFormat)
+        throw new Error("Destination format not determined");
+      const numFrames = this.numberOfFrames;
+      const numChannels = this.numberOfChannels;
+      const frameOffset = optFrameOffset ?? 0;
+      if (frameOffset >= numFrames) {
+        throw new RangeError("frameOffset out of range");
+      }
+      const copyFrameCount = optFrameCount !== void 0 ? optFrameCount : numFrames - frameOffset;
+      if (copyFrameCount > numFrames - frameOffset) {
+        throw new RangeError("frameCount out of range");
+      }
+      const destBytesPerSample = getBytesPerSample(destFormat);
+      const destIsPlanar = formatIsPlanar(destFormat);
+      if (destIsPlanar && planeIndex >= numChannels) {
+        throw new RangeError("planeIndex out of range");
+      }
+      if (!destIsPlanar && planeIndex !== 0) {
+        throw new RangeError("planeIndex out of range");
+      }
+      const destElementCount = destIsPlanar ? copyFrameCount : copyFrameCount * numChannels;
+      const requiredSize = destElementCount * destBytesPerSample;
+      if (destination.byteLength < requiredSize) {
+        throw new RangeError("Destination buffer is too small");
+      }
+      const destView = toDataView(destination);
+      const writeFn = getWriteFunction(destFormat);
+      if (isAudioData(this._data)) {
+        if (isWebKit() && numChannels > 2 && destFormat !== srcFormat) {
+          doAudioDataCopyToWebKitWorkaround(this._data, destView, srcFormat, destFormat, numChannels, planeIndex, frameOffset, copyFrameCount);
+          return;
+        } else {
+          try {
+            this._data.copyTo(destination, {
+              planeIndex,
+              frameOffset,
+              frameCount: copyFrameCount,
+              format: destFormat
+            });
+            return;
+          } catch (error) {
+            if (destFormat === "f32-planar") {
+              throw error;
+            }
+            srcFormat = "f32-planar";
+          }
+        }
+      }
+      const readFn = getReadFunction(srcFormat);
+      const srcBytesPerSample = getBytesPerSample(srcFormat);
+      const srcIsPlanar = formatIsPlanar(srcFormat);
+      let uint8Data;
+      if (this._data instanceof AudioSampleResource) {
+        const getDataPlaneValidated = (index) => {
+          const result = this._data.getDataPlane(index);
+          if (!(result instanceof Uint8Array)) {
+            throw new TypeError("getDataPlane() must return a Uint8Array.");
+          }
+          const expectedSize = numFrames * srcBytesPerSample * (srcIsPlanar ? 1 : numChannels);
+          if (result.byteLength !== expectedSize) {
+            throw new TypeError(`Data plane ${index} has invalid size. Expected exactly ${expectedSize} bytes, got ${result.byteLength} bytes.`);
+          }
+          return result;
+        };
+        if (srcIsPlanar) {
+          if (destIsPlanar) {
+            uint8Data = getDataPlaneValidated(planeIndex);
+            planeIndex = 0;
+          } else {
+            uint8Data = new Uint8Array(numFrames * srcBytesPerSample * numChannels);
+            for (let ch = 0; ch < numChannels; ch++) {
+              const planeData = getDataPlaneValidated(ch);
+              uint8Data.set(planeData, ch * numFrames * srcBytesPerSample);
+            }
+          }
+        } else {
+          uint8Data = getDataPlaneValidated(0);
+        }
+      } else if (this._data instanceof Uint8Array) {
+        uint8Data = this._data;
+      } else {
+        assert(srcFormat === "f32-planar");
+        if (destIsPlanar) {
+          uint8Data = new Uint8Array(this._data.allocationSize({
+            format: "f32-planar",
+            planeIndex
+          }));
+          this._data.copyTo(uint8Data, {
+            format: "f32-planar",
+            planeIndex
+          });
+          planeIndex = 0;
+        } else {
+          uint8Data = new Uint8Array(this._data.allocationSize({
+            format: "f32-planar",
+            planeIndex: 0
+          }) * numChannels);
+          for (let ch = 0; ch < numChannels; ch++) {
+            this._data.copyTo(uint8Data.subarray(ch * numFrames * srcBytesPerSample, (ch + 1) * numFrames * srcBytesPerSample), {
+              format: "f32-planar",
+              planeIndex: ch
+            });
+          }
+        }
+      }
+      const srcView = toDataView(uint8Data);
+      for (let i = 0; i < copyFrameCount; i++) {
+        if (destIsPlanar) {
+          const destOffset = i * destBytesPerSample;
+          let srcOffset;
+          if (srcIsPlanar) {
+            srcOffset = (planeIndex * numFrames + (i + frameOffset)) * srcBytesPerSample;
+          } else {
+            srcOffset = ((i + frameOffset) * numChannels + planeIndex) * srcBytesPerSample;
+          }
+          const normalized = readFn(srcView, srcOffset);
+          writeFn(destView, destOffset, normalized);
+        } else {
+          for (let ch = 0; ch < numChannels; ch++) {
+            const destIndex = i * numChannels + ch;
+            const destOffset = destIndex * destBytesPerSample;
+            let srcOffset;
+            if (srcIsPlanar) {
+              srcOffset = (ch * numFrames + (i + frameOffset)) * srcBytesPerSample;
+            } else {
+              srcOffset = ((i + frameOffset) * numChannels + ch) * srcBytesPerSample;
+            }
+            const normalized = readFn(srcView, srcOffset);
+            writeFn(destView, destOffset, normalized);
+          }
+        }
+      }
+    }
+    /** Clones this audio sample. */
+    clone() {
+      if (this._closed) {
+        throw new Error("AudioSample is closed.");
+      }
+      if (this._data instanceof AudioSampleResource) {
+        const sample = new _AudioSample(this._data);
+        sample.setTimestamp(this.timestamp);
+        return sample;
+      } else if (isAudioData(this._data)) {
+        const sample = new _AudioSample(this._data.clone());
+        sample.setTimestamp(this.timestamp);
+        return sample;
+      } else {
+        return new _AudioSample({
+          format: this.format,
+          sampleRate: this.sampleRate,
+          numberOfFrames: this.numberOfFrames,
+          numberOfChannels: this.numberOfChannels,
+          timestamp: this.timestamp,
+          data: this._data
+        });
+      }
+    }
+    /**
+     * Returns a new {@link AudioSample} containing only the frames in the range [startFrame, endFrame). Both bounds
+     * must lie within this sample's range of frames. The returned sample's timestamp is shifted to match the start of
+     * the trimmed section.
+     */
+    trim(startFrame, endFrame = this.numberOfFrames) {
+      if (!Number.isInteger(startFrame) || startFrame < 0) {
+        throw new TypeError("startFrame must be a non-negative integer.");
+      }
+      if (!Number.isInteger(endFrame) || endFrame < 0) {
+        throw new TypeError("endFrame must be a non-negative integer.");
+      }
+      if (startFrame > this.numberOfFrames) {
+        throw new RangeError("startFrame out of range.");
+      }
+      if (endFrame > this.numberOfFrames) {
+        throw new RangeError("endFrame out of range.");
+      }
+      if (endFrame < startFrame) {
+        throw new RangeError("endFrame must not be less than startFrame.");
+      }
+      if (this._closed) {
+        throw new Error("AudioSample is closed.");
+      }
+      const frameCount = endFrame - startFrame;
+      const bytesPerSample = getBytesPerSample(this.format);
+      let data;
+      if (formatIsPlanar(this.format)) {
+        const planeSize = frameCount * bytesPerSample;
+        data = new Uint8Array(planeSize * this.numberOfChannels);
+        if (frameCount > 0) {
+          for (let i = 0; i < this.numberOfChannels; i++) {
+            this.copyTo(data.subarray(i * planeSize, (i + 1) * planeSize), {
+              planeIndex: i,
+              format: this.format,
+              frameOffset: startFrame,
+              frameCount
+            });
+          }
+        }
+      } else {
+        data = new Uint8Array(frameCount * this.numberOfChannels * bytesPerSample);
+        if (frameCount > 0) {
+          this.copyTo(data, {
+            planeIndex: 0,
+            format: this.format,
+            frameOffset: startFrame,
+            frameCount
+          });
+        }
+      }
+      return new _AudioSample({
+        data,
+        format: this.format,
+        sampleRate: this.sampleRate,
+        numberOfChannels: this.numberOfChannels,
+        timestamp: this.timestamp + startFrame / this.sampleRate
+      });
+    }
+    /**
+     * Closes this audio sample, releasing held resources. Audio samples should be closed as soon as they are not
+     * needed anymore.
+     */
+    close() {
+      if (this._closed) {
+        return;
+      }
+      finalizationRegistry?.unregister(this);
+      if (this._data instanceof AudioSampleResource) {
+        this._data._referenceCount--;
+        if (this._data._referenceCount === 0) {
+          this._data.close();
+        }
+      } else if (isAudioData(this._data)) {
+        this._data.close();
+      } else {
+        this._data = new Uint8Array(0);
+      }
+      this._closed = true;
+    }
+    /**
+     * Converts this audio sample to an AudioData for use with the WebCodecs API. The AudioData returned by this
+     * method *must* be closed separately from this audio sample.
+     */
+    toAudioData() {
+      if (this._closed) {
+        throw new Error("AudioSample is closed.");
+      }
+      if (this._data instanceof AudioSampleResource) {
+        return this._createAudioDataFromData();
+      } else if (isAudioData(this._data)) {
+        if (this._data.timestamp === this.microsecondTimestamp) {
+          return this._data.clone();
+        } else {
+          return this._createAudioDataFromData();
+        }
+      } else {
+        return new AudioData({
+          format: this.format,
+          sampleRate: this.sampleRate,
+          numberOfFrames: this.numberOfFrames,
+          numberOfChannels: this.numberOfChannels,
+          timestamp: this.microsecondTimestamp,
+          data: this._data.buffer instanceof ArrayBuffer ? this._data.buffer : this._data.slice()
+          // In the case of SharedArrayBuffer, convert to ArrayBuffer
+        });
+      }
+    }
+    /** @internal */
+    _createAudioDataFromData() {
+      if (formatIsPlanar(this.format)) {
+        const size = this.allocationSize({ planeIndex: 0, format: this.format });
+        const data = new ArrayBuffer(size * this.numberOfChannels);
+        for (let i = 0; i < this.numberOfChannels; i++) {
+          this.copyTo(new Uint8Array(data, i * size, size), { planeIndex: i, format: this.format });
+        }
+        return new AudioData({
+          format: this.format,
+          sampleRate: this.sampleRate,
+          numberOfFrames: this.numberOfFrames,
+          numberOfChannels: this.numberOfChannels,
+          timestamp: this.microsecondTimestamp,
+          data
+        });
+      } else {
+        const data = new ArrayBuffer(this.allocationSize({ planeIndex: 0, format: this.format }));
+        this.copyTo(data, { planeIndex: 0, format: this.format });
+        return new AudioData({
+          format: this.format,
+          sampleRate: this.sampleRate,
+          numberOfFrames: this.numberOfFrames,
+          numberOfChannels: this.numberOfChannels,
+          timestamp: this.microsecondTimestamp,
+          data
+        });
+      }
+    }
+    /** Convert this audio sample to an AudioBuffer for use with the Web Audio API. */
+    toAudioBuffer() {
+      if (this._closed) {
+        throw new Error("AudioSample is closed.");
+      }
+      const audioBuffer = new AudioBuffer({
+        numberOfChannels: this.numberOfChannels,
+        length: this.numberOfFrames,
+        sampleRate: this.sampleRate
+      });
+      const dataBytes = new Float32Array(this.allocationSize({ planeIndex: 0, format: "f32-planar" }) / 4);
+      for (let i = 0; i < this.numberOfChannels; i++) {
+        this.copyTo(dataBytes, { planeIndex: i, format: "f32-planar" });
+        audioBuffer.copyToChannel(dataBytes, i);
+      }
+      return audioBuffer;
+    }
+    /** Sets the presentation timestamp of this audio sample, in seconds. */
+    setTimestamp(newTimestamp) {
+      if (!Number.isFinite(newTimestamp)) {
+        throw new TypeError("newTimestamp must be a number.");
+      }
+      this.timestamp = newTimestamp;
+    }
+    /** Calls `.close()`. */
+    [Symbol.dispose]() {
+      this.close();
+    }
+    /** @internal */
+    static *_fromAudioBuffer(audioBuffer, timestamp) {
+      if (!(audioBuffer instanceof AudioBuffer)) {
+        throw new TypeError("audioBuffer must be an AudioBuffer.");
+      }
+      const MAX_FLOAT_COUNT = 48e3 * 5;
+      const numberOfChannels = audioBuffer.numberOfChannels;
+      const sampleRate = audioBuffer.sampleRate;
+      const totalFrames = audioBuffer.length;
+      const maxFramesPerChunk = Math.floor(MAX_FLOAT_COUNT / numberOfChannels);
+      let currentRelativeFrame = 0;
+      let remainingFrames = totalFrames;
+      while (remainingFrames > 0) {
+        const framesToCopy = Math.min(maxFramesPerChunk, remainingFrames);
+        const chunkData = new Float32Array(numberOfChannels * framesToCopy);
+        for (let channel = 0; channel < numberOfChannels; channel++) {
+          audioBuffer.copyFromChannel(chunkData.subarray(channel * framesToCopy, (channel + 1) * framesToCopy), channel, currentRelativeFrame);
+        }
+        yield new _AudioSample({
+          format: "f32-planar",
+          sampleRate,
+          numberOfFrames: framesToCopy,
+          numberOfChannels,
+          timestamp: timestamp + currentRelativeFrame / sampleRate,
+          data: chunkData
+        });
+        currentRelativeFrame += framesToCopy;
+        remainingFrames -= framesToCopy;
+      }
+    }
+    /**
+     * Creates AudioSamples from an AudioBuffer, starting at the given timestamp in seconds. Typically creates exactly
+     * one sample, but may create multiple if the AudioBuffer is exceedingly large.
+     */
+    static fromAudioBuffer(audioBuffer, timestamp) {
+      if (!(audioBuffer instanceof AudioBuffer)) {
+        throw new TypeError("audioBuffer must be an AudioBuffer.");
+      }
+      const MAX_FLOAT_COUNT = 48e3 * 5;
+      const numberOfChannels = audioBuffer.numberOfChannels;
+      const sampleRate = audioBuffer.sampleRate;
+      const totalFrames = audioBuffer.length;
+      const maxFramesPerChunk = Math.floor(MAX_FLOAT_COUNT / numberOfChannels);
+      let currentRelativeFrame = 0;
+      let remainingFrames = totalFrames;
+      const result = [];
+      while (remainingFrames > 0) {
+        const framesToCopy = Math.min(maxFramesPerChunk, remainingFrames);
+        const chunkData = new Float32Array(numberOfChannels * framesToCopy);
+        for (let channel = 0; channel < numberOfChannels; channel++) {
+          audioBuffer.copyFromChannel(chunkData.subarray(channel * framesToCopy, (channel + 1) * framesToCopy), channel, currentRelativeFrame);
+        }
+        const audioSample = new _AudioSample({
+          format: "f32-planar",
+          sampleRate,
+          numberOfFrames: framesToCopy,
+          numberOfChannels,
+          timestamp: timestamp + currentRelativeFrame / sampleRate,
+          data: chunkData
+        });
+        result.push(audioSample);
+        currentRelativeFrame += framesToCopy;
+        remainingFrames -= framesToCopy;
+      }
+      return result;
+    }
+  };
+  var getBytesPerSample = (format) => {
+    switch (format) {
+      case "u8":
+      case "u8-planar":
+        return 1;
+      case "s16":
+      case "s16-planar":
+        return 2;
+      case "s32":
+      case "s32-planar":
+        return 4;
+      case "f32":
+      case "f32-planar":
+        return 4;
+      default:
+        throw new Error("Unknown AudioSampleFormat");
+    }
+  };
+  var formatIsPlanar = (format) => {
+    switch (format) {
+      case "u8-planar":
+      case "s16-planar":
+      case "s32-planar":
+      case "f32-planar":
+        return true;
+      default:
+        return false;
+    }
+  };
+  var getReadFunction = (format) => {
+    switch (format) {
+      case "u8":
+      case "u8-planar":
+        return (view2, offset) => (view2.getUint8(offset) - 128) / 128;
+      case "s16":
+      case "s16-planar":
+        return (view2, offset) => view2.getInt16(offset, true) / 32768;
+      case "s32":
+      case "s32-planar":
+        return (view2, offset) => view2.getInt32(offset, true) / 2147483648;
+      case "f32":
+      case "f32-planar":
+        return (view2, offset) => view2.getFloat32(offset, true);
+    }
+  };
+  var getWriteFunction = (format) => {
+    switch (format) {
+      case "u8":
+      case "u8-planar":
+        return (view2, offset, value) => view2.setUint8(offset, clamp(Math.round(value * 128) + 128, 0, 255));
+      case "s16":
+      case "s16-planar":
+        return (view2, offset, value) => view2.setInt16(offset, clamp(Math.round(value * 32768), -32768, 32767), true);
+      case "s32":
+      case "s32-planar":
+        return (view2, offset, value) => view2.setInt32(offset, clamp(Math.round(value * 2147483648), -2147483648, 2147483647), true);
+      case "f32":
+      case "f32-planar":
+        return (view2, offset, value) => view2.setFloat32(offset, value, true);
+    }
+  };
+  var isAudioData = (x) => {
+    return typeof AudioData !== "undefined" && x instanceof AudioData;
+  };
+  var toInterleavedAudioFormat = (format) => {
+    switch (format) {
+      case "u8-planar":
+        return "u8";
+      case "s16-planar":
+        return "s16";
+      case "s32-planar":
+        return "s32";
+      case "f32-planar":
+        return "f32";
+      default:
+        return format;
+    }
+  };
+  var doAudioDataCopyToWebKitWorkaround = (audioData, destView, srcFormat, destFormat, numChannels, planeIndex, frameOffset, copyFrameCount) => {
+    const readFn = getReadFunction(srcFormat);
+    const writeFn = getWriteFunction(destFormat);
+    const srcBytesPerSample = getBytesPerSample(srcFormat);
+    const destBytesPerSample = getBytesPerSample(destFormat);
+    const srcIsPlanar = formatIsPlanar(srcFormat);
+    const destIsPlanar = formatIsPlanar(destFormat);
+    if (destIsPlanar) {
+      if (srcIsPlanar) {
+        const data = new ArrayBuffer(copyFrameCount * srcBytesPerSample);
+        const dataView = toDataView(data);
+        audioData.copyTo(data, {
+          planeIndex,
+          frameOffset,
+          frameCount: copyFrameCount,
+          format: srcFormat
+        });
+        for (let i = 0; i < copyFrameCount; i++) {
+          const srcOffset = i * srcBytesPerSample;
+          const destOffset = i * destBytesPerSample;
+          const sample = readFn(dataView, srcOffset);
+          writeFn(destView, destOffset, sample);
+        }
+      } else {
+        const data = new ArrayBuffer(copyFrameCount * numChannels * srcBytesPerSample);
+        const dataView = toDataView(data);
+        audioData.copyTo(data, {
+          planeIndex: 0,
+          frameOffset,
+          frameCount: copyFrameCount,
+          format: srcFormat
+        });
+        for (let i = 0; i < copyFrameCount; i++) {
+          const srcOffset = (i * numChannels + planeIndex) * srcBytesPerSample;
+          const destOffset = i * destBytesPerSample;
+          const sample = readFn(dataView, srcOffset);
+          writeFn(destView, destOffset, sample);
+        }
+      }
+    } else {
+      if (srcIsPlanar) {
+        const planeSize = copyFrameCount * srcBytesPerSample;
+        const data = new ArrayBuffer(planeSize);
+        const dataView = toDataView(data);
+        for (let ch = 0; ch < numChannels; ch++) {
+          audioData.copyTo(data, {
+            planeIndex: ch,
+            frameOffset,
+            frameCount: copyFrameCount,
+            format: srcFormat
+          });
+          for (let i = 0; i < copyFrameCount; i++) {
+            const srcOffset = i * srcBytesPerSample;
+            const destOffset = (i * numChannels + ch) * destBytesPerSample;
+            const sample = readFn(dataView, srcOffset);
+            writeFn(destView, destOffset, sample);
+          }
+        }
+      } else {
+        const data = new ArrayBuffer(copyFrameCount * numChannels * srcBytesPerSample);
+        const dataView = toDataView(data);
+        audioData.copyTo(data, {
+          planeIndex: 0,
+          frameOffset,
+          frameCount: copyFrameCount,
+          format: srcFormat
+        });
+        for (let i = 0; i < copyFrameCount; i++) {
+          for (let ch = 0; ch < numChannels; ch++) {
+            const idx = i * numChannels + ch;
+            const srcOffset = idx * srcBytesPerSample;
+            const destOffset = idx * destBytesPerSample;
+            const sample = readFn(dataView, srcOffset);
+            writeFn(destView, destOffset, sample);
+          }
+        }
+      }
+    }
+  };
+  var audioSampleToInterleavedFormat = (sample, format) => {
+    const size = sample.allocationSize({ format, planeIndex: 0 });
+    const buffer = new ArrayBuffer(size);
+    sample.copyTo(buffer, { format, planeIndex: 0 });
+    return new AudioSample({
+      data: buffer,
+      format,
+      numberOfChannels: sample.numberOfChannels,
+      sampleRate: sample.sampleRate,
+      timestamp: sample.timestamp,
+      duration: sample.duration
+    });
+  };
 
   // node_modules/mediabunny/dist/modules/src/encode.js
   var canEncodeVideoMemo = /* @__PURE__ */ new Map();
+  var canEncodeAudioMemo = /* @__PURE__ */ new Map();
   var validateVideoEncodingConfig = (config) => {
     if (!config || typeof config !== "object") {
       throw new TypeError("Encoding config must be an object.");
@@ -20700,6 +21473,80 @@
     }
     assert(candidates.length > 0);
     return candidates;
+  };
+  var validateAudioEncodingConfig = (config) => {
+    if (!config || typeof config !== "object") {
+      throw new TypeError("Encoding config must be an object.");
+    }
+    if (!AUDIO_CODECS.includes(config.codec)) {
+      throw new TypeError(`Invalid audio codec '${config.codec}'. Must be one of: ${AUDIO_CODECS.join(", ")}.`);
+    }
+    const bitrate = config.bitrate;
+    if (config.quality === void 0 && bitrate === void 0 && !(PCM_AUDIO_CODECS.includes(config.codec) || config.codec === "flac")) {
+      throw new TypeError("config.quality must be provided for compressed audio codecs.");
+    }
+    if (config.quality !== void 0 && bitrate !== void 0) {
+      throw new TypeError("config.quality and config.bitrate cannot both be provided.");
+    }
+    if (config.quality !== void 0 && !(config.quality instanceof Quality)) {
+      throw new TypeError("config.quality, when provided, must be a Quality.");
+    }
+    if (bitrate !== void 0 && !(bitrate instanceof Quality) && (!Number.isInteger(bitrate) || bitrate <= 0)) {
+      throw new TypeError("config.bitrate, when provided, must be a positive integer or a quality.");
+    }
+    if (config.transform !== void 0) {
+      if (typeof config.transform !== "object" || !config.transform) {
+        throw new TypeError("config.transform, when provided, must be an object.");
+      }
+      if (config.transform.numberOfChannels !== void 0 && (!Number.isInteger(config.transform.numberOfChannels) || config.transform.numberOfChannels <= 0)) {
+        throw new TypeError("config.transform.numberOfChannels, when provided, must be a positive integer.");
+      }
+      if (config.transform.sampleRate !== void 0 && (!Number.isInteger(config.transform.sampleRate) || config.transform.sampleRate <= 0)) {
+        throw new TypeError("config.transform.sampleRate, when provided, must be a positive integer.");
+      }
+      if (config.transform.sampleFormat !== void 0 && !["u8", "s16", "s32", "f32"].includes(config.transform.sampleFormat)) {
+        throw new TypeError("config.transform.sampleFormat, when provided, must be one of: u8, s16, s32, f32.");
+      }
+      if (config.transform.process !== void 0 && typeof config.transform.process !== "function") {
+        throw new TypeError("config.transform.process, when provided, must be a function.");
+      }
+    }
+    if (config.onEncodedPacket !== void 0 && typeof config.onEncodedPacket !== "function") {
+      throw new TypeError("config.onEncodedPacket, when provided, must be a function.");
+    }
+    if (config.onEncoderConfig !== void 0 && typeof config.onEncoderConfig !== "function") {
+      throw new TypeError("config.onEncoderConfig, when provided, must be a function.");
+    }
+    if (config.onEncodedSample !== void 0 && typeof config.onEncodedSample !== "function") {
+      throw new TypeError("config.onEncodedSample, when provided, must be a function.");
+    }
+    validateAudioEncodingAdditionalOptions(config.codec, config);
+  };
+  var validateAudioEncodingAdditionalOptions = (codec, options) => {
+    if (!options || typeof options !== "object") {
+      throw new TypeError("Encoding options must be an object.");
+    }
+    const bitrateMode = options.bitrateMode;
+    if (bitrateMode !== void 0 && !["constant", "variable"].includes(bitrateMode)) {
+      throw new TypeError("bitrateMode, when provided, must be 'constant' or 'variable'.");
+    }
+    if (options.fullCodecString !== void 0 && typeof options.fullCodecString !== "string") {
+      throw new TypeError("fullCodecString, when provided, must be a string.");
+    }
+    if (options.fullCodecString !== void 0 && inferCodecFromCodecString(options.fullCodecString) !== codec) {
+      throw new TypeError(`fullCodecString, when provided, must be a string that matches the specified codec (${codec}).`);
+    }
+  };
+  var buildAudioEncoderConfig = (options) => {
+    const fallbackBitrateMode = options.bitrateMode;
+    return {
+      codec: options.fullCodecString ?? buildAudioCodecString(options.codec, options.numberOfChannels, options.sampleRate),
+      numberOfChannels: options.numberOfChannels,
+      sampleRate: options.sampleRate,
+      bitrate: options.quality?._toAudioBitrate(options.codec),
+      bitrateMode: options.quality?._bitrateMode ?? fallbackBitrateMode,
+      ...getAudioEncoderConfigExtension(options.codec)
+    };
   };
   var Quality = class {
     constructor(options) {
@@ -21017,6 +21864,67 @@
     canEncodeVideoMemo.set(key, promise);
     return promise;
   };
+  var canEncodeAudio = async (codec, options = {}) => {
+    const {
+      numberOfChannels = 2,
+      sampleRate = 48e3,
+      quality,
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
+      bitrate,
+      ...restOptions
+    } = options;
+    if (!AUDIO_CODECS.includes(codec)) {
+      return false;
+    }
+    if (!Number.isInteger(numberOfChannels) || numberOfChannels <= 0) {
+      throw new TypeError("numberOfChannels must be a positive integer.");
+    }
+    if (!Number.isInteger(sampleRate) || sampleRate <= 0) {
+      throw new TypeError("sampleRate must be a positive integer.");
+    }
+    if (quality !== void 0 && !(quality instanceof Quality)) {
+      throw new TypeError("quality, when provided, must be a Quality.");
+    }
+    if (quality !== void 0 && bitrate !== void 0) {
+      throw new TypeError("quality and bitrate cannot both be provided.");
+    }
+    if (bitrate !== void 0 && !(bitrate instanceof Quality) && (!Number.isInteger(bitrate) || bitrate <= 0)) {
+      throw new TypeError("bitrate must be a positive integer.");
+    }
+    validateAudioEncodingAdditionalOptions(codec, restOptions);
+    const resolvedQuality = resolveQuality(quality, bitrate) ?? new Quality("medium");
+    const encoderConfig = buildAudioEncoderConfig({
+      codec,
+      numberOfChannels,
+      sampleRate,
+      quality: resolvedQuality,
+      ...restOptions
+    });
+    const key = JSON.stringify(encoderConfig);
+    const memoized = canEncodeAudioMemo.get(key);
+    if (memoized) {
+      return memoized;
+    }
+    const promise = (async () => {
+      if (customAudioEncoders.some((x) => x.supports(codec, encoderConfig))) {
+        return true;
+      }
+      if (PCM_AUDIO_CODECS.includes(codec)) {
+        return true;
+      }
+      if (typeof AudioEncoder === "undefined") {
+        return false;
+      }
+      try {
+        const support = await AudioEncoder.isConfigSupported(encoderConfig);
+        return support.supported === true;
+      } catch {
+        return false;
+      }
+    })();
+    canEncodeAudioMemo.set(key, promise);
+    return promise;
+  };
   var resolveQuality = (quality, bitrate) => {
     if (quality !== void 0) {
       return quality;
@@ -21031,6 +21939,54 @@
   var customVideoDecoders = [];
   var customAudioDecoders = [];
   var customVideoEncoders = [];
+  var customAudioEncoders = [];
+
+  // node_modules/mediabunny/dist/modules/src/pcm.js
+  var toUlaw = (s16) => {
+    const MULAW_MAX = 8191;
+    const MULAW_BIAS = 33;
+    let number = s16 >> 2;
+    let mask = 4096;
+    let sign = 0;
+    let position = 12;
+    let lsb = 0;
+    if (number < 0) {
+      number = -number;
+      sign = 128;
+    }
+    number += MULAW_BIAS;
+    if (number > MULAW_MAX) {
+      number = MULAW_MAX;
+    }
+    while ((number & mask) !== mask && position >= 5) {
+      mask >>= 1;
+      position--;
+    }
+    lsb = number >> position - 4 & 15;
+    return ~(sign | position - 5 << 4 | lsb) & 255;
+  };
+  var toAlaw = (s16) => {
+    const ALAW_MAX = 4095;
+    let mask = 2048;
+    let sign = 0;
+    let position = 11;
+    let lsb = 0;
+    let number = s16 >> 3;
+    if (number < 0) {
+      number = -number - 1;
+    } else {
+      sign = 128;
+    }
+    if (number > ALAW_MAX) {
+      number = ALAW_MAX;
+    }
+    while ((number & mask) !== mask && position >= 5) {
+      mask >>= 1;
+      position--;
+    }
+    lsb = number >> (position === 4 ? 1 : position - 4) & 15;
+    return (sign | position - 4 << 4 | lsb) ^ 85;
+  };
 
   // node_modules/mediabunny/dist/modules/src/media-sink.js
   var validatePacketRetrievalOptions = (options) => {
@@ -28186,6 +29142,191 @@
     }
   };
 
+  // node_modules/mediabunny/dist/modules/src/resample.js
+  var AudioResampler = class {
+    constructor(options) {
+      this.sourceSampleRate = null;
+      this.sourceNumberOfChannels = null;
+      this.startTime = null;
+      this.bufferStartFrame = 0;
+      this.maxWrittenFrame = null;
+      this.targetSampleRate = options.targetSampleRate;
+      this.targetNumberOfChannels = options.targetNumberOfChannels;
+      this.onSample = options.onSample;
+      this.bufferSizeInFrames = Math.floor(this.targetSampleRate * 5);
+      this.bufferSizeInSamples = this.bufferSizeInFrames * this.targetNumberOfChannels;
+    }
+    /**
+     * Sets up the channel mixer to handle up/downmixing in the case where input and output channel counts don't match.
+     */
+    doChannelMixerSetup() {
+      assert(this.sourceNumberOfChannels !== null);
+      const sourceNum = this.sourceNumberOfChannels;
+      const targetNum = this.targetNumberOfChannels;
+      if (sourceNum === 1 && targetNum === 2) {
+        this.channelMixer = (sourceData, sourceFrameIndex) => {
+          return sourceData[sourceFrameIndex * sourceNum];
+        };
+      } else if (sourceNum === 1 && targetNum === 4) {
+        this.channelMixer = (sourceData, sourceFrameIndex, targetChannelIndex) => {
+          return sourceData[sourceFrameIndex * sourceNum] * +(targetChannelIndex < 2);
+        };
+      } else if (sourceNum === 1 && targetNum === 6) {
+        this.channelMixer = (sourceData, sourceFrameIndex, targetChannelIndex) => {
+          return sourceData[sourceFrameIndex * sourceNum] * +(targetChannelIndex === 2);
+        };
+      } else if (sourceNum === 2 && targetNum === 1) {
+        this.channelMixer = (sourceData, sourceFrameIndex) => {
+          const baseIdx = sourceFrameIndex * sourceNum;
+          return 0.5 * (sourceData[baseIdx] + sourceData[baseIdx + 1]);
+        };
+      } else if (sourceNum === 2 && targetNum === 4) {
+        this.channelMixer = (sourceData, sourceFrameIndex, targetChannelIndex) => {
+          return targetChannelIndex < 2 ? sourceData[sourceFrameIndex * sourceNum + targetChannelIndex] : 0;
+        };
+      } else if (sourceNum === 2 && targetNum === 6) {
+        this.channelMixer = (sourceData, sourceFrameIndex, targetChannelIndex) => {
+          return targetChannelIndex < 2 ? sourceData[sourceFrameIndex * sourceNum + targetChannelIndex] : 0;
+        };
+      } else if (sourceNum === 4 && targetNum === 1) {
+        this.channelMixer = (sourceData, sourceFrameIndex) => {
+          const baseIdx = sourceFrameIndex * sourceNum;
+          return 0.25 * (sourceData[baseIdx] + sourceData[baseIdx + 1] + sourceData[baseIdx + 2] + sourceData[baseIdx + 3]);
+        };
+      } else if (sourceNum === 4 && targetNum === 2) {
+        this.channelMixer = (sourceData, sourceFrameIndex, targetChannelIndex) => {
+          const baseIdx = sourceFrameIndex * sourceNum;
+          return 0.5 * (sourceData[baseIdx + targetChannelIndex] + sourceData[baseIdx + targetChannelIndex + 2]);
+        };
+      } else if (sourceNum === 4 && targetNum === 6) {
+        this.channelMixer = (sourceData, sourceFrameIndex, targetChannelIndex) => {
+          const baseIdx = sourceFrameIndex * sourceNum;
+          if (targetChannelIndex < 2)
+            return sourceData[baseIdx + targetChannelIndex];
+          if (targetChannelIndex === 2 || targetChannelIndex === 3)
+            return 0;
+          return sourceData[baseIdx + targetChannelIndex - 2];
+        };
+      } else if (sourceNum === 6 && targetNum === 1) {
+        this.channelMixer = (sourceData, sourceFrameIndex) => {
+          const baseIdx = sourceFrameIndex * sourceNum;
+          return Math.SQRT1_2 * (sourceData[baseIdx] + sourceData[baseIdx + 1]) + sourceData[baseIdx + 2] + 0.5 * (sourceData[baseIdx + 4] + sourceData[baseIdx + 5]);
+        };
+      } else if (sourceNum === 6 && targetNum === 2) {
+        this.channelMixer = (sourceData, sourceFrameIndex, targetChannelIndex) => {
+          const baseIdx = sourceFrameIndex * sourceNum;
+          return sourceData[baseIdx + targetChannelIndex] + Math.SQRT1_2 * (sourceData[baseIdx + 2] + sourceData[baseIdx + targetChannelIndex + 4]);
+        };
+      } else if (sourceNum === 6 && targetNum === 4) {
+        this.channelMixer = (sourceData, sourceFrameIndex, targetChannelIndex) => {
+          const baseIdx = sourceFrameIndex * sourceNum;
+          if (targetChannelIndex < 2) {
+            return sourceData[baseIdx + targetChannelIndex] + Math.SQRT1_2 * sourceData[baseIdx + 2];
+          }
+          return sourceData[baseIdx + targetChannelIndex + 2];
+        };
+      } else {
+        this.channelMixer = (sourceData, sourceFrameIndex, targetChannelIndex) => {
+          return targetChannelIndex < sourceNum ? sourceData[sourceFrameIndex * sourceNum + targetChannelIndex] : 0;
+        };
+      }
+    }
+    ensureTempBufferSize(requiredSamples) {
+      let length = this.tempSourceBuffer.length;
+      while (length < requiredSamples) {
+        length *= 2;
+      }
+      if (length !== this.tempSourceBuffer.length) {
+        const newBuffer = new Float32Array(length);
+        newBuffer.set(this.tempSourceBuffer);
+        this.tempSourceBuffer = newBuffer;
+      }
+    }
+    async add(audioSample) {
+      if (this.sourceSampleRate === null) {
+        this.sourceSampleRate = audioSample.sampleRate;
+        this.sourceNumberOfChannels = audioSample.numberOfChannels;
+        this.startTime = audioSample.timestamp;
+        const overflowFrames = Math.ceil(this.targetSampleRate / this.sourceSampleRate);
+        this.bufferCapacityInFrames = this.bufferSizeInFrames + overflowFrames;
+        this.outputBuffer = new Float32Array(this.bufferCapacityInFrames * this.targetNumberOfChannels);
+        this.tempSourceBuffer = new Float32Array(this.sourceSampleRate * this.sourceNumberOfChannels);
+        this.doChannelMixerSetup();
+      }
+      assert(this.startTime !== null);
+      const requiredSamples = audioSample.numberOfFrames * audioSample.numberOfChannels;
+      this.ensureTempBufferSize(requiredSamples);
+      const sourceDataSize = audioSample.allocationSize({ planeIndex: 0, format: "f32" });
+      const sourceView = new Float32Array(this.tempSourceBuffer.buffer, 0, sourceDataSize / 4);
+      audioSample.copyTo(sourceView, { planeIndex: 0, format: "f32" });
+      const inputStartTime = audioSample.timestamp - this.startTime;
+      const inputEndTime = inputStartTime + audioSample.duration;
+      const outputStartFrame = Math.floor((inputStartTime - 1 / this.sourceSampleRate) * this.targetSampleRate) + 1;
+      const outputEndFrame = Math.ceil(inputEndTime * this.targetSampleRate);
+      for (let outputFrame = outputStartFrame; outputFrame < outputEndFrame; outputFrame++) {
+        if (outputFrame < this.bufferStartFrame) {
+          continue;
+        }
+        while (outputFrame >= this.bufferStartFrame + this.bufferCapacityInFrames) {
+          await this.finalizeCurrentBuffer();
+          this.bufferStartFrame += this.bufferSizeInFrames;
+        }
+        const bufferFrameIndex = outputFrame - this.bufferStartFrame;
+        assert(bufferFrameIndex < this.bufferCapacityInFrames);
+        const outputTime = outputFrame / this.targetSampleRate;
+        const inputTime = outputTime - inputStartTime;
+        const sourcePosition = inputTime * this.sourceSampleRate;
+        const sourceLowerFrame = Math.floor(sourcePosition);
+        const sourceUpperFrame = Math.ceil(sourcePosition);
+        const fraction = sourcePosition - sourceLowerFrame;
+        for (let targetChannel = 0; targetChannel < this.targetNumberOfChannels; targetChannel++) {
+          let lowerSample = 0;
+          let upperSample = 0;
+          if (sourceLowerFrame >= 0 && sourceLowerFrame < audioSample.numberOfFrames) {
+            lowerSample = this.channelMixer(sourceView, sourceLowerFrame, targetChannel);
+          }
+          if (sourceUpperFrame >= 0 && sourceUpperFrame < audioSample.numberOfFrames) {
+            upperSample = this.channelMixer(sourceView, sourceUpperFrame, targetChannel);
+          }
+          const outputSample = lowerSample + fraction * (upperSample - lowerSample);
+          const outputIndex = bufferFrameIndex * this.targetNumberOfChannels + targetChannel;
+          this.outputBuffer[outputIndex] += outputSample;
+        }
+        if (this.maxWrittenFrame === null) {
+          this.maxWrittenFrame = bufferFrameIndex;
+        } else {
+          this.maxWrittenFrame = Math.max(this.maxWrittenFrame, bufferFrameIndex);
+        }
+      }
+    }
+    async finalizeCurrentBuffer() {
+      if (this.maxWrittenFrame === null) {
+        return;
+      }
+      assert(this.startTime !== null);
+      const samplesWritten = Math.min(this.maxWrittenFrame + 1, this.bufferSizeInFrames) * this.targetNumberOfChannels;
+      const outputData = new Float32Array(samplesWritten);
+      outputData.set(this.outputBuffer.subarray(0, samplesWritten));
+      const audioSample = new AudioSample({
+        format: "f32",
+        sampleRate: this.targetSampleRate,
+        numberOfChannels: this.targetNumberOfChannels,
+        timestamp: this.startTime + this.bufferStartFrame / this.targetSampleRate,
+        data: outputData
+      });
+      await this.onSample(audioSample);
+      this.outputBuffer.copyWithin(0, this.bufferSizeInSamples);
+      this.outputBuffer.fill(0, this.outputBuffer.length - this.bufferSizeInSamples);
+      this.maxWrittenFrame = this.maxWrittenFrame >= this.bufferSizeInFrames ? this.maxWrittenFrame - this.bufferSizeInFrames : null;
+    }
+    async finalize() {
+      while (this.maxWrittenFrame !== null) {
+        await this.finalizeCurrentBuffer();
+        this.bufferStartFrame += this.bufferSizeInFrames;
+      }
+    }
+  };
+
   // node_modules/mediabunny/dist/modules/src/media-source.js
   var __addDisposableResource3 = function(env, value, async) {
     if (value !== null && value !== void 0) {
@@ -29205,6 +30346,501 @@
       this._codec = codec;
     }
   };
+  var AudioEncoderWrapper = class {
+    setError(error) {
+      if (!this.errorSet) {
+        this.error = error;
+        this.errorSet = true;
+      }
+    }
+    constructor(source, encodingConfig) {
+      this.source = source;
+      this.encodingConfig = encodingConfig;
+      this.ensureEncoderPromise = null;
+      this.encoderInitialized = false;
+      this.encoder = null;
+      this.muxer = null;
+      this.lastNumberOfChannels = null;
+      this.lastSampleRate = null;
+      this.isPcmEncoder = false;
+      this.outputSampleSize = null;
+      this.writeOutputValue = null;
+      this.customEncoder = null;
+      this.customEncoderCallSerializer = new CallSerializer();
+      this.customEncoderQueueSize = 0;
+      this.lastEndSampleIndex = null;
+      this.resampler = null;
+      this.error = null;
+      this.errorSet = false;
+      this.lastMuxerPromise = Promise.resolve();
+      this.closed = false;
+    }
+    async add(audioSample, shouldClose) {
+      try {
+        this.checkForEncoderError();
+        this.source._ensureValidAdd();
+        if (this.lastNumberOfChannels !== null && this.lastSampleRate !== null) {
+          if (audioSample.numberOfChannels !== this.lastNumberOfChannels || audioSample.sampleRate !== this.lastSampleRate) {
+            throw new Error(`Audio parameters must remain constant. Expected ${this.lastNumberOfChannels} channels at ${this.lastSampleRate} Hz, got ${audioSample.numberOfChannels} channels at ${audioSample.sampleRate} Hz.`);
+          }
+        } else {
+          this.lastNumberOfChannels = audioSample.numberOfChannels;
+          this.lastSampleRate = audioSample.sampleRate;
+        }
+        const config = this.encodingConfig;
+        const needsResample = config.transform?.numberOfChannels !== void 0 || config.transform?.sampleRate !== void 0;
+        if (needsResample) {
+          if (!this.resampler) {
+            this.resampler = new AudioResampler({
+              targetNumberOfChannels: config.transform.numberOfChannels ?? audioSample.numberOfChannels,
+              targetSampleRate: config.transform.sampleRate ?? audioSample.sampleRate,
+              onSample: async (sample) => {
+                await this.processAndEncode(sample, true);
+              }
+            });
+          }
+          await this.resampler.add(audioSample);
+        } else {
+          await this.processAndEncode(audioSample, shouldClose);
+        }
+      } finally {
+        if (shouldClose) {
+          audioSample.close();
+        }
+      }
+    }
+    /**
+     * Runs the process function (if any) and encodes the resulting samples.
+     */
+    async processAndEncode(audioSample, shouldClose) {
+      const config = this.encodingConfig;
+      if (config.transform?.sampleFormat !== void 0 && toInterleavedAudioFormat(audioSample.format) !== config.transform.sampleFormat) {
+        const newSample = audioSampleToInterleavedFormat(audioSample, config.transform.sampleFormat);
+        if (shouldClose) {
+          audioSample.close();
+        }
+        audioSample = newSample;
+        shouldClose = true;
+      }
+      if (config.transform?.process) {
+        try {
+          let processed = config.transform.process(audioSample);
+          if (isThenable(processed)) {
+            processed = await processed;
+          }
+          if (processed === null) {
+            return;
+          }
+          if (!Array.isArray(processed)) {
+            processed = [processed];
+          }
+          try {
+            for (const sample of processed) {
+              if (!(sample instanceof AudioSample)) {
+                throw new TypeError("The audio process function must return an AudioSample, null, or an array of AudioSamples.");
+              }
+            }
+            for (const sample of processed) {
+              await this.encodeSample(sample, true);
+            }
+          } finally {
+            for (const sample of processed) {
+              if (sample instanceof AudioSample) {
+                sample.close();
+              }
+            }
+          }
+        } finally {
+          if (shouldClose) {
+            audioSample.close();
+          }
+        }
+      } else {
+        await this.encodeSample(audioSample, shouldClose);
+      }
+    }
+    /**
+     * Encodes a single audio sample, handling encoder init, gap padding, and backpressure.
+     */
+    async encodeSample(audioSample, shouldClose) {
+      try {
+        if (!this.encoderInitialized) {
+          if (!this.ensureEncoderPromise) {
+            this.ensureEncoder(audioSample);
+          }
+          if (!this.encoderInitialized) {
+            await this.ensureEncoderPromise;
+          }
+        }
+        assert(this.encoderInitialized);
+        if (this.closed) {
+          return;
+        }
+        {
+          const startSampleIndex = Math.round(audioSample.timestamp * audioSample.sampleRate);
+          const endSampleIndex = Math.round((audioSample.timestamp + audioSample.duration) * audioSample.sampleRate);
+          if (this.lastEndSampleIndex === null) {
+            this.lastEndSampleIndex = endSampleIndex;
+          } else {
+            const sampleDiff = startSampleIndex - this.lastEndSampleIndex;
+            if (sampleDiff >= 64) {
+              const fillSample = new AudioSample({
+                data: new Float32Array(sampleDiff * audioSample.numberOfChannels),
+                format: "f32-planar",
+                sampleRate: audioSample.sampleRate,
+                numberOfChannels: audioSample.numberOfChannels,
+                numberOfFrames: sampleDiff,
+                timestamp: this.lastEndSampleIndex / audioSample.sampleRate
+              });
+              await this.encodeSample(fillSample, true);
+            }
+            this.lastEndSampleIndex += audioSample.numberOfFrames;
+          }
+        }
+        this.encodingConfig.onEncodedSample?.(audioSample);
+        if (this.customEncoder) {
+          this.customEncoderQueueSize++;
+          const clonedSample = audioSample.clone();
+          const promise = this.customEncoderCallSerializer.call(() => this.customEncoder.encode(clonedSample)).catch((error) => this.setError(error)).finally(() => {
+            this.customEncoderQueueSize--;
+            clonedSample.close();
+          });
+          if (this.customEncoderQueueSize >= 4) {
+            await promise;
+          }
+          await this.lastMuxerPromise;
+        } else if (this.isPcmEncoder) {
+          await this.doPcmEncoding(audioSample, shouldClose);
+        } else {
+          assert(this.encoder);
+          const audioData = audioSample.toAudioData();
+          this.encoder.encode(audioData);
+          audioData.close();
+          if (shouldClose) {
+            audioSample.close();
+          }
+          if (this.encoder.encodeQueueSize >= 4) {
+            await new Promise((resolve) => this.encoder.addEventListener("dequeue", resolve, { once: true }));
+          }
+          await this.lastMuxerPromise;
+        }
+      } finally {
+        if (shouldClose) {
+          audioSample.close();
+        }
+      }
+    }
+    async doPcmEncoding(audioSample, shouldClose) {
+      assert(this.outputSampleSize);
+      assert(this.writeOutputValue);
+      const { numberOfChannels, numberOfFrames, sampleRate, timestamp } = audioSample;
+      const CHUNK_SIZE = 2048;
+      const outputs = [];
+      for (let frame = 0; frame < numberOfFrames; frame += CHUNK_SIZE) {
+        const frameCount = Math.min(CHUNK_SIZE, audioSample.numberOfFrames - frame);
+        const outputSize = frameCount * numberOfChannels * this.outputSampleSize;
+        const outputBuffer = new ArrayBuffer(outputSize);
+        const outputView = new DataView(outputBuffer);
+        outputs.push({ frameCount, view: outputView });
+      }
+      const isS32 = audioSample.format === "s32" || audioSample.format === "s32-planar";
+      const readFormat = isS32 ? "s32-planar" : "f32-planar";
+      const scale = isS32 ? 1 / 2147483648 : 1;
+      const allocationSize = audioSample.allocationSize({ planeIndex: 0, format: readFormat });
+      const values = isS32 ? new Int32Array(allocationSize / 4) : new Float32Array(allocationSize / 4);
+      for (let i = 0; i < numberOfChannels; i++) {
+        audioSample.copyTo(values, { planeIndex: i, format: readFormat });
+        for (let j = 0; j < outputs.length; j++) {
+          const { frameCount, view: view2 } = outputs[j];
+          for (let k = 0; k < frameCount; k++) {
+            this.writeOutputValue(view2, (k * numberOfChannels + i) * this.outputSampleSize, values[j * CHUNK_SIZE + k] * scale);
+          }
+        }
+      }
+      if (shouldClose) {
+        audioSample.close();
+      }
+      const meta = {
+        decoderConfig: {
+          codec: this.encodingConfig.codec,
+          numberOfChannels,
+          sampleRate
+        }
+      };
+      for (let i = 0; i < outputs.length; i++) {
+        const { frameCount, view: view2 } = outputs[i];
+        const outputBuffer = view2.buffer;
+        const startFrame = i * CHUNK_SIZE;
+        const packet = new EncodedPacket(new Uint8Array(outputBuffer), "key", timestamp + startFrame / sampleRate, frameCount / sampleRate);
+        this.encodingConfig.onEncodedPacket?.(packet, meta);
+        await this.muxer.addEncodedAudioPacket(this.source._connectedTrack, packet, meta);
+      }
+    }
+    ensureEncoder(audioSample) {
+      this.ensureEncoderPromise = (async () => {
+        const { numberOfChannels, sampleRate } = audioSample;
+        const quality = resolveQuality(this.encodingConfig.quality, this.encodingConfig.bitrate);
+        const encoderConfig = buildAudioEncoderConfig({
+          numberOfChannels,
+          sampleRate,
+          ...this.encodingConfig,
+          quality
+        });
+        this.encodingConfig.onEncoderConfig?.(encoderConfig);
+        this.source._nominalBitrate = encoderConfig.bitrate ?? null;
+        const MatchingCustomEncoder = customAudioEncoders.find((x) => x.supports(this.encodingConfig.codec, encoderConfig));
+        if (MatchingCustomEncoder) {
+          this.customEncoder = new MatchingCustomEncoder();
+          this.customEncoder.codec = this.encodingConfig.codec;
+          this.customEncoder.config = encoderConfig;
+          this.customEncoder.onPacket = (packet, meta) => {
+            if (!(packet instanceof EncodedPacket)) {
+              throw new TypeError("The first argument passed to onPacket must be an EncodedPacket.");
+            }
+            if (meta !== void 0 && (!meta || typeof meta !== "object")) {
+              throw new TypeError("The second argument passed to onPacket must be an object or undefined.");
+            }
+            this.encodingConfig.onEncodedPacket?.(packet, meta);
+            this.lastMuxerPromise = this.muxer.addEncodedAudioPacket(this.source._connectedTrack, packet, meta).catch((error) => {
+              this.setError(error);
+            });
+          };
+          this.customEncoder.onError = (error) => {
+            this.setError(error);
+          };
+          await this.customEncoder.init();
+        } else if (PCM_AUDIO_CODECS.includes(this.encodingConfig.codec)) {
+          this.initPcmEncoder();
+        } else {
+          if (typeof AudioEncoder === "undefined") {
+            throw new Error(missingWebCodecsClassMessage("AudioEncoder"));
+          }
+          let supported;
+          try {
+            const support = await AudioEncoder.isConfigSupported(encoderConfig);
+            supported = support.supported ?? false;
+          } catch {
+            supported = false;
+          }
+          if (!supported) {
+            throw new Error(`This specific encoder configuration (${encoderConfig.codec}, ${encoderConfig.bitrate} bps, ${encoderConfig.numberOfChannels} channels, ${encoderConfig.sampleRate} Hz) is not supported in this environment. Consider using another codec or changing your audio parameters.`);
+          }
+          const stack = new Error("Encoding error").stack;
+          this.encoder = new AudioEncoder({
+            output: (chunk, meta) => {
+              if (this.encodingConfig.codec === "aac" && meta?.decoderConfig) {
+                if (meta.decoderConfig.description && meta.decoderConfig.description.byteLength > 0 && toUint8Array(meta.decoderConfig.description)[0] === 3) {
+                  const { decoderSpecificInfo } = readEsDescriptor(FileSlice.tempFromBytes(toUint8Array(meta.decoderConfig.description)));
+                  meta.decoderConfig.description = decoderSpecificInfo ?? void 0;
+                }
+                let needsDescriptionOverwrite = false;
+                if (!meta.decoderConfig.description || meta.decoderConfig.description.byteLength < 2) {
+                  needsDescriptionOverwrite = true;
+                } else {
+                  const audioSpecificConfig = parseAacAudioSpecificConfig(toUint8Array(meta.decoderConfig.description));
+                  needsDescriptionOverwrite = audioSpecificConfig.objectType === 0;
+                }
+                if (needsDescriptionOverwrite) {
+                  const objectType = Number(last(encoderConfig.codec.split(".")));
+                  meta.decoderConfig.description = buildAacAudioSpecificConfig({
+                    objectType,
+                    outputNumberOfChannels: meta.decoderConfig.numberOfChannels,
+                    outputSampleRate: meta.decoderConfig.sampleRate
+                  });
+                }
+              }
+              let packet = EncodedPacket.fromEncodedChunk(chunk);
+              packet = packet.clone({
+                timestamp: roundToDivisor(packet.timestamp, encoderConfig.sampleRate),
+                duration: chunk.duration != null ? roundToDivisor(packet.duration, encoderConfig.sampleRate) : void 0
+              });
+              this.encodingConfig.onEncodedPacket?.(packet, meta);
+              this.lastMuxerPromise = this.muxer.addEncodedAudioPacket(this.source._connectedTrack, packet, meta).catch((error) => {
+                this.setError(error);
+              });
+            },
+            error: (error) => {
+              error.stack = stack;
+              this.setError(error);
+            }
+          });
+          this.encoder.configure(encoderConfig);
+        }
+        assert(this.source._connectedTrack);
+        this.muxer = this.source._connectedTrack.output._muxer;
+        this.encoderInitialized = true;
+      })();
+    }
+    initPcmEncoder() {
+      this.isPcmEncoder = true;
+      const codec = this.encodingConfig.codec;
+      const { dataType, sampleSize, littleEndian } = parsePcmCodec(codec);
+      this.outputSampleSize = sampleSize;
+      switch (sampleSize) {
+        case 1:
+          {
+            if (dataType === "unsigned") {
+              this.writeOutputValue = (view2, byteOffset, value) => view2.setUint8(byteOffset, clamp(Math.round(value * 128) + 128, 0, 255));
+            } else if (dataType === "signed") {
+              this.writeOutputValue = (view2, byteOffset, value) => {
+                view2.setInt8(byteOffset, clamp(Math.round(value * 128), -128, 127));
+              };
+            } else if (dataType === "ulaw") {
+              this.writeOutputValue = (view2, byteOffset, value) => {
+                const int16 = clamp(Math.round(value * 32768), -32768, 32767);
+                view2.setUint8(byteOffset, toUlaw(int16));
+              };
+            } else if (dataType === "alaw") {
+              this.writeOutputValue = (view2, byteOffset, value) => {
+                const int16 = clamp(Math.round(value * 32768), -32768, 32767);
+                view2.setUint8(byteOffset, toAlaw(int16));
+              };
+            } else {
+              assert(false);
+            }
+          }
+          ;
+          break;
+        case 2:
+          {
+            if (dataType === "unsigned") {
+              this.writeOutputValue = (view2, byteOffset, value) => view2.setUint16(byteOffset, clamp(Math.round(value * 32768) + 32768, 0, 65535), littleEndian);
+            } else if (dataType === "signed") {
+              this.writeOutputValue = (view2, byteOffset, value) => view2.setInt16(byteOffset, clamp(Math.round(value * 32768), -32768, 32767), littleEndian);
+            } else {
+              assert(false);
+            }
+          }
+          ;
+          break;
+        case 3:
+          {
+            if (dataType === "unsigned") {
+              this.writeOutputValue = (view2, byteOffset, value) => setUint24(view2, byteOffset, clamp(Math.round(value * 8388608) + 8388608, 0, 16777215), littleEndian);
+            } else if (dataType === "signed") {
+              this.writeOutputValue = (view2, byteOffset, value) => setInt24(view2, byteOffset, clamp(Math.round(value * 8388608), -8388608, 8388607), littleEndian);
+            } else {
+              assert(false);
+            }
+          }
+          ;
+          break;
+        case 4:
+          {
+            if (dataType === "unsigned") {
+              this.writeOutputValue = (view2, byteOffset, value) => view2.setUint32(byteOffset, clamp(Math.round(value * 2147483648) + 2147483648, 0, 4294967295), littleEndian);
+            } else if (dataType === "signed") {
+              this.writeOutputValue = (view2, byteOffset, value) => view2.setInt32(byteOffset, clamp(Math.round(value * 2147483648), -2147483648, 2147483647), littleEndian);
+            } else if (dataType === "float") {
+              this.writeOutputValue = (view2, byteOffset, value) => view2.setFloat32(byteOffset, value, littleEndian);
+            } else {
+              assert(false);
+            }
+          }
+          ;
+          break;
+        case 8:
+          {
+            if (dataType === "float") {
+              this.writeOutputValue = (view2, byteOffset, value) => view2.setFloat64(byteOffset, value, littleEndian);
+            } else {
+              assert(false);
+            }
+          }
+          ;
+          break;
+        default:
+          {
+            assertNever(sampleSize);
+            assert(false);
+          }
+          ;
+      }
+    }
+    async flushAndClose(forceClose) {
+      try {
+        if (!forceClose) {
+          this.checkForEncoderError();
+          if (this.resampler) {
+            await this.resampler.finalize();
+          }
+        }
+        this.closed = true;
+        if (!forceClose) {
+          if (this.customEncoder) {
+            void this.customEncoderCallSerializer.call(() => this.customEncoder.flush());
+          } else if (this.encoder) {
+            await this.encoder.flush();
+          }
+        }
+      } finally {
+        this.closed = true;
+        this.resampler = null;
+        if (this.customEncoder) {
+          await this.customEncoderCallSerializer.call(() => this.customEncoder.close()).catch((error) => this.setError(error));
+        } else if (this.encoder && this.encoder.state !== "closed") {
+          this.encoder.close();
+        }
+      }
+      if (!forceClose) {
+        this.checkForEncoderError();
+      }
+    }
+    getQueueSize() {
+      if (this.customEncoder) {
+        return this.customEncoderQueueSize;
+      } else if (this.isPcmEncoder) {
+        return 0;
+      } else {
+        return this.encoder?.encodeQueueSize ?? 0;
+      }
+    }
+    checkForEncoderError() {
+      if (this.errorSet) {
+        throw this.error;
+      }
+    }
+  };
+  var AudioBufferSource = class extends AudioSource {
+    /**
+     * Creates a new {@link AudioBufferSource} whose `AudioBuffer` instances are encoded according to the specified
+     * {@link AudioEncodingConfig} and {@link AudioBufferSourceOptions}.
+     */
+    constructor(encodingConfig, options = {}) {
+      validateAudioEncodingConfig(encodingConfig);
+      if (typeof options !== "object" || !options) {
+        throw new TypeError("options must be an object.");
+      }
+      if (options.startTimestamp !== void 0 && !Number.isFinite(options.startTimestamp)) {
+        throw new TypeError("options.startTimestamp, when provided, must be a finite number.");
+      }
+      super(encodingConfig.codec);
+      this._encoder = new AudioEncoderWrapper(this, encodingConfig);
+      this._accumulatedTime = options.startTimestamp ?? 0;
+    }
+    /**
+     * Converts an AudioBuffer to audio samples, encodes them and adds them to the output. The first `AudioBuffer` will
+     * be played at the configured start timestamp (the default is 0), and each subsequent `AudioBuffer` will be placed
+     * directly after the previous one.
+     *
+     * @returns A Promise that resolves once the output is ready to receive more samples. You should await this Promise
+     * to respect writer and encoder backpressure.
+     */
+    async add(audioBuffer) {
+      if (!(audioBuffer instanceof AudioBuffer)) {
+        throw new TypeError("audioBuffer must be an AudioBuffer.");
+      }
+      const iterator = AudioSample._fromAudioBuffer(audioBuffer, this._accumulatedTime);
+      this._accumulatedTime += audioBuffer.duration;
+      for (const audioSample of iterator) {
+        await this._encoder.add(audioSample, true);
+      }
+    }
+    /** @internal */
+    _flushAndClose(forceClose) {
+      return this._encoder.flushAndClose(forceClose);
+    }
+  };
   var SubtitleSource = class extends MediaSource {
     /** Internal constructor. */
     constructor(codec) {
@@ -30187,7 +31823,21 @@
       fade: 0.4,
       transition: "crossfade"
     },
-    edits: { trims: [], speeds: [] }
+    edits: { trims: [], speeds: [] },
+    audio: {
+      voice: { enabled: null, voiceId: "af_heart", speed: 1, gainDb: 0 },
+      music: {
+        enabled: false,
+        file: null,
+        gainDb: -18,
+        loop: true,
+        fadeInSec: 1,
+        fadeOutSec: 2,
+        duck: { enabled: true, depthDb: 12, attackMs: 150, releaseMs: 400 }
+      },
+      loudness: { enabled: true, targetLufs: -16, truePeakDb: -1 },
+      narration: { steps: {} }
+    }
   });
   var COMPOSITION_RANGES = [
     ["output.width", 2, 7680, true],
@@ -30211,7 +31861,17 @@
     ["zoom.leadInSec", 0, 5],
     ["captions.bandHeightPct", 6, 25],
     ["captions.fontSizePct", 1, 10],
-    ["cards.fade", 0, 1.5]
+    ["cards.fade", 0, 1.5],
+    ["audio.voice.speed", 0.5, 2],
+    ["audio.voice.gainDb", -24, 12],
+    ["audio.music.gainDb", -60, 6],
+    ["audio.music.fadeInSec", 0, 30],
+    ["audio.music.fadeOutSec", 0, 30],
+    ["audio.music.duck.depthDb", 0, 30],
+    ["audio.music.duck.attackMs", 10, 2e3],
+    ["audio.music.duck.releaseMs", 50, 5e3],
+    ["audio.loudness.targetLufs", -30, -8],
+    ["audio.loudness.truePeakDb", -6, 0]
   ];
   var COMPOSITION_ENUMS = {
     "cursor.style": ["arrow", "pointer", "dot", "ring", "crosshair", "custom"],
@@ -30621,7 +32281,313 @@
     return canvas;
   }
 
+  // scripts/lib/audio/loudness.mjs
+  var SAMPLE_RATE = 48e3;
+  var SHELF = { b: [1.53512485958697, -2.69169618940638, 1.19839281085285], a: [1, -1.69065929318241, 0.73248077421585] };
+  var HIPASS = { b: [1, -2, 1], a: [1, -1.99004745483398, 0.99007225036621] };
+  var toDb = (linear) => linear > 0 ? 20 * Math.log10(linear) : -Infinity;
+  function biquad(x, { b, a }) {
+    const y = new Float64Array(x.length);
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < x.length; i++) {
+      const v = b[0] * x[i] + b[1] * x1 + b[2] * x2 - a[1] * y1 - a[2] * y2;
+      x2 = x1;
+      x1 = x[i];
+      y2 = y1;
+      y1 = v;
+      y[i] = v;
+    }
+    return y;
+  }
+  function checkChannels(channels) {
+    if (!Array.isArray(channels) || !channels.length || channels.length > 2) throw new Error("Audio must have one or two channels");
+    const length = channels[0].length;
+    if (channels.some((c) => !(c instanceof Float32Array) || c.length !== length)) throw new Error("Audio channels must be Float32Arrays of equal length");
+    return length;
+  }
+  function integratedLufs(channels) {
+    checkChannels(channels);
+    const block = Math.round(0.4 * SAMPLE_RATE), hop = Math.round(0.1 * SAMPLE_RATE);
+    const sums = channels.map((c) => {
+      const w = biquad(biquad(c, SHELF), HIPASS), s = new Float64Array(w.length + 1);
+      for (let i = 0; i < w.length; i++) s[i + 1] = s[i] + w[i] * w[i];
+      return s;
+    });
+    const lufs = (z) => -0.691 + 10 * Math.log10(z);
+    const energies = [];
+    for (let start = 0; start + block <= channels[0].length; start += hop) {
+      let z = 0;
+      for (const s of sums) z += (s[start + block] - s[start]) / block;
+      if (z > 0 && lufs(z) > -70) energies.push(z);
+    }
+    if (!energies.length) return -Infinity;
+    const mean = (list) => list.reduce((p, c) => p + c, 0) / list.length;
+    const relativeGate = lufs(mean(energies)) - 10;
+    const kept = energies.filter((z) => lufs(z) > relativeGate);
+    return kept.length ? lufs(mean(kept)) : -Infinity;
+  }
+  var PHASES = [1, 2, 3].map((p) => {
+    const f = p / 4, taps = [];
+    for (let m = -5; m <= 6; m++) {
+      const x = m - f, sinc = x === 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x);
+      taps.push(sinc * (0.5 + 0.5 * Math.cos(Math.PI * x / 6.5)));
+    }
+    const total = taps.reduce((p2, c) => p2 + c, 0);
+    return taps.map((t) => t / total);
+  });
+  function intervalPeaks(channels) {
+    const n = channels[0].length, out = new Float32Array(n);
+    for (const c of channels) {
+      for (let i = 0; i < n; i++) {
+        let peak = Math.abs(c[i]);
+        const next = i + 1 < n ? Math.abs(c[i + 1]) : 0;
+        if (next > peak) peak = next;
+        for (let p = 0; p < 3; p++) {
+          const taps = PHASES[p];
+          let y = 0;
+          for (let k = 0; k < 12; k++) {
+            const j = i - 5 + k;
+            if (j >= 0 && j < n) y += taps[k] * c[j];
+          }
+          y = Math.abs(y);
+          if (y > peak) peak = y;
+        }
+        if (peak > out[i]) out[i] = peak;
+      }
+    }
+    return out;
+  }
+  function truePeakLinear(channels) {
+    checkChannels(channels);
+    let peak = 0;
+    for (const v of intervalPeaks(channels)) if (v > peak) peak = v;
+    return peak;
+  }
+  function gainToTarget(measured, target) {
+    const lufs = typeof measured === "number" ? measured : measured?.integratedLufs;
+    return Number.isFinite(lufs) && Number.isFinite(target) ? target - lufs : 0;
+  }
+  function applyGainDb(channels, gainDb) {
+    const g = 10 ** (gainDb / 20);
+    return channels.map((c) => {
+      const out = new Float32Array(c.length);
+      for (let i = 0; i < c.length; i++) out[i] = c[i] * g;
+      return out;
+    });
+  }
+  function truePeakLimiter(channels, { ceilingDb = -1, lookaheadMs = 5, releaseMs = 80 } = {}) {
+    const n = checkChannels(channels), ceiling = 10 ** (ceilingDb / 20);
+    const L = Math.max(1, Math.round(lookaheadMs / 1e3 * SAMPLE_RATE));
+    const peaks = intervalPeaks(channels);
+    const need = new Float32Array(n).fill(1);
+    let any = false;
+    for (let i = 0; i < n; i++) if (peaks[i] > ceiling) {
+      any = true;
+      const g = ceiling / peaks[i];
+      if (g < need[i]) need[i] = g;
+      if (i + 1 < n && g < need[i + 1]) need[i + 1] = g;
+    }
+    if (!any) return { channels: channels.map((c) => Float32Array.from(c)), reductionDb: 0 };
+    const d = need;
+    const m = new Float64Array(n), queue = new Int32Array(n);
+    let head = 0, tail = 0;
+    for (let i = n - 1; i >= 0; i--) {
+      while (tail > head && d[queue[tail - 1]] >= d[i]) tail--;
+      queue[tail++] = i;
+      while (queue[head] > i + L - 1) head++;
+      m[i] = d[queue[head]];
+    }
+    const gain = new Float64Array(n);
+    let acc = L * m[0];
+    for (let i = 0; i < n; i++) {
+      acc += m[i] - (i - L >= 0 ? m[i - L] : m[0]);
+      gain[i] = acc / L;
+    }
+    const release = 1 - Math.exp(-1 / (releaseMs / 1e3 * SAMPLE_RATE));
+    let r = 1, minGain = 1;
+    const out = channels.map(() => new Float32Array(n));
+    for (let i = 0; i < n; i++) {
+      const target = Math.min(1, gain[i]);
+      r = Math.min(target, r + (1 - r) * release);
+      if (r < minGain) minGain = r;
+      for (let c = 0; c < channels.length; c++) out[c][i] = channels[c][i] * r;
+    }
+    return { channels: out, reductionDb: -toDb(minGain) };
+  }
+  function resample48k(channels, fromRate) {
+    if (!Number.isFinite(fromRate) || fromRate <= 0) throw new Error("Invalid sample rate");
+    if (fromRate === SAMPLE_RATE) return channels.map((c) => Float32Array.from(c));
+    const ratio = SAMPLE_RATE / fromRate, cutoff = Math.min(1, ratio) * 0.97, half = 16 / cutoff, table = 2048;
+    const size = Math.ceil(half * table) + 2, kernel = new Float64Array(size);
+    for (let k = 0; k < size; k++) {
+      const x = k / table;
+      if (x >= half) continue;
+      const s = x === 0 ? cutoff : Math.sin(Math.PI * cutoff * x) / (Math.PI * x), u = x / half;
+      kernel[k] = s * (0.42 + 0.5 * Math.cos(Math.PI * u) + 0.08 * Math.cos(2 * Math.PI * u));
+    }
+    const at = (x) => {
+      const p = Math.abs(x) * table, i = Math.floor(p);
+      return i + 1 >= size ? 0 : kernel[i] + (kernel[i + 1] - kernel[i]) * (p - i);
+    };
+    return channels.map((c) => {
+      const outLength = Math.round(c.length * ratio), out = new Float32Array(outLength);
+      for (let n = 0; n < outLength; n++) {
+        const t = n / ratio, lo = Math.max(0, Math.ceil(t - half)), hi = Math.min(c.length - 1, Math.floor(t + half));
+        let sum = 0;
+        for (let j = lo; j <= hi; j++) sum += c[j] * at(j - t);
+        out[n] = sum;
+      }
+      return out;
+    });
+  }
+
+  // scripts/lib/audio/decode.js
+  async function decodeAudio(arrayBuffer) {
+    const context = new OfflineAudioContext(1, 1, 48e3);
+    const decoded = await context.decodeAudioData(arrayBuffer);
+    const channels = [];
+    for (let i = 0; i < Math.min(2, decoded.numberOfChannels); i++) channels.push(Float32Array.from(decoded.getChannelData(i)));
+    return decoded.sampleRate === 48e3 ? channels : resample48k(channels, decoded.sampleRate);
+  }
+  async function loadAudio(url2) {
+    const response = await fetch(new URL(url2, location.href));
+    if (!response.ok) throw new Error(`Cannot load audio ${url2} (${response.status})`);
+    return decodeAudio(await response.arrayBuffer());
+  }
+
+  // scripts/lib/audio/duck.mjs
+  var ramp = (x) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, x)));
+  function mergeIntervals(intervals, gapSec = 0) {
+    const sorted = intervals.filter((i) => Number.isFinite(i?.start) && Number.isFinite(i?.end) && i.end > i.start).map((i) => ({ start: i.start, end: i.end })).sort((a, b) => a.start - b.start);
+    const merged = [];
+    for (const i of sorted) {
+      const last2 = merged.at(-1);
+      if (last2 && i.start - last2.end < gapSec) last2.end = Math.max(last2.end, i.end);
+      else merged.push(i);
+    }
+    return merged;
+  }
+  function duckEnvelope({ intervals, length, sampleRate, depthDb = 12, attackMs = 150, releaseMs = 400 }) {
+    const out = new Float32Array(length).fill(1);
+    const low = 10 ** (-depthDb / 20), attack = Math.max(1, Math.round(attackMs / 1e3 * sampleRate)), release = Math.max(1, Math.round(releaseMs / 1e3 * sampleRate));
+    for (const { start, end } of mergeIntervals(intervals, releaseMs / 1e3)) {
+      const s = Math.round(start * sampleRate), e = Math.round(end * sampleRate);
+      const from = Math.max(0, s - attack), to = Math.min(length, e + release);
+      for (let i = from; i < to; i++) {
+        const g = i < s ? 1 - (1 - low) * ramp((i - (s - attack)) / attack) : i < e ? low : 1 - (1 - low) * (1 - ramp((i - e) / release));
+        if (g < out[i]) out[i] = g;
+      }
+    }
+    return out;
+  }
+
+  // scripts/lib/audio/mix.mjs
+  var toDb2 = (linear) => linear > 0 ? 20 * Math.log10(linear) : -Infinity;
+  var stereo = (channels, rate) => {
+    if (!Array.isArray(channels) || !channels.length || channels.length > 2 || channels.some((c) => !(c instanceof Float32Array))) throw new Error("Audio must be one or two Float32Array channels");
+    const fixed = rate !== void 0 && rate !== SAMPLE_RATE ? resample48k(channels, rate) : channels;
+    return [fixed[0], fixed[1] ?? fixed[0]];
+  };
+  var fade = (x) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, x)));
+  function placeClips(clips, length, sampleRate) {
+    const bus = [new Float32Array(length), new Float32Array(length)], intervals = [];
+    for (const clip of clips) {
+      const [l, r] = stereo(clip.channels, clip.sampleRate), gain = 10 ** ((clip.gainDb ?? 0) / 20);
+      const at = Math.round(clip.start * sampleRate), from = Math.max(0, at), to = Math.min(length, at + l.length);
+      if (to <= from) continue;
+      for (let i = from; i < to; i++) {
+        bus[0][i] += l[i - at] * gain;
+        bus[1][i] += r[i - at] * gain;
+      }
+      intervals.push({ start: from / sampleRate, end: to / sampleRate });
+    }
+    return { bus, intervals };
+  }
+  function renderMusic(music, length, durationSec, sampleRate) {
+    const out = [new Float32Array(length), new Float32Array(length)];
+    const [l, r] = stereo(music.channels, music.sampleRate), n = l.length;
+    if (!n) return out;
+    const s0 = Math.max(0, Math.round((music.startSec ?? 0) * sampleRate)), s1 = Math.min(length, Math.round((music.endSec ?? durationSec) * sampleRate));
+    if (s1 <= s0) return out;
+    const gain = 10 ** ((music.gainDb ?? 0) / 20), span = s1 - s0;
+    const inN = Math.round((music.fadeInSec ?? 0) * sampleRate), outN = Math.round((music.fadeOutSec ?? 0) * sampleRate);
+    const seam = Math.min(Math.round(3e-3 * sampleRate), n >> 2);
+    const jump = music.loop && Math.max(Math.abs(l[n - 1] - l[0]), Math.abs(r[n - 1] - r[0])) > 0.01;
+    for (let i = 0; i < span; i++) {
+      let j = i;
+      if (j >= n) {
+        if (!music.loop) break;
+        j %= n;
+      }
+      let g = gain;
+      if (inN > 0 && i < inN) g *= fade(i / inN);
+      if (outN > 0 && span - i <= outN) g *= fade((span - 1 - i) / outN);
+      if (jump && seam > 0) {
+        if (j < seam) g *= fade((j + 0.5) / seam);
+        if (n - j <= seam) g *= fade((n - j - 0.5) / seam);
+      }
+      out[0][s0 + i] = l[j] * g;
+      out[1][s0 + i] = r[j] * g;
+    }
+    return out;
+  }
+  function mixAudio({ durationSec, sampleRate = SAMPLE_RATE, clips = [], music = null, duck = {}, loudness = {} }) {
+    if (sampleRate !== SAMPLE_RATE) throw new Error("mixAudio supports 48 kHz only");
+    if (!Number.isFinite(durationSec) || durationSec <= 0) throw new Error("durationSec must be positive");
+    const length = Math.round(durationSec * sampleRate);
+    const { bus, intervals } = placeClips(clips, length, sampleRate);
+    let mixed = bus;
+    if (music) {
+      const m = renderMusic(music, length, durationSec, sampleRate);
+      if (duck.enabled && intervals.length) {
+        const env = duckEnvelope({ intervals, length, sampleRate, depthDb: duck.depthDb ?? 12, attackMs: duck.attackMs ?? 150, releaseMs: duck.releaseMs ?? 400 });
+        for (const c of m) for (let i = 0; i < length; i++) c[i] *= env[i];
+      }
+      mixed = bus.map((c, k) => {
+        for (let i = 0; i < length; i++) c[i] += m[k][i];
+        return c;
+      });
+    }
+    const ceilingDb = loudness.truePeakDb ?? -1, preGainLufs = integratedLufs(mixed);
+    let gainDb = loudness.enabled ? gainToTarget(preGainLufs, loudness.targetLufs ?? -16) : 0;
+    let result;
+    for (let pass = 0; pass < 4; pass++) {
+      const limited = truePeakLimiter(applyGainDb(mixed, gainDb), { ceilingDb });
+      result = { ...limited, integrated: integratedLufs(limited.channels) };
+      const error = loudness.enabled && Number.isFinite(result.integrated) ? (loudness.targetLufs ?? -16) - result.integrated : 0;
+      if (Math.abs(error) <= 0.05 || result.reductionDb === 0 && pass > 0) break;
+      gainDb += error;
+    }
+    return {
+      channels: result.channels,
+      measured: { integratedLufs: result.integrated, truePeakDb: toDb2(truePeakLinear(result.channels)), preGainLufs },
+      appliedGainDb: gainDb,
+      limiterReductionDb: result.reductionDb
+    };
+  }
+
   // scripts/lib/compose/render-page.js
+  var AUDIO_BITRATE = 192e3;
+  async function prepareAudio(plan) {
+    const a = plan.audio, warnings = [];
+    const clips = await Promise.all(a.narration.map(async (n) => ({ channels: await loadAudio(n.clipUrl), start: n.outStart, gainDb: n.gainDb })));
+    const music = a.music ? { ...a.music, channels: await loadAudio(a.music.url) } : null;
+    const mix = mixAudio({ durationSec: a.durationSec ?? plan.timemap.outputDuration, sampleRate: a.sampleRate, clips, music, duck: a.duck, loudness: a.loudness });
+    const config = { numberOfChannels: 2, sampleRate: a.sampleRate, bitrate: AUDIO_BITRATE };
+    let codec = null;
+    for (const candidate of ["aac", "opus"]) if (await canEncodeAudio(candidate, config)) {
+      codec = candidate;
+      break;
+    }
+    if (!codec) throw new Error("Neither AAC nor Opus audio encoding is supported");
+    if (codec === "opus") warnings.push("AAC audio unavailable; encoded Opus audio inside MP4");
+    return { ...mix, codec, warnings, sampleRate: a.sampleRate };
+  }
+  function audioSlice(mix, from, to) {
+    const buffer = new AudioBuffer({ length: to - from, numberOfChannels: 2, sampleRate: mix.sampleRate });
+    for (let c = 0; c < 2; c++) buffer.copyToChannel(mix.channels[c].subarray(from, to), c);
+    return buffer;
+  }
   var defaults = () => ({
     source: new URL("raw.mp4", location.href).href,
     fonts: {
@@ -30664,7 +32630,6 @@
   };
   window.renderComposition = async (plan, options = {}) => {
     options = { ...defaults(), ...options };
-    if (options.audio !== null) throw new Error("Audio is not supported yet; pass audio: null");
     stillOptions = options;
     await loadFonts(options.fonts);
     await loadAssets(plan, options);
@@ -30678,7 +32643,8 @@
       }
     }
     if (!codec) throw new Error("Neither H.264 nor VP9 encoding is supported");
-    let bytes2 = 0, finalized = false, source, output, video;
+    let bytes2 = 0, finalized = false, source, output, video, audioSource;
+    const mix = options.audio && plan.audio?.enabled ? await prepareAudio(plan) : null;
     const post = async (route, body, headers) => {
       const response = await fetch(new URL(route, location.href), { method: "POST", body, headers });
       if (!response.ok) throw new Error(`Render transport failed: ${route} (${response.status})`);
@@ -30692,7 +32658,20 @@
       output = new Output({ format: new Mp4OutputFormat({ fastStart: false }), target });
       source = new CanvasSource(canvas, { codec, bitrate, keyFrameInterval: 2 });
       output.addVideoTrack(source, { frameRate: fps });
+      if (mix) {
+        audioSource = new AudioBufferSource({ codec: mix.codec, bitrate: AUDIO_BITRATE });
+        output.addAudioTrack(audioSource);
+      }
       await output.start();
+      let audioAt = 0;
+      const feedAudio = async (untilSec) => {
+        const end = mix ? Math.min(mix.channels[0].length, Math.ceil(untilSec * mix.sampleRate)) : 0;
+        while (audioAt < end) {
+          const to = Math.min(mix.channels[0].length, audioAt + mix.sampleRate);
+          await audioSource.add(audioSlice(mix, audioAt, to));
+          audioAt = to;
+        }
+      };
       const total = Math.round(plan.timemap.outputDuration * fps);
       if (total < 1) throw new Error("Composition has no output frames");
       function* timestamps() {
@@ -30702,6 +32681,7 @@
       for await (const decoded of video.sink.canvasesAtTimestamps(timestamps())) {
         if (window.__renderAbort || options.signal?.aborted) throw new Error("Render aborted");
         if (!decoded) throw new Error(`No source frame for output frame ${frame}`);
+        if (mix) await feedAudio(frame / fps + 1);
         drawFrame(canvas, plan, frame / fps, decoded.canvas);
         await source.add(frame / fps, 1 / fps);
         frame++;
@@ -30711,10 +32691,20 @@
         }
       }
       if (frame !== total) throw new Error("Decoder ended before the composition");
+      if (mix) {
+        await feedAudio(Infinity);
+        audioSource.close();
+      }
       source.close();
       await output.finalize();
       finalized = true;
-      return { frames: frame, codec, bytes: bytes2, warnings: plan.warnings };
+      return {
+        frames: frame,
+        codec,
+        bytes: bytes2,
+        warnings: plan.warnings,
+        ...mix ? { audio: { codec: mix.codec, measured: mix.measured, appliedGainDb: mix.appliedGainDb, limiterReductionDb: mix.limiterReductionDb, warnings: mix.warnings } } : {}
+      };
     } finally {
       try {
         if (output && !finalized) await output.cancel();
@@ -30766,6 +32756,7 @@ mediabunny/dist/modules/src/input-format.js:
 mediabunny/dist/modules/src/sample.js:
 mediabunny/dist/modules/src/encode.js:
 mediabunny/dist/modules/src/custom-coder.js:
+mediabunny/dist/modules/src/pcm.js:
 mediabunny/dist/modules/src/media-sink.js:
 mediabunny/dist/modules/src/input-track.js:
 mediabunny/dist/modules/src/input.js:
@@ -30777,6 +32768,7 @@ mediabunny/dist/modules/src/isobmff/isobmff-boxes.js:
 mediabunny/dist/modules/src/writer.js:
 mediabunny/dist/modules/src/target.js:
 mediabunny/dist/modules/src/isobmff/isobmff-muxer.js:
+mediabunny/dist/modules/src/resample.js:
 mediabunny/dist/modules/src/media-source.js:
 mediabunny/dist/modules/src/output-format.js:
 mediabunny/dist/modules/src/output.js:

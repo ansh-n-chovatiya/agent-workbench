@@ -6,10 +6,33 @@ import { cuesFromRun, captionAlpha } from './captions.mjs';
 import { validateComposition, resolveComposition, zoomOptions } from './composition.mjs';
 import { layoutFor } from './layout.mjs';
 import { THEMES } from './themes.mjs';
+import { placeNarration, extendCues } from '../audio/retime.mjs';
 import { maxSharpZoom, validateRegions, suggestZoomRegions } from './zoom.mjs';
 
-export function planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings = [] }) {
-  void brief;
+// Export serves clips as voice/<key>.wav and music as music/<project path>; the editor passes its own /media/ builders.
+export const exportAudioUrls = {
+  clip: (key) => `voice/${key}.wav`,
+  music: (file) => `music/${file.split('/').map(encodeURIComponent).join('/')}`,
+};
+export function planAudio({ composition, brief, events, timemap, cues, voiceClips = null, audioUrls = exportAudioUrls }) {
+  const { voice, music, loudness } = composition.audio, urls = { ...exportAudioUrls, ...audioUrls };
+  const voiceEnabled = voice.enabled ?? brief?.voice?.enabled === true;
+  const clips = {};
+  if (voiceEnabled) for (const step of events.steps ?? []) {
+    const key = voiceClips?.steps?.[step.id], clip = key ? voiceClips.clips?.[key] : null;
+    if (clip && Number.isFinite(clip.durationSec) && clip.durationSec > 0) clips[step.id] = { durationSec: clip.durationSec, source: clip.source ?? 'tts', key };
+  }
+  const muted = Object.fromEntries(Object.entries(composition.audio.narration.steps).filter(([, v]) => v?.muted === true).map(([id]) => [id, true]));
+  const placed = placeNarration({ steps: events.steps ?? [], clips, timemap, cues, muted, fps: composition.output.fps });
+  const narration = placed.placements.map((p) => ({ stepId: p.stepId, clipUrl: urls.clip(clips[p.stepId].key), outStart: p.outStart,
+    durationSec: clips[p.stepId].durationSec, gainDb: voice.gainDb, source: clips[p.stepId].source }));
+  const musicPlan = music.enabled && music.file ? { url: urls.music(music.file), gainDb: music.gainDb, loop: music.loop,
+    fadeInSec: music.fadeInSec, fadeOutSec: music.fadeOutSec, startSec: 0, endSec: timemap.outputDuration } : null;
+  return { enabled: narration.length > 0 || musicPlan !== null, sampleRate: 48000, durationSec: timemap.outputDuration, narration, music: musicPlan,
+    duck: { ...music.duck }, loudness: { ...loudness }, warnings: placed.warnings, captionSpans: placed.captionSpans };
+}
+
+export function planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings = [], voiceClips = null, audioUrls }) {
   const validation = validateComposition(composition, { duration: record.durationSec });
   if (!validation.ok) throw new Error(validation.errors.join('\n'));
   if (![sourceSize.width, sourceSize.height, record.scale.used].every((v) => Number.isFinite(v) && v > 0)) throw new Error('Invalid source size or capture scale');
@@ -29,10 +52,13 @@ export function planRender({ composition, brief, storyboard, events, record, sou
   if (!regionValidation.ok) throw new Error(regionValidation.errors.join('\n'));
   const cssSource = { width: sourceSize.width / record.scale.used, height: sourceSize.height / record.scale.used };
   const clone = (v) => JSON.parse(JSON.stringify(v));
+  let cues = !composition.captions.enabled ? [] : composition.captions.cues !== undefined ? clone(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true });
+  const audio = planAudio({ composition, brief, events, timemap, cues, voiceClips, audioUrls });
+  if (audio.captionSpans.length) cues = extendCues(cues, audio.captionSpans, timemap);
   return { output: clone(output), layout, theme: THEMES[composition.theme], frame: clone(composition.frame), timemap,
     regions: clone(regions),
     camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
-    cues: !composition.captions.enabled ? [] : composition.captions.cues !== undefined ? clone(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true }),
+    cues, audio,
     captions: clone(composition.captions),
     cursor: { ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }), sizePx: output.height * (composition.cursor.style === 'custom' ? composition.cursor.custom?.heightPct ?? composition.cursor.sizePct : composition.cursor.sizePct) / 100,
       color: THEMES[composition.theme].cursor.fill, ...composition.cursor },

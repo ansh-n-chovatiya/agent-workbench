@@ -13,7 +13,7 @@ test('timecode formats hours and frame boundaries at 30 and 60 fps', () => {
 });
 test('settings grouping/search matches label words without changing schema or hiding advanced entries', () => {
   const before = JSON.stringify(SETTINGS), groups = groupSettings(SETTINGS);
-  assert.deepEqual(Object.keys(groups), ['output', 'look', 'cursor', 'zoom', 'captions', 'cards']);
+  assert.deepEqual(Object.keys(groups), ['output', 'look', 'cursor', 'zoom', 'captions', 'cards', 'audio']);
   assert.equal(Object.values(groups).flat().length, SETTINGS.length);
   const found = Object.values(groupSettings(SETTINGS, ' CURSOR   click point ')).flat();
   assert.ok(found.length); assert.ok(found.every(s => s.advanced));

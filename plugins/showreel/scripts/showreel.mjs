@@ -33,6 +33,7 @@ Commands:
   composition validate --name <name>            Validate composition.json
   composition set --name <name> --path a.b.c --value <json-or-string>
   composition reset --name <name> --path a.b     Restore the theme default
+  voice <install|list|samples|generate|status|import|clean>    Local voice-over (Kokoro); see: showreel voice install --check
   cursor-demo [--headed]                        Compare planned and linear motion
   --help                          Show this help
 `;
@@ -231,6 +232,10 @@ async function main(args) {
     }
     return;
   }
+  if (command === 'voice') {
+    const { voiceCommand } = await import('./lib/voice/commands.mjs');
+    return voiceCommand(flags);
+  }
   if (command === 'guide') return guideCommand(flags);
   if (command === 'snapshot') return snapshotCommand(flags);
   if (command === '--help' && !flags.length) return console.log(help);
@@ -254,9 +259,13 @@ async function main(args) {
         }) + '\n');
       } finally { await server?.close(); }
     }
+    const { voiceDoctor } = await import('./lib/voice/doctor.mjs');
+    result.voice = await voiceDoctor({ benchmark: flags.includes('--benchmark') });
     if (flags.includes('--json')) console.log(JSON.stringify(result, null, 2));
     else {
       printDoctor(result);
+      console.log('Voice');
+      printDoctor({ items: result.voice });
       if (result.benchmark) {
         console.table(result.benchmark);
         console.log(`recommended capture scale: ${result.recommendations.captureScale}`);

@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 import { projectDir } from '../paths.mjs';
 import { readProjectFile } from '../project.mjs';
 import { localRunId } from '../record/timing.mjs';
-import { buildComposition, validateComposition, safeImagePath, resolveComposition } from './composition.mjs';
+import { buildComposition, validateComposition, safeImagePath, resolveComposition, safeMusicPath } from './composition.mjs';
 import { planRender } from './plan.mjs';
 import { imageAssetUrl, cursorImageWarning } from './custom-cursor.mjs';
 import { toSrt, toVtt } from './captions.mjs';
@@ -23,6 +23,36 @@ async function writeRenderChunk(file, data, position) {
     offset += bytesWritten;
   }
   return position + offset;
+}
+
+const AUDIO_TYPES = { '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg' };
+const inside = (root, file) => { const relative = path.relative(root, file); return !(relative.startsWith('..' + path.sep) || relative === '..' || path.isAbsolute(relative)); };
+// Maps an export-server audio route (voice/<key>.wav or music/<project path>) to a real file inside the project, or null.
+export async function resolveAudioRoute(dir, route) {
+  let root, relative;
+  try {
+    const parts = route.split('/').map(decodeURIComponent);
+    if (parts[0] === 'voice' && parts.length === 2 && /^[A-Za-z0-9_-]{1,128}\.wav$/.test(parts[1])) { root = path.join(dir, 'voice', 'clips'); relative = parts[1]; }
+    else if (parts[0] === 'music' && parts.length > 1 && safeMusicPath(parts.slice(1).join('/'))) { root = dir; relative = parts.slice(1).join('/'); }
+    else return null;
+    const realRoot = await realpath(root), file = await realpath(path.join(realRoot, relative));
+    if (!inside(realRoot, file) || !(await stat(file)).isFile()) return null;
+    return { file, type: AUDIO_TYPES[path.extname(file).toLowerCase()] };
+  } catch { return null; }
+}
+// voice/clips.json from the voice task: { version: 1, clips: { <key>: { durationSec, source } }, steps: { <stepId>: <key> } }.
+// Entries whose WAV file is gone are dropped with a warning instead of failing the export.
+export async function loadVoiceClips(dir) {
+  let index;
+  try { index = await json(path.join(dir, 'voice', 'clips.json')); }
+  catch (error) { if (error.code === 'ENOENT') return { voiceClips: null, warnings: [] }; throw new Error(`voice/clips.json is not readable: ${error.message}`); }
+  if (!index || index.version !== 1 || typeof index.clips !== 'object' || typeof index.steps !== 'object') throw new Error('voice/clips.json has an unsupported shape');
+  const steps = {}, warnings = [];
+  for (const [stepId, key] of Object.entries(index.steps)) {
+    if ((await resolveAudioRoute(dir, `voice/${encodeURIComponent(key)}.wav`)) && index.clips[key]) steps[stepId] = key;
+    else warnings.push(`The narration clip for step ${stepId} is missing, so that step has no voice; generate it again.`);
+  }
+  return { voiceClips: { ...index, steps }, warnings };
 }
 
 // Shared with browser tests so production Range and chunk transport are exercised.
@@ -55,7 +85,7 @@ export async function resolveImageAssets(composition, dir) {
   }
   return assets;
 }
-export async function startRenderServer({ rawFile, outFile, assets = new Map(), onProgress = () => {} }) {
+export async function startRenderServer({ rawFile, outFile, assets = new Map(), projectDir: audioDir = null, onProgress = () => {} }) {
   const prefix = `/${randomUUID()}/`;
   const rawStat = await stat(rawFile);
   const bundle = await readFile(new URL('dist/render-page.js', root));
@@ -99,6 +129,13 @@ export async function startRenderServer({ rawFile, outFile, assets = new Map(), 
           const asset = assets.get(key);
           if (!asset) { response.writeHead(404); response.end(); return; }
           response.writeHead(200, { 'content-type': asset.type }); response.end(asset.data);
+        } else if (request.method === 'GET' && audioDir && /^(voice|music)\//.test(route.slice(prefix.length)) && route.startsWith(prefix)) {
+          const found = await resolveAudioRoute(audioDir, route.slice(prefix.length));
+          if (!found) { response.writeHead(404); response.end(); return; }
+          response.writeHead(200, { 'content-type': found.type, 'content-length': (await stat(found.file)).size });
+          const stream = createReadStream(found.file);
+          stream.on('error', (error) => { failure ??= error; response.destroy(error); });
+          response.on('close', () => stream.destroy()); stream.pipe(response);
         } else if (request.method === 'GET' && route === prefix) {
           response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
           response.end('<!doctype html><meta charset="utf-8"><script src="render-page.js"></script>');
@@ -193,6 +230,12 @@ export async function renderRun({ name, runId, size, fps, out, rebuild = false, 
   composition = resolveComposition(composition);
   composition.output = { ...composition.output, ...(size ? { width: size === '4k' ? 3840 : 1920, height: size === '4k' ? 2160 : 1080 } : {}), ...(fps ? { fps } : {}) };
   const assets = await resolveImageAssets(composition, dir);
+  const { voiceClips, warnings: voiceWarnings } = await loadVoiceClips(dir);
+  assets.warnings.push(...voiceWarnings);
+  if (composition.audio.music.enabled && composition.audio.music.file && !(await resolveAudioRoute(dir, `music/${composition.audio.music.file.split('/').map(encodeURIComponent).join('/')}`))) {
+    assets.warnings.push(`The music file ${composition.audio.music.file} was not found inside the project, so the video has no music.`);
+    composition.audio.music.enabled = false;
+  }
   const renderId = localRunId(), renderDir = path.join(dir, 'renders', renderId);
   await mkdir(path.dirname(renderDir), { recursive: true }); await mkdir(renderDir);
   const finalFile = out ? path.resolve(out) : path.join(renderDir, 'final.mp4');
@@ -202,7 +245,7 @@ export async function renderRun({ name, runId, size, fps, out, rebuild = false, 
   const started = Date.now();
   try {
     checkCancelled();
-    server = await startRenderServer({ rawFile, outFile: finalFile, assets, onProgress({ frame, total }) {
+    server = await startRenderServer({ rawFile, outFile: finalFile, assets, projectDir: dir, onProgress({ frame, total }) {
       onProgress({frame,total});
       const now = Date.now();
       if (now - lastLog < 1000) return;
@@ -221,8 +264,9 @@ export async function renderRun({ name, runId, size, fps, out, rebuild = false, 
     checkCancelled();
     await page.goto(server.url); await page.waitForFunction(() => typeof window.renderComposition === 'function');
     const sourceSize = await page.evaluate(() => window.probeRenderSource());
-    plan = planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings: assets.warnings });
+    plan = planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings: assets.warnings, voiceClips });
     for (const warning of plan.warnings) log(`warning: ${warning}`);
+    for (const warning of plan.audio.warnings) log(`warning: ${warning.message}`);
     if (stills) {
       const files = [];
       for (const t of stills) {
@@ -236,9 +280,14 @@ export async function renderRun({ name, runId, size, fps, out, rebuild = false, 
       checkCancelled(); completed = true;
       return { renderDir, plan, files };
     }
-    result = await page.evaluate(({ plan, options }) => window.renderComposition(plan, { ...options, audio: null }), { plan: JSON.parse(JSON.stringify(plan)), options: server.options });
+    result = await page.evaluate(({ plan, options }) => window.renderComposition(plan, { ...options, audio: plan.audio.enabled ? {} : null }), { plan: JSON.parse(JSON.stringify(plan)), options: server.options });
     for (const warning of result.warnings) if (!plan.warnings.includes(warning)) { plan.warnings.push(warning); log(`warning: ${warning}`); }
     await server.finish();
+    if (result.audio) {
+      const { integratedLufs, truePeakDb } = result.audio.measured;
+      log(`Loudness: ${integratedLufs.toFixed(1)} LUFS, true peak ${truePeakDb.toFixed(1)} dBTP`);
+      for (const warning of result.audio.warnings) { plan.warnings.push(warning); log(`warning: ${warning}`); }
+    }
     if (result.codec === 'vp9') log('warning: H.264 unavailable; encoded VP9 inside MP4');
     const poster = await page.evaluate(({ plan, t }) => window.renderStill(plan, t), {
       plan: JSON.parse(JSON.stringify(plan)), t: plan.timemap.mainStart + (plan.timemap.mainEnd - plan.timemap.mainStart) * 0.35,
