@@ -14,3 +14,4 @@
 - Fix: two reports finishing in the same second no longer overwrite each other's snapshot (suffixed `-2`, `-3`; claimed atomically, safe under concurrent writers). `--keep N` prunes old snapshots; only exact `usage-<stamp>[-n].json` files are ever touched.
 - `/ctx-agents`: row-building moved to a tested pure function (empty state, 60-character labels, newest-that-fit); a kit test checks the pane mounts on terminal and desktop and degrades to one line if agents cannot be listed.
 - Subagent router (experimental, `route` option, off by default): label-based model choice for agents ctx does not name; never raises cost, explicit models win, every decision logged.
+- Fix: the `--units` table stays aligned when a plan name is long.

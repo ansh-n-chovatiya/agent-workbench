@@ -1,4 +1,3 @@
-# py/ctx_optimize/cli.py
 import argparse
 import datetime
 import json
