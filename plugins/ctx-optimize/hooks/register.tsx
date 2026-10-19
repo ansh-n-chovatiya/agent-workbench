@@ -2,6 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
 import { paneLines } from './format'
+import { routerHooks } from './router'
 import type { AgentUse } from '../types'
 
 const PANE = 'ctx-agents'
@@ -9,7 +10,9 @@ const usage = atom({ plugin: 'ctx-optimize', key: 'usage' } as const, {} as Reco
 
 // Nothing is drawn until the person runs /ctx-agents. Only task labels (<= 60 chars) and token counts are kept;
 // prompts and answers are never read or stored.
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  routerHooks(on, options)
+
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'ctx-agents',

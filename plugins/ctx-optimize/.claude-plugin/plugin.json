@@ -12,5 +12,13 @@
     "report"
   ],
   "license": "MIT",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "route": {
+      "type": "boolean",
+      "title": "Route subagents to cheaper models",
+      "description": "Experimental, off by default. For subagents ctx does not name, pick haiku or sonnet from the task label when that is cheaper than the main model. Never raises cost; every decision is logged.",
+      "default": false
+    }
+  }
 }
