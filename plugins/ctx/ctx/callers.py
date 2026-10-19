@@ -92,7 +92,8 @@ def render(changed, found):
     lines = [
         "Computed from the diff in code, not by a model: functions and classes whose signature was added, removed or",
         "changed, and the files outside this change that mention the name (word match; a lead to read, not proof of a",
-        "call).",
+        "call). For a removed name that is still mentioned, or a changed signature, read that caller (reading outside",
+        "the diff is allowed for exactly this) and report whether it breaks.",
         "",
     ]
     if not changed:
