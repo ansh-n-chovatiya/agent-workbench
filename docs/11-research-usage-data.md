@@ -37,7 +37,7 @@ not applied here, so this is a volume comparison, not a cost comparison.
 **Caveat:** one session. Do not generalise. Phase 1 must repeat this on many sessions.
 
 A `ctx:unit-runner` fix round ran on Opus (`meta.json` says `model: opus`) although `ctx.yaml` sets
-`models.runner: sonnet`. Likely the ledger's escalate-on-failed-round setting (see 15); not confirmed.
+`models.runner: sonnet`. Not escalation: it came from the unit's complexity score mapping to the dearest tier (see 15, update 2026-10-19).
 
 ## Implications
 

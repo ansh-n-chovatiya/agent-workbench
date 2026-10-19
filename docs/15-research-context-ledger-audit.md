@@ -55,3 +55,21 @@ Read locally on 2026-10-17 from `~/Desktop/Personal/context-ledger` (v1.2.0 per 
   phase 3 `agent.spawn` mod closes.
 - **Always-on cost.** Unchanged from doc 10: about 845 tokens per session.
 - **Review round cap.** `MAX_ROUNDS = 3`, enforced by the caller in `ctx/commands.py`, not by `Ledger.bump_round`.
+
+## Update 2026-10-19 (Q17 checked against a real session)
+
+Checked the `token-quality-ux` build (15 unit-runner spawns, 9 units). In every spawn the orchestrator **did** pass a
+`model` on the Agent call, and it equalled the model `ctx start` named for that unit: Opus for the units whose score
+reached `complexity.thresholds.deep` (6.0), Sonnet for the rest (for example unit 07: score 10.17 = budget 70k 4.67 +
+owns 2.0 + reads 1.0 + depends_on 0.5 + interface 2.0, so deep, so Opus). So the "orchestrator omitted the model and
+inherited" branch did not happen here; ctx's own tier choice did. Two facts follow:
+
+- The score is driven by size (budget_tokens per 15k, paths owned and read), not by how hard the work is, and `deep`
+  always maps to the dearest tier. A 40k-token unit with a few paths already reaches deep.
+- When a unit is scored, `models.runner: sonnet` is not used at all (it is only the fallback when no unit is given),
+  so setting it does not cap the tier. Fix rounds of a deep unit also run on Opus without `escalate_on_failed_round`
+  (default off), which corrects the guess in doc 11.
+
+Consequence for phase 3: for ctx runners the cheaper model is a ctx config decision (thresholds or `models.tiers`),
+tested through the D18 quality gate, not something the routing mod must force. The mod still matters for agents ctx
+does not name (general-purpose, Explore) and as the enforcement if an orchestrator omits the model.
