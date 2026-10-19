@@ -49,7 +49,7 @@ comparison.
 
 ## Model-per-stage experiment (D18)
 
-**Pilot 2026-10-19 (see 16): one change, Opus versus Sonnet runners, equal on hidden tests and blind review, Sonnet used half the volume. n=1, small task: not enough to change defaults.** Next: 2 or 3 more changes including security/concurrency units.
+**Pilots 2026-10-19 (see 16): two changes (4 units, including security and concurrency), Opus versus Sonnet runners: equal on 25 of 25 hidden tests, Sonnet at 41% to 50% of the cache-read volume, with more hand-back hygiene slips (one red own test, one empty report) that the done-gate should catch. Not yet the 3 to 5 real changes D18 asks for, so no default changes.** Next: an opt-in trial on real ctx work with `models.tiers: [haiku, sonnet, sonnet]`, reviewer on Opus, gate on.
 
 Run after phase 1 gives the baseline. For 3 to 5 real changes, run the build stage on Sonnet and the rest on Opus,
 then compare with the Opus-only baseline: findings per round, rounds to approval, escaped bugs, tokens by stage.

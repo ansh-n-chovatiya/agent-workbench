@@ -118,3 +118,39 @@ blind (neutral file names) by the same Opus reviewer. Volumes below are token co
   keeping the Opus reviewer fixed while the runner model is varied.
 - **Next:** run two or three more changes, at least one with security- or concurrency-sensitive units, then decide
   between lowering the `deep` tier threshold, mapping `deep` to Sonnet for runners only, or keeping the default.
+
+### Pilot 2: security- and concurrency-sensitive units (2026-10-19, n=1 per arm)
+
+Same method, harder units: (03) an anonymiser for shareable usage summaries (nothing identifying may survive, in
+output or in the saved snapshot) and (04) a concurrency-safe snapshot writer plus retention (40 simultaneous writers,
+numeric suffix ordering, concurrent prune). Hidden tests: 9 for the anonymiser, 6 for the writer.
+
+| | Opus runner | Sonnet runner |
+|---|---|---|
+| Hidden acceptance tests | 15 of 15 | 15 of 15 |
+| Runner's own tests at hand-back | 66 passed | 59 passed, **1 failing** |
+| Hand-back report | complete | **"placeholder"** (no content) |
+| Blind review findings | 0 critical, 2 important, 4 minor | 0 critical, 1 important, 3 minor |
+| Runner requests | 17 | 10 |
+| Runner cache-read volume | 243k | 102k |
+
+- **Correctness: no difference on the hidden tests**, including the two traps (a hashed key prefix that leaks through the
+  split on the last `/`, and `-10` sorting after `-9`).
+- **Where Sonnet was weaker: hygiene, not correctness.** It left one of its own tests red (the test expected a key suffix
+  its own, spec-correct code does not produce) and sent an empty report. ctx's done-gate runs the unit's `verify`
+  command and would have refused that hand-back, so in real use this is caught by the gate; this pilot used a looser
+  protocol on purpose and does not test the gate.
+- **Reviews are noisy.** Both arms used the same hard-link design. One reviewer flagged the Opus arm for having no
+  fallback on filesystems without hard links; the other flagged the Sonnet arm's fallback as unsafe. Another finding
+  (writers always probe from the lowest suffix, so a freed name can be reused while a pruner holds a stale listing)
+  applies to both and was reported for one. Counts of 1 versus 2 important findings are not a quality difference.
+- **My own flaw:** a hidden test assumed snapshot stamps never contain a hyphen; the spec did not say so, and both runners
+  read a file named `usage-<stamp>-abc.json` as a valid snapshot. Both failed the test identically, which is how it was
+  caught. The test was corrected and both arms re-scored. Lesson for the protocol: when two independent runners fail
+  the same hidden test, suspect the test first.
+
+**Across both pilots (4 units): equal hidden-test results, Sonnet at 41% to 50% of the Opus cache-read volume.** The
+cost of choosing Sonnet is more hygiene slips at hand-back, which the gate exists to catch. D18's bar (3 to 5 real
+changes) is not yet met, so no default changes. Proposal for an opt-in trial on real work: runners on Sonnet for
+`deep` units (`models.tiers: [haiku, sonnet, sonnet]`), reviewer unchanged on Opus, the done-gate on, and the Phase 1
+report used to compare rounds and findings against the baseline.
