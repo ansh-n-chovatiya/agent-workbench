@@ -90,3 +90,31 @@ Rounds are inferred from spawn order (see ctx-optimize README); one plan, so tre
 - **H2: not supported by this plan.** The review loop did not multiply cost: only two units got a round 2 and it was cheap (Sonnet, 92k vs 2.2M for round 1). The expensive review was one unit (09) whose single round 1 used 28 requests.
 - **Q17 answered in part:** 115 of 169 build requests and 24 of 62 fix requests ran on Opus although `models.runner` is sonnet; units 01, 07, 08, 09 built entirely on Opus. Moving those to Sonnet is the larger saving than any review change. Still to confirm: whether those units carry their own `model:`.
 - 39 non-ctx subagents (general-purpose and similar) were unattributed: 1.6M cache read.
+
+## Phase 3 pilot: runner model on the same change (2026-10-19, D18 quality gate, n=1 per arm)
+
+Task: the same two-unit change (a journal reader with local-time conversion, then wiring plan names into the report),
+identical contracts, built once with `unit-runner` on Opus and once on Sonnet (model set per spawn). Each result was
+scored by 10 hidden acceptance tests written beforehand and validated against a reference solution, then reviewed
+blind (neutral file names) by the same Opus reviewer. Volumes below are token counts from transcripts, not dollars.
+
+| | Opus runner | Sonnet runner |
+|---|---|---|
+| Hidden acceptance tests | 10 of 10 | 10 of 10 |
+| Blind review findings | 0 critical, 1 important, 2 minor | 0 critical, 1 important, 3 minor |
+| Runner requests | 16 | 11 |
+| Runner cache-read volume | 271k | 135k |
+| Fix rounds needed | 0 | 0 |
+
+- **Quality: no difference seen.** The single important finding was identical in both and came from the contract (stage
+  inference grouped by session and unit while units were now keyed by plan), so neither runner caused it; it was fixed
+  afterwards with a regression test. The Sonnet arm's extra minors: a CLI test that checked wiring but not the output
+  keys (the runner flagged this itself as "partial"), and a changelog heading in the wrong place.
+- **Volume: Sonnet used half the cache-read volume** on this task (fewer requests, smaller context per request).
+- **Limits.** One small task, one run per arm; the reviewers see the same code, not the run-to-run variation. This
+  supports trying `deep` units on Sonnet; it does not justify changing the default. D18 asks for 3 to 5 real changes,
+  including harder units (cross-module, concurrency, security) where Opus is most likely to matter.
+- **Process finding.** The review step found a real defect that both runners and the hidden tests missed, which argues for
+  keeping the Opus reviewer fixed while the runner model is varied.
+- **Next:** run two or three more changes, at least one with security- or concurrency-sensitive units, then decide
+  between lowering the `deep` tier threshold, mapping `deep` to Sonnet for runners only, or keeping the default.

@@ -27,7 +27,11 @@ rarely names the round, so stages are inferred from spawn order per (session, un
 `build`, each reviewer opens the next `review rN`, a runner after that is `fix rN`, a verifier is `verify`. Agents
 without a ctx label (general-purpose, Explore and so on) are listed as `unattributed`; main-chat tokens cannot be
 split per unit and are shown as one line. Nothing is dropped. Unit numbers repeat across plans, so units are keyed
-`<session8>/<unit>`; plan names are not joined yet.
+`<session8>/<unit>`. See `--ledger` below.
+
+With `--ledger PATH` (a project directory containing `.ctx`, or the `.ctx` directory itself) the journal is read and
+each unit is keyed `<plan>/<unit>` when its first request falls inside that plan's journal window (plus 30 minutes of
+grace). Units the journal cannot place keep the `<session8>/<unit>` key.
 
 ## Status line
 

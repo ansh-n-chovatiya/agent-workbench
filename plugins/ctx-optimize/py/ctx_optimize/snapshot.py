@@ -9,7 +9,7 @@ from .join import join_units
 from .usage import Request, aggregate
 
 
-def build_summary(per_session: Dict[str, List[Request]], stats: dict) -> dict:
+def build_summary(per_session: Dict[str, List[Request]], stats: dict, windows=None) -> dict:
     sessions, everything = {}, []
     for sid, reqs in per_session.items():
         entry = aggregate(reqs)
@@ -17,7 +17,7 @@ def build_summary(per_session: Dict[str, List[Request]], stats: dict) -> dict:
         sessions[sid] = entry
         everything += reqs
     return {"version": 1, "sessions": sessions, "total": aggregate(everything),
-            "attribution": join_units(everything),
+            "attribution": join_units(everything, windows),
             "skipped_lines": int(stats.get("skipped_lines", 0))}
 
 

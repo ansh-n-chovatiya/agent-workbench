@@ -49,6 +49,8 @@ comparison.
 
 ## Model-per-stage experiment (D18)
 
+**Pilot 2026-10-19 (see 16): one change, Opus versus Sonnet runners, equal on hidden tests and blind review, Sonnet used half the volume. n=1, small task: not enough to change defaults.** Next: 2 or 3 more changes including security/concurrency units.
+
 Run after phase 1 gives the baseline. For 3 to 5 real changes, run the build stage on Sonnet and the rest on Opus,
 then compare with the Opus-only baseline: findings per round, rounds to approval, escaped bugs, tokens by stage.
 If equal or better, Sonnet becomes the default for build and orchestration stages and the stage hint switches on;
