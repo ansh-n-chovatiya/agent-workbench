@@ -49,7 +49,9 @@ test('phone recording CLI, vertical stills and export', { timeout: 180000 }, asy
     assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1080, 1920]);
     const { frame, caption } = stills.plan.layout;
     assert.ok(frame.y >= 1920 * .07); assert.ok(frame.y + frame.h <= caption.y);
-    assert.equal(caption.h, Math.round(1920 * .16)); assert.ok(caption.y > 1920 / 2);
+    assert.ok(caption.h < Math.round(1920 * .16));
+    assert.ok(Math.abs(frame.w/frame.h-390/844)/(390/844)<.005);
+    assert.equal(caption.w,Math.round(1080*.88)); assert.ok(caption.y > 1920 / 2);
     assert.ok(caption.y + caption.h <= 1920 * .86);
     const exported = await renderRun({ name, runId: run.record.runId, format: 'vertical', log() {} });
     assert.equal(path.basename(exported.finalFile), 'final-vertical.mp4');

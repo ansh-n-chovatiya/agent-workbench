@@ -15,7 +15,8 @@ const cardDefaults = { align: 'center', titleSizePct: 7, subtitleSizePct: 3.6,
   titleColor: '#111827', subtitleColor: '#4b5563', background,
   accent: { enabled: true, color: '#0f766e', shape: 'bar', widthPct: 12 }, logo: null };
 export const DEFAULT_COMPOSITION = freeze({
-  version: 1, run: { id: null }, output: { preset: null, width: 1920, height: 1080, fps: 60, quality: 'standard' }, theme: 'clean',
+  version: 1, run: { id: null }, output: { preset: null, width: 1920, height: 1080, fps: 60, quality: 'standard' }, theme: 'clean', themeSource: 'default', brandDefaults: {},
+  watermark: { enabled: false, image: null, position: 'top-right', opacity: 0.25, sizePct: 10, marginPct: 3 },
   layout: { safeZones: null },
   frame: { paddingXPct: 8, paddingYPct: 5, radiusPx: 14,
     shadow: { enabled: true, blurPx: 40, offsetYPx: 16, opacity: 0.25 },
@@ -85,11 +86,12 @@ export function resolveComposition(input) {
     cards: Object.fromEntries(['title', 'outro'].map((key) => [key, { titleColor: theme.card.titleColor,
       subtitleColor: theme.card.subtitleColor, background: { colors: theme.card.background.colors, angle: theme.card.background.angle ?? 135 }, accent: { color: theme.card.accent } }])) });
   if (input.output?.preset === 'vertical') themed = merge(themed, {
-    frame: { paddingXPct: 4, paddingYPct: 0 }, captions: { bandHeightPct: 16 }, zoom: { depth: 1.5 }, layout: { safeZones: true },
+    frame: { paddingXPct: 4, paddingYPct: 0 }, captions: { bandHeightPct: 16, fontSizePct: 3.9, maxLines: 3 }, zoom: { depth: 1.5 }, layout: { safeZones: true },
   });
   delete themed.frame.shadow.color;
   themed.cards.transition = theme.transition;
   const patch = copy(input);
+  patch.themeSource ??= input.theme ? 'user' : 'default';
   if (['landscape', 'vertical', 'square'].includes(patch.output?.preset)) {
     const size = Math.max(patch.output.width ?? 0, patch.output.height ?? 0) > 1920 ? '4k' : '1080';
     Object.assign(patch.output, presetOutput(patch.output.preset, size));
@@ -122,7 +124,7 @@ export function validateComposition(c, { duration = Number.MAX_VALUE } = {}) {
     for (const [k, x] of Object.entries(v)) {
       const key = p ? `${p}.${k}` : k;
       if ((p === 'frame' && k === 'paddingPct') || (/^cards\.(title|outro)$/.test(p) && k === 'duration')) { range(key, x, 0, k === 'duration' ? 30 : 25); continue; }
-      if (key === 'captions.cues' || key === 'audio.narration.steps') continue;
+      if (key === 'captions.cues' || key === 'audio.narration.steps' || key === 'brandDefaults') continue;
       if (!Object.hasOwn(model, k)) { fail(key, 'is an unknown key'); continue; }
       if (key === 'cursor.clickEffect' && typeof x === 'boolean') continue;
       if (key === 'cursor.custom') {
@@ -144,6 +146,16 @@ export function validateComposition(c, { duration = Number.MAX_VALUE } = {}) {
   }
   if (c.output?.preset !== undefined && c.output.preset !== null && !['landscape', 'vertical', 'square'].includes(c.output.preset)) fail('output.preset', 'must be landscape|vertical|square');
   if (c.layout?.safeZones !== undefined && c.layout.safeZones !== null && typeof c.layout.safeZones !== 'boolean') fail('layout.safeZones', 'must be boolean');
+  if (c.themeSource !== undefined && !['brand','user','default'].includes(c.themeSource)) fail('themeSource','must be brand|user|default');
+  if (c.brandDefaults !== undefined && !object(c.brandDefaults)) fail('brandDefaults','must be an object');
+  if (c.watermark !== undefined) {
+    const w = resolveComposition(c).watermark;
+    if (object(w)) {
+      if (!['top-left','top-right','bottom-left','bottom-right'].includes(w.position)) fail('watermark.position','is invalid');
+      range('watermark.opacity',w.opacity,0.05,1); range('watermark.sizePct',w.sizePct,3,30); range('watermark.marginPct',w.marginPct,0,25);
+      if (w.enabled && !safeImagePath(w.image)) fail('watermark.image','requires a local image');
+    }
+  }
   const d = resolveComposition(c);
   const get = (p) => p.split('.').reduce((v,k) => v?.[k], d);
   const enumAt = (p, values) => { if (!values.includes(get(p))) fail(p, `must be ${values.join('|')}`); };
@@ -234,7 +246,7 @@ export function compositionPaths(c) {
   function visit(v,p = '') {
     for (const [k,x] of Object.entries(v)) {
       const key = p ? `${p}.${k}` : k;
-      if (object(x) && key !== 'audio.narration.steps') visit(x,key); else result[key] = x;
+      if (object(x) && !['audio.narration.steps','brandDefaults'].includes(key)) visit(x,key); else result[key] = x;
     }
   }
   visit(value);
@@ -262,6 +274,8 @@ export function changeComposition(c, path, value, { reset = false } = {}) {
   const keys = path.split('.');
   if (keys.some((k) => ['__proto__','constructor','prototype'].includes(k))) throw new Error('Invalid composition path');
   const next = copy(c), last = keys.pop();
+  if (path === 'theme') next.themeSource = reset ? 'default' : 'user';
+  for (const p of Object.keys(next.brandDefaults ?? {})) if (p === path || p.startsWith(path + '.') || path.startsWith(p + '.')) delete next.brandDefaults[p];
   if (path === 'frame.paddingPct') {
     next.frame = { ...next.frame, paddingXPct: reset ? DEFAULT_COMPOSITION.frame.paddingXPct : value,
       paddingYPct: reset ? DEFAULT_COMPOSITION.frame.paddingYPct : value };
@@ -290,7 +304,7 @@ export function buildComposition({ brief, storyboard, events, record, edits = {}
   // Storyboard captions are resolved later, against recorded step IDs rather than guideSteps.
   const overlays = storyboardOverlays(storyboard, events);
   const c = resolveComposition(merge({
-    run: { id: record.runId }, theme: brief.theme, overlays,
+    run: { id: record.runId }, theme: brief.theme, themeSource: Object.hasOwn(overrides,'theme') ? 'user' : brief.themeSource ?? (brief.theme !== 'clean' ? 'user' : 'default'), overlays,
     captions: brief.captions,
     cards: { title: { ...brief.titleCard, title: brief.titleCard.title ?? brief.topic }, outro: brief.outroCard }, edits,
     // Choices made at intake seed the audio settings; overrides still win.
@@ -308,5 +322,13 @@ export function buildComposition({ brief, storyboard, events, record, edits = {}
   buildTimeMap({ duration: record.durationSec, ...c.edits });
   const regions = validateRegions(c.zoom.regions, { duration: record.durationSec });
   if (!regions.ok) throw new Error(regions.errors.join('\n'));
+  // Generated leaves inherit brand defaults until edited. Intake text supplied explicitly stays explicit.
+  const explicit = new Set();
+  const leaves = (v,p='',out={}) => { for (const [k,x] of Object.entries(v)) { const q=p?`${p}.${k}`:k; if (object(x)) leaves(x,q,out); else out[q]=copy(x); } return out; };
+  Object.keys(leaves(overrides)).forEach(p=>explicit.add(p));
+  for (const k of ['title','outro']) if (overrides.cards?.[k]?.duration !== undefined) explicit.add(`cards.${k}.durationSec`);
+  for (const [key,value] of Object.entries(brief.titleCard ?? {})) if (value !== null && (key !== 'enabled' || value !== true)) explicit.add(`cards.title.${key}`);
+  for (const [key,value] of Object.entries(brief.outroCard ?? {})) if ((key === 'text' && value !== 'Thank you') || (key === 'enabled' && value !== true)) explicit.add(`cards.outro.${key}`);
+  c.brandDefaults=Object.fromEntries(Object.entries(leaves(c)).filter(([p])=>!explicit.has(p) && (/^(frame|cursor|captions|cards|watermark)\./.test(p) || /^zoom\.(depth|speed)$/.test(p))));
   return c;
 }

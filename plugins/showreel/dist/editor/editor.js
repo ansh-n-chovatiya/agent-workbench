@@ -1,4 +1,4 @@
-// showreel editor sources sha256: c97f22e951d59ab63a6d0202bcc5e850d7d6612a7b4fc2cba4c645c084b1d149
+// showreel editor sources sha256: 0cadc8da05de95bf3bac11c99bba67531994b2cccb46dbb8eaca21b60ff53d89
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -489,128 +489,8 @@
     return "function" == typeof t3 ? t3(n2) : t3;
   }
 
-  // scripts/lib/compose/layout.mjs
-  var OUTPUT_PRESETS = Object.freeze({ landscape: [1920, 1080], vertical: [1080, 1920], square: [1080, 1080] });
-  function presetOutput(preset = "landscape", size4 = "1080") {
-    if (!Object.hasOwn(OUTPUT_PRESETS, preset)) throw new Error("format must be landscape, vertical or square");
-    if (!["1080", "4k"].includes(size4)) throw new Error("size must be 1080 or 4k");
-    const [width, height] = OUTPUT_PRESETS[preset], scale = size4 === "4k" ? 2 : 1;
-    return { preset, width: width * scale, height: height * scale };
-  }
-  var isVertical = (output) => output.preset === "vertical" || output.height > output.width;
-  function safeArea(output, enabled = isVertical(output)) {
-    const top = enabled ? Math.ceil(output.height * 0.07) : 0;
-    const bottom = enabled ? Math.ceil(output.height * 0.14) : 0;
-    return { x: 0, y: top, w: output.width, h: output.height - top - bottom };
-  }
-  function containRect(source, bounds) {
-    const scale = Math.min(bounds.w / source.width, bounds.h / source.height);
-    const w4 = Math.min(bounds.w, Math.round(source.width * scale));
-    const h3 = Math.min(bounds.h, Math.round(source.height * scale));
-    return { x: bounds.x + Math.round((bounds.w - w4) / 2), y: bounds.y + Math.round((bounds.h - h3) / 2), w: w4, h: h3 };
-  }
-  function verticalLayout({ output, source, composition }) {
-    const { width, height } = output, captions = composition.captions;
-    const safe = safeArea(output, composition.layout?.safeZones ?? true);
-    const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 4;
-    const pad = Math.round(width * px / 100), gap = Math.round(height * 0.02);
-    const py = Math.round(height * (composition.frame?.paddingYPct ?? 0) / 100);
-    const band = captions?.enabled && captions.mode === "band" ? Math.round(height * (captions.bandHeightPct ?? 16) / 100) : 0;
-    const frame = { x: pad, y: safe.y + py, w: width - pad * 2, h: safe.h - band - gap - py * 2 };
-    const content = containRect(source, frame);
-    const caption = !captions?.enabled ? null : band ? { x: 0, y: safe.y + safe.h - band, w: width, h: band } : { x: pad, y: frame.y + frame.h - Math.round(height * 0.1), w: frame.w, h: Math.round(height * 0.1) };
-    return { canvas: { width, height }, safe, frame, content, caption, scaleFramePx: content.w / source.width };
-  }
-  function layoutFor({ output, source, composition }) {
-    const { width, height } = output;
-    if (![width, height, source.width, source.height].every((v3) => Number.isFinite(v3) && v3 > 0)) throw new Error("Layout dimensions must be finite and positive");
-    if (isVertical(output)) return verticalLayout({ output, source, composition });
-    const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 8;
-    const py = composition.frame?.paddingYPct ?? composition.frame?.paddingPct ?? 5;
-    const captions = composition.captions;
-    const band = captions?.enabled && captions.mode === "band" ? Math.round(height * (captions.bandHeightPct ?? 13) / 100) : 0;
-    const safe = safeArea(output, composition.layout?.safeZones === true);
-    const availableH = safe.h - band;
-    const scale = Math.min(width * (1 - 2 * px / 100) / source.width, (availableH - 2 * height * py / 100) / source.height);
-    const w4 = Math.round(source.width * scale), h3 = Math.round(source.height * scale);
-    const frame = { x: Math.round((width - w4) / 2), y: safe.y + Math.round((availableH - h3) / 2) + (band && captions.position === "top" ? band : 0), w: w4, h: h3 };
-    let caption = null;
-    if (captions?.enabled) {
-      if (band) caption = { x: 0, y: captions.position === "top" ? safe.y : safe.y + safe.h - band, w: width, h: band };
-      else {
-        const w5 = Math.round(frame.w * 0.8), h4 = Math.round(height * 0.075);
-        caption = { x: Math.round(frame.x + (frame.w - w5) / 2), y: Math.round(captions.position === "top" ? frame.y + height * 0.04 : frame.y + frame.h - height * 0.04 - h4), w: w5, h: h4 };
-      }
-    }
-    return { canvas: { width, height }, frame, caption, scaleFramePx: w4 / source.width };
-  }
-
-  // scripts/lib/compose/zoom.mjs
-  var clamp = (v3, max2) => Math.max(0, Math.min(max2, v3));
-  function maxSharpZoom({ sourceWidthPx, frameWidthPx }) {
-    if (!(sourceWidthPx > 0) || !(frameWidthPx > 0) || !Number.isFinite(sourceWidthPx + frameWidthPx)) throw new Error("Widths must be finite and positive");
-    return Math.max(1, sourceWidthPx / frameWidthPx);
-  }
-  function suggestZoomRegions({ events, record, options = {} }) {
-    const {
-      depth = 1.7,
-      kinds = ["click", "fill"],
-      leadIn = 0.1,
-      holdAfterClick = 0.9,
-      holdAfterTyping = 0.6,
-      minGap = 0.8,
-      maxBoxFraction = 0.6
-    } = options;
-    const { width, height } = events.viewport;
-    const regions = [];
-    for (const target of events.targets) {
-      const { box: box2, stepId } = target;
-      if (!kinds.includes(target.kind) || box2.w * box2.h > width * height * maxBoxFraction) continue;
-      const click = events.clicks.find((c3) => c3.stepId === stepId && c3.t >= target.t);
-      const keys = target.kind === "fill" ? events.keys.filter((k4) => k4.stepId === stepId && k4.t >= target.t) : [];
-      const end = keys.length ? keys.at(-1).t + holdAfterTyping : (click?.t ?? target.t) + holdAfterClick;
-      const tStart = clamp(target.t + leadIn, record.durationSec), tEnd = clamp(end, record.durationSec);
-      if (tEnd - tStart < 0.4) continue;
-      const keyframe = { t: tStart, x: clamp(box2.x + box2.w / 2, width), y: clamp(box2.y + box2.h / 2, height) };
-      const previous = regions.at(-1);
-      if (previous && tStart - previous.tEnd < minGap) {
-        previous.tEnd = Math.max(previous.tEnd, tEnd);
-        previous.keyframes.push(keyframe);
-        if (!previous.stepIds.includes(stepId)) previous.stepIds.push(stepId);
-      } else regions.push({ id: `z${regions.length + 1}`, tStart, tEnd, depth, keyframes: [keyframe], stepIds: [stepId], source: "auto" });
-    }
-    return regions;
-  }
-  function validateRegions(regions, { duration = Infinity, maxSharp = Infinity } = {}) {
-    const errors = [], warnings = [], ids = /* @__PURE__ */ new Set();
-    if (!Array.isArray(regions)) return { ok: false, errors: ["regions must be an array"], warnings };
-    regions.forEach((r4, i3) => {
-      const prefix = `regions[${i3}]`;
-      if (!r4 || typeof r4 !== "object") {
-        errors.push(`${prefix} must be an object`);
-        return;
-      }
-      for (const k4 of Object.keys(r4)) if (!["id", "tStart", "tEnd", "depth", "keyframes", "stepIds", "source"].includes(k4)) errors.push(`${prefix}.${k4} is unknown`);
-      if (typeof r4.id !== "string" || !r4.id.trim() || ids.has(r4.id)) errors.push(`${prefix}.id must be nonempty and unique`);
-      ids.add(r4.id);
-      if (!Number.isFinite(r4.tStart) || !Number.isFinite(r4.tEnd) || r4.tStart < 0 || r4.tStart >= r4.tEnd || r4.tEnd > duration) errors.push(`${prefix} has invalid times`);
-      if (i3 && r4.tStart < regions[i3 - 1]?.tEnd) errors.push(`${prefix} must be sorted and non-overlapping`);
-      if (!Number.isFinite(r4.depth) || r4.depth < 1.05 || r4.depth > 4) errors.push(`${prefix}.depth must be from 1.05 to 4`);
-      if (r4.depth > maxSharp) warnings.push(`region ${r4.id} depth ${r4.depth} exceeds the sharp limit ${maxSharp}`);
-      if (!["auto", "manual"].includes(r4.source)) errors.push(`${prefix}.source must be auto|manual`);
-      if (!Array.isArray(r4.stepIds) || r4.stepIds.some((id13) => typeof id13 !== "string")) errors.push(`${prefix}.stepIds must be strings`);
-      if (!Array.isArray(r4.keyframes) || !r4.keyframes.length) errors.push(`${prefix}.keyframes must not be empty`);
-      else r4.keyframes.forEach((k4, j4) => {
-        if (!k4 || !Number.isFinite(k4.t) || k4.t < r4.tStart || k4.t > r4.tEnd || j4 && k4.t < r4.keyframes[j4 - 1]?.t || !Number.isFinite(k4.x) || !Number.isFinite(k4.y)) errors.push(`${prefix}.keyframes[${j4}] is invalid`);
-        if (k4 && Object.keys(k4).some((key) => !["t", "x", "y"].includes(key))) errors.push(`${prefix}.keyframes[${j4}] has an unknown key`);
-      });
-      if (r4.keyframes?.[0]?.t !== r4.tStart) errors.push(`${prefix}.keyframes[0].t must equal tStart`);
-    });
-    return { ok: !errors.length, errors, warnings };
-  }
-
   // scripts/lib/compose/timemap.mjs
-  var clamp2 = (x4, lo, hi) => Math.max(lo, Math.min(hi, x4));
+  var clamp = (x4, lo, hi) => Math.max(lo, Math.min(hi, x4));
   function validateRanges(ranges, name, duration, speeds = false) {
     if (!Array.isArray(ranges)) throw new Error(`${name} must be an array`);
     ranges.forEach((r4, i3) => {
@@ -620,7 +500,7 @@
   }
   function sourceAt(map, tOut) {
     const { segments, mainStart, mainEnd, titleEnd, outroStart, outputDuration } = map;
-    const t3 = clamp2(tOut, 0, outputDuration);
+    const t3 = clamp(tOut, 0, outputDuration);
     const s3 = segments.find((s4) => t3 < s4.outputEnd) ?? segments.at(-1);
     const first = segments[0];
     const sourceT = !s3 ? 0 : t3 <= mainStart ? first.start : t3 >= mainEnd ? s3.end : s3.start + (t3 - s3.outputStart) * s3.rate;
@@ -630,8 +510,8 @@
       t: sourceT,
       rate: s3?.rate ?? 1,
       section: t3 < mainStart ? "title" : t3 <= mainEnd ? "main" : outroStart !== null && t3 >= outroStart ? "outro" : "title",
-      alphaTitle: clamp2(alphaTitle, 0, 1),
-      alphaOutro: clamp2(alphaOutro, 0, 1)
+      alphaTitle: clamp(alphaTitle, 0, 1),
+      alphaOutro: clamp(alphaOutro, 0, 1)
     };
   }
   function outputAt(map, tSrc) {
@@ -697,6 +577,194 @@
     return { ...map, toSource: (t3) => sourceAt(map, t3), toOutput: (t3) => outputAt(map, t3) };
   }
 
+  // scripts/lib/compose/captions.mjs
+  var smooth = (t3) => t3 * t3 * (3 - 2 * t3);
+  function cuesFromRun({ storyboard, events, captionsEnabled }) {
+    if (!captionsEnabled) return [];
+    const cues = storyboard.steps.flatMap((step) => {
+      const timing = events.steps.find((entry) => entry.id === step.id);
+      return step.caption?.trim() && timing ? [{ id: step.id, text: step.caption, start: timing.tStart + 0.15, end: timing.tEnd - 0.1 }] : [];
+    }).sort((a3, b3) => a3.start - b3.start);
+    return cues.map((cue, i3) => ({ ...cue, end: Math.min(Math.max(cue.end, cue.start + 1), cues[i3 + 1] ? cues[i3 + 1].start - 0.05 : Infinity) })).filter((cue) => cue.end > cue.start);
+  }
+  function captionAlpha(cue, t3) {
+    if (t3 <= cue.start || t3 >= cue.end) return 0;
+    return smooth(Math.min(1, (t3 - cue.start) / 0.2, (cue.end - t3) / 0.2));
+  }
+  function wrap(text2, width, measure) {
+    const lines = [];
+    let line = "";
+    for (const word of text2.trim().split(/\s+/).filter(Boolean)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (measure(candidate) <= width) {
+        line = candidate;
+        continue;
+      }
+      if (line) {
+        lines.push(line);
+        line = "";
+      }
+      if (measure(word) <= width) {
+        line = word;
+        continue;
+      }
+      for (const char of word) {
+        if (line && measure(line + char) > width) {
+          lines.push(line);
+          line = "";
+        }
+        line += char;
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  function wrapLines(text2, maxWidth, measure, { maxLines = 2 } = {}) {
+    if (!Number.isFinite(maxWidth) || maxWidth <= 0 || !Number.isInteger(maxLines) || maxLines < 1) throw new Error("Invalid caption wrapping bounds");
+    let lines;
+    for (const scale of [1, 0.9, 0.8]) {
+      lines = wrap(text2, maxWidth / scale, measure);
+      if (lines.length <= maxLines) return { lines, scale };
+    }
+    lines = lines.slice(0, maxLines);
+    let last2 = lines.at(-1);
+    const width = maxWidth / 0.8;
+    while (measure(last2 + "\u2026") > width && last2.includes(" ")) last2 = last2.slice(0, last2.lastIndexOf(" "));
+    while (last2 && measure(last2 + "\u2026") > width) last2 = Array.from(last2).slice(0, -1).join("");
+    lines[lines.length - 1] = measure("\u2026") <= width ? last2 + "\u2026" : "";
+    return { lines, scale: 0.8 };
+  }
+
+  // scripts/lib/compose/layout.mjs
+  var OUTPUT_PRESETS = Object.freeze({ landscape: [1920, 1080], vertical: [1080, 1920], square: [1080, 1080] });
+  function presetOutput(preset = "landscape", size4 = "1080") {
+    if (!Object.hasOwn(OUTPUT_PRESETS, preset)) throw new Error("format must be landscape, vertical or square");
+    if (!["1080", "4k"].includes(size4)) throw new Error("size must be 1080 or 4k");
+    const [width, height] = OUTPUT_PRESETS[preset], scale = size4 === "4k" ? 2 : 1;
+    return { preset, width: width * scale, height: height * scale };
+  }
+  var isVertical = (output) => output.preset === "vertical" || output.height > output.width;
+  function safeArea(output, enabled = isVertical(output)) {
+    const top = enabled ? Math.ceil(output.height * 0.07) : 0;
+    const bottom = enabled ? Math.ceil(output.height * 0.14) : 0;
+    return { x: 0, y: top, w: output.width, h: output.height - top - bottom };
+  }
+  function containRect(source, bounds) {
+    const scale = Math.min(bounds.w / source.width, bounds.h / source.height);
+    const w4 = Math.min(bounds.w, Math.round(source.width * scale));
+    const h3 = Math.min(bounds.h, Math.round(source.height * scale));
+    return { x: bounds.x + Math.round((bounds.w - w4) / 2), y: bounds.y + Math.round((bounds.h - h3) / 2), w: w4, h: h3 };
+  }
+  function verticalCaptionMetrics(output, captions, texts = [], measureText) {
+    const size4 = output.height * (captions?.fontSizePct ?? 3.9) / 100, padding = size4 * 0.6;
+    const w4 = Math.round(output.width * 0.88), maxLines = Math.min(3, captions?.maxLines ?? 3);
+    const measure = measureText ?? ((text2) => Array.from(text2).length * size4 * 0.55);
+    const lines = Math.max(1, ...texts.map((text2) => wrapLines(text2, w4 - padding * 2, measure, { maxLines }).lines.length));
+    return { size: size4, w: w4, lines, h: Math.ceil(lines * size4 * 1.25 + padding) };
+  }
+  function verticalLayout({ output, source, composition, captionTexts = [], measureCaption }) {
+    const { width, height } = output, captions = composition.captions;
+    const safe = safeArea(output, composition.layout?.safeZones ?? true);
+    const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 4;
+    const pad = Math.round(width * px / 100), gap = captions?.enabled && captions.mode !== "band" ? Math.round(height * 0.012) : 0;
+    const py = Math.round(height * (composition.frame?.paddingYPct ?? 0) / 100);
+    const metrics = verticalCaptionMetrics(output, captions, captionTexts, measureCaption);
+    const captionH = captions?.enabled ? metrics.h : 0;
+    const available = { x: pad, y: safe.y + py, w: width - 2 * pad, h: Math.max(1, safe.h - 2 * py - captionH - gap) };
+    const frame = source.width > source.height ? available : containRect(source, available);
+    frame.y = available.y;
+    const content = source.width > source.height ? containRect(source, frame) : { ...frame };
+    const caption = !captions?.enabled ? null : { x: Math.round((width - metrics.w) / 2), y: frame.y + frame.h + gap, w: metrics.w, h: captionH };
+    return { canvas: { width, height }, safe, frame, content, caption, scaleFramePx: content.w / source.width };
+  }
+  function layoutFor({ output, source, composition, captionTexts, measureCaption }) {
+    const { width, height } = output;
+    if (![width, height, source.width, source.height].every((v3) => Number.isFinite(v3) && v3 > 0)) throw new Error("Layout dimensions must be finite and positive");
+    if (isVertical(output)) return verticalLayout({ output, source, composition, captionTexts, measureCaption });
+    const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 8;
+    const py = composition.frame?.paddingYPct ?? composition.frame?.paddingPct ?? 5;
+    const captions = composition.captions;
+    const band = captions?.enabled && captions.mode === "band" ? Math.round(height * (captions.bandHeightPct ?? 13) / 100) : 0;
+    const safe = safeArea(output, composition.layout?.safeZones === true);
+    const availableH = safe.h - band;
+    const scale = Math.min(width * (1 - 2 * px / 100) / source.width, (availableH - 2 * height * py / 100) / source.height);
+    const w4 = Math.round(source.width * scale), h3 = Math.round(source.height * scale);
+    const frame = { x: Math.round((width - w4) / 2), y: safe.y + Math.round((availableH - h3) / 2) + (band && captions.position === "top" ? band : 0), w: w4, h: h3 };
+    let caption = null;
+    if (captions?.enabled) {
+      if (band) caption = { x: 0, y: captions.position === "top" ? safe.y : safe.y + safe.h - band, w: width, h: band };
+      else {
+        const w5 = Math.round(frame.w * 0.8), h4 = Math.round(height * 0.075);
+        caption = { x: Math.round(frame.x + (frame.w - w5) / 2), y: Math.round(captions.position === "top" ? frame.y + height * 0.04 : frame.y + frame.h - height * 0.04 - h4), w: w5, h: h4 };
+      }
+    }
+    return { canvas: { width, height }, frame, caption, scaleFramePx: w4 / source.width };
+  }
+
+  // scripts/lib/compose/zoom.mjs
+  var clamp2 = (v3, max2) => Math.max(0, Math.min(max2, v3));
+  function maxSharpZoom({ sourceWidthPx, frameWidthPx }) {
+    if (!(sourceWidthPx > 0) || !(frameWidthPx > 0) || !Number.isFinite(sourceWidthPx + frameWidthPx)) throw new Error("Widths must be finite and positive");
+    return Math.max(1, sourceWidthPx / frameWidthPx);
+  }
+  function suggestZoomRegions({ events, record, options = {} }) {
+    const {
+      depth = 1.7,
+      kinds = ["click", "fill"],
+      leadIn = 0.1,
+      holdAfterClick = 0.9,
+      holdAfterTyping = 0.6,
+      minGap = 0.8,
+      maxBoxFraction = 0.6
+    } = options;
+    const { width, height } = events.viewport;
+    const regions = [];
+    for (const target of events.targets) {
+      const { box: box2, stepId } = target;
+      if (!kinds.includes(target.kind) || box2.w * box2.h > width * height * maxBoxFraction) continue;
+      const click = events.clicks.find((c3) => c3.stepId === stepId && c3.t >= target.t);
+      const keys = target.kind === "fill" ? events.keys.filter((k4) => k4.stepId === stepId && k4.t >= target.t) : [];
+      const end = keys.length ? keys.at(-1).t + holdAfterTyping : (click?.t ?? target.t) + holdAfterClick;
+      const tStart = clamp2(target.t + leadIn, record.durationSec), tEnd = clamp2(end, record.durationSec);
+      if (tEnd - tStart < 0.4) continue;
+      const keyframe = { t: tStart, x: clamp2(box2.x + box2.w / 2, width), y: clamp2(box2.y + box2.h / 2, height) };
+      const previous = regions.at(-1);
+      if (previous && tStart - previous.tEnd < minGap) {
+        previous.tEnd = Math.max(previous.tEnd, tEnd);
+        previous.keyframes.push(keyframe);
+        if (!previous.stepIds.includes(stepId)) previous.stepIds.push(stepId);
+      } else regions.push({ id: `z${regions.length + 1}`, tStart, tEnd, depth, keyframes: [keyframe], stepIds: [stepId], source: "auto" });
+    }
+    return regions;
+  }
+  function validateRegions(regions, { duration = Infinity, maxSharp = Infinity } = {}) {
+    const errors = [], warnings = [], ids = /* @__PURE__ */ new Set();
+    if (!Array.isArray(regions)) return { ok: false, errors: ["regions must be an array"], warnings };
+    regions.forEach((r4, i3) => {
+      const prefix = `regions[${i3}]`;
+      if (!r4 || typeof r4 !== "object") {
+        errors.push(`${prefix} must be an object`);
+        return;
+      }
+      for (const k4 of Object.keys(r4)) if (!["id", "tStart", "tEnd", "depth", "keyframes", "stepIds", "source"].includes(k4)) errors.push(`${prefix}.${k4} is unknown`);
+      if (typeof r4.id !== "string" || !r4.id.trim() || ids.has(r4.id)) errors.push(`${prefix}.id must be nonempty and unique`);
+      ids.add(r4.id);
+      if (!Number.isFinite(r4.tStart) || !Number.isFinite(r4.tEnd) || r4.tStart < 0 || r4.tStart >= r4.tEnd || r4.tEnd > duration) errors.push(`${prefix} has invalid times`);
+      if (i3 && r4.tStart < regions[i3 - 1]?.tEnd) errors.push(`${prefix} must be sorted and non-overlapping`);
+      if (!Number.isFinite(r4.depth) || r4.depth < 1.05 || r4.depth > 4) errors.push(`${prefix}.depth must be from 1.05 to 4`);
+      if (r4.depth > maxSharp) warnings.push(`region ${r4.id} depth ${r4.depth} exceeds the sharp limit ${maxSharp}`);
+      if (!["auto", "manual"].includes(r4.source)) errors.push(`${prefix}.source must be auto|manual`);
+      if (!Array.isArray(r4.stepIds) || r4.stepIds.some((id13) => typeof id13 !== "string")) errors.push(`${prefix}.stepIds must be strings`);
+      if (!Array.isArray(r4.keyframes) || !r4.keyframes.length) errors.push(`${prefix}.keyframes must not be empty`);
+      else r4.keyframes.forEach((k4, j4) => {
+        if (!k4 || !Number.isFinite(k4.t) || k4.t < r4.tStart || k4.t > r4.tEnd || j4 && k4.t < r4.keyframes[j4 - 1]?.t || !Number.isFinite(k4.x) || !Number.isFinite(k4.y)) errors.push(`${prefix}.keyframes[${j4}] is invalid`);
+        if (k4 && Object.keys(k4).some((key) => !["t", "x", "y"].includes(key))) errors.push(`${prefix}.keyframes[${j4}] has an unknown key`);
+      });
+      if (r4.keyframes?.[0]?.t !== r4.tStart) errors.push(`${prefix}.keyframes[0].t must equal tStart`);
+    });
+    return { ok: !errors.length, errors, warnings };
+  }
+
   // scripts/lib/compose/themes.mjs
   function freeze(value) {
     if (value && typeof value === "object") {
@@ -705,7 +773,7 @@
     }
     return value;
   }
-  function theme(name, colors, ink, muted, accent, font, weight, radius, size4, speed, depth) {
+  function theme(name, colors, ink, muted, accent, font2, weight, radius, size4, speed, depth) {
     return {
       name,
       background: { type: "gradient", angle: 135, colors },
@@ -718,11 +786,11 @@
       ripple: { color: accent },
       caption: { background: name === "clean" ? "rgba(17,24,39,0.86)" : name === "dark" ? "#202b40" : "#24124b", color: "#ffffff", fontWeight: weight },
       card: { background: { type: "gradient", angle: 135, colors }, titleColor: ink, subtitleColor: muted, accent },
-      overlay: { accent, surface: name === "clean" ? "#ffffff" : name === "dark" ? "#172033" : "#24124b", onSurface: name === "clean" ? "#111827" : "#ffffff", muted },
-      typography: { family: font, weights: { body: 400, display: weight }, captionSizeMultiplier: name === "bold" ? 1.2 : 1 },
+      overlay: { accent, onAccent: name === "clean" ? "#ffffff" : "#111827", surfaceBorder: name === "clean" ? "#c2cbd7" : name === "dark" ? "#0b1220" : "#160b30", surface: name === "clean" ? "#ffffff" : name === "dark" ? "#172033" : "#24124b", onSurface: name === "clean" ? "#111827" : "#ffffff", muted },
+      typography: { family: font2, weights: { body: 400, display: weight }, captionSizeMultiplier: name === "bold" ? 1.2 : 1 },
       zoom: { depth, speed },
       transition: name === "bold" ? "cut" : "crossfade",
-      font
+      font: font2
     };
   }
   var THEMES = freeze({
@@ -771,7 +839,8 @@
   var color = (value = "accent") => ({ type: "color", default: value });
   var boolean = (value) => ({ type: "boolean", default: value });
   function define(id13, label13, help13, params13, draw13, defaultDuration13 = 3) {
-    params13 = { position: { type: "position", values: POSITIONS, default: "center" }, offsetX: number(0, -100, 100), offsetY: number(0, -100, 100), color: color(), ...params13 };
+    const canvas = ["title-card", "outro-card", "animated-gradient", "logo-sting"].includes(id13);
+    params13 = { placement: enumeration(canvas ? "canvas" : "frame", ["frame", "canvas"]), position: { type: "position", values: POSITIONS, default: "center" }, offsetX: number(0, -100, 100), offsetY: number(0, -100, 100), color: color(), ...params13 };
     return Object.freeze({ id: id13, label: label13, help: help13, params: params13, defaults: Object.fromEntries(Object.entries(params13).map(([k4, s3]) => [k4, s3.default])), defaultDuration: defaultDuration13, draw: draw13 });
   }
   function validateParams(template13, params13 = {}, path = "params") {
@@ -790,13 +859,114 @@
   }
   var resolveParams = (template13, params13) => ({ ...template13.defaults, ...params13 });
   var paint = (f4, c3) => f4.theme.overlay[c3] ?? c3;
+  function overlaySafeArea(f4, placement = "frame") {
+    if (placement === "canvas" || !f4.layout?.frame) return { x: 0, y: 0, w: f4.width, h: f4.height };
+    const frame = f4.layout.frame, margin = frame.w * 0.03;
+    let r4 = { x: frame.x + margin, y: frame.y + margin, w: Math.max(0, frame.w - 2 * margin), h: Math.max(0, frame.h - 2 * margin) };
+    const c3 = f4.layout.caption;
+    if (c3 && c3.x < r4.x + r4.w && c3.x + c3.w > r4.x && c3.y < r4.y + r4.h && c3.y + c3.h > r4.y) {
+      const right = r4.x + r4.w, bottom = r4.y + r4.h;
+      const parts = [
+        { x: r4.x, y: r4.y, w: r4.w, h: Math.max(0, c3.y - r4.y) },
+        { x: r4.x, y: Math.max(r4.y, c3.y + c3.h), w: r4.w, h: Math.max(0, bottom - Math.max(r4.y, c3.y + c3.h)) },
+        { x: r4.x, y: r4.y, w: Math.max(0, c3.x - r4.x), h: r4.h },
+        { x: Math.max(r4.x, c3.x + c3.w), y: r4.y, w: Math.max(0, right - Math.max(r4.x, c3.x + c3.w)), h: r4.h }
+      ];
+      r4 = parts.sort((a3, b3) => b3.w * b3.h - a3.w * a3.h)[0];
+    }
+    return r4;
+  }
+  var clamp3 = (v3, lo, hi) => Math.max(lo, Math.min(hi, v3));
   function anchor(f4, p3) {
-    const pos = f4.anchor ?? p3.position, x4 = pos.endsWith("left") ? 0.12 : pos.endsWith("right") ? 0.88 : 0.5;
-    const y3 = pos.startsWith("top") ? 0.14 : pos.startsWith("bottom") ? 0.82 : 0.5;
-    return { x: f4.width * (x4 + p3.offsetX / 100), y: f4.height * (y3 + p3.offsetY / 100) };
+    const r4 = overlaySafeArea(f4, p3.placement), pos = f4.anchor ?? p3.position;
+    const x4 = pos.endsWith("left") ? 0 : pos.endsWith("right") ? 1 : 0.5;
+    const y3 = pos.startsWith("top") ? 0 : pos.startsWith("bottom") ? 1 : 0.5;
+    return { x: r4.x + r4.w * clamp3(x4 + (p3.offsetX ?? 0) / 100, 0, 1), y: r4.y + r4.h * clamp3(y3 + (p3.offsetY ?? 0) / 100, 0, 1) };
+  }
+  function fitPlate(f4, p3, size4, point = anchor(f4, p3)) {
+    const r4 = overlaySafeArea(f4, p3.placement), w4 = Math.min(size4.w, r4.w), h3 = Math.min(size4.h, r4.h);
+    const pos = f4.anchor ?? p3.position;
+    return {
+      x: clamp3(point.x - (pos.endsWith("left") ? 0 : pos.endsWith("right") ? w4 : w4 / 2), r4.x, r4.x + r4.w - w4),
+      y: clamp3(point.y - (pos.startsWith("top") ? 0 : pos.startsWith("bottom") ? h3 : h3 / 2), r4.y, r4.y + r4.h - h3),
+      w: w4,
+      h: h3
+    };
+  }
+  var font = (f4, size4) => `${f4.theme.typography.weights.display} ${size4}px "${f4.theme.typography.family}"`;
+  function plateSize(lines, measureText, { minWidth = 0, extraWidth = 0 } = {}) {
+    const em = Math.max(...lines.map((l3) => l3.size)), px = em * 0.9, py = em * 0.55;
+    return {
+      w: Math.max(minWidth, Math.max(...lines.map((l3) => measureText(l3.text, l3.size).width)) + 2 * px + extraWidth),
+      h: lines.reduce((n2, l3) => n2 + l3.size * 1.25, 0) + 2 * py,
+      px,
+      py,
+      em
+    };
+  }
+  function measurePlate(ctx, f4, lines, options) {
+    return plateSize(lines, (value, size4) => {
+      ctx.font = font(f4, size4);
+      return ctx.measureText(value);
+    }, options);
+  }
+  function drawPlate(ctx, f4, r4, size4, accent = "accent", pill = false) {
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.22)";
+    ctx.shadowBlur = size4.em * 0.45;
+    ctx.shadowOffsetY = size4.em * 0.15;
+    ctx.fillStyle = paint(f4, "surface");
+    ctx.globalAlpha *= 0.96;
+    ctx.beginPath();
+    ctx.roundRect(r4.x, r4.y, r4.w, r4.h, pill ? r4.h / 2 : size4.em * 0.5);
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.strokeStyle = paint(f4, "surfaceBorder");
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+    if (!pill) {
+      ctx.fillStyle = paint(f4, accent);
+      ctx.fillRect(r4.x + 1, r4.y + size4.em * 0.5, Math.max(2, size4.em * 0.12), Math.max(0, r4.h - size4.em));
+    }
+  }
+  function plateText(ctx, f4, value, x4, y3, size4, maxWidth) {
+    ctx.font = font(f4, size4);
+    ctx.fillStyle = paint(f4, "onSurface");
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(value, x4, y3, Math.max(1, maxWidth));
+  }
+  function calloutGeometry(f4, p3, size4, target) {
+    if ((f4.anchor ?? p3.position) !== "auto") {
+      const r4 = fitPlate(f4, p3, size4);
+      return { plate: r4, start: leaderStart(r4, target), target };
+    }
+    const safe = overlaySafeArea(f4, p3.placement), gap = 90 * f4.height / 1080;
+    const w4 = Math.min(size4.w, safe.w * 0.65), h3 = Math.min(size4.h, safe.h * 0.4);
+    const sides2 = [
+      ["right", safe.x + safe.w - target.x, w4],
+      ["left", target.x - safe.x, w4],
+      ["bottom", safe.y + safe.h - target.y, h3],
+      ["top", target.y - safe.y, h3]
+    ];
+    sides2.sort((a3, b3) => b3[1] - b3[2] - (a3[1] - a3[2]));
+    const side = sides2[0][0];
+    let x4 = target.x - w4 / 2, y3 = target.y - h3 / 2;
+    if (side === "right") x4 = target.x + Math.min(gap, Math.max(8, sides2[0][1] - w4));
+    if (side === "left") x4 = target.x - w4 - Math.min(gap, Math.max(8, sides2[0][1] - w4));
+    if (side === "bottom") y3 = target.y + Math.min(gap, Math.max(8, sides2[0][1] - h3));
+    if (side === "top") y3 = target.y - h3 - Math.min(gap, Math.max(8, sides2[0][1] - h3));
+    const plate = { x: clamp3(x4, safe.x, safe.x + safe.w - w4), y: clamp3(y3, safe.y, safe.y + safe.h - h3), w: w4, h: h3 };
+    return { plate, start: leaderStart(plate, target), target };
+  }
+  function leaderStart(r4, t3) {
+    const cx2 = r4.x + r4.w / 2, cy = r4.y + r4.h / 2, dx = t3.x - cx2, dy = t3.y - cy;
+    const scale = 1 / Math.max(Math.abs(dx) / (r4.w / 2), Math.abs(dy) / (r4.h / 2), 1);
+    return { x: cx2 + dx * scale, y: cy + dy * scale };
   }
   function text(ctx, f4, value, x4, y3, size4, c3 = "onSurface", align = "center") {
-    ctx.font = `${f4.theme.typography.weights.display} ${size4}px "${f4.theme.typography.family}"`;
+    ctx.font = font(f4, size4);
     ctx.fillStyle = paint(f4, c3);
     ctx.textAlign = align;
     ctx.textBaseline = "middle";
@@ -809,15 +979,16 @@
     ctx.fill();
   }
   function box(f4, p3) {
-    const a3 = f4.mapSource({ x: p3.x, y: p3.y }), b3 = f4.mapSource({ x: p3.x + p3.width, y: p3.y + p3.height });
+    const pad = p3.pad ?? 6, x4 = p3.x - (p3.origin === "center" ? p3.width / 2 : 0), y3 = p3.y - (p3.origin === "center" ? p3.height / 2 : 0);
+    const a3 = f4.mapSource({ x: x4 - pad, y: y3 - pad }), b3 = f4.mapSource({ x: x4 + p3.width + pad, y: y3 + p3.height + pad });
     return { x: a3.x, y: a3.y, w: b3.x - a3.x, h: b3.y - a3.y };
   }
-  var sourceRect = { x: number(320, 0, 1e5), y: number(180, 0, 1e5), width: number(320, 1, 1e5), height: number(180, 1, 1e5) };
+  var sourceRect = { origin: enumeration("topleft", ["topleft", "center"]), pad: number(6, 0, 200), x: number(320, 0, 1e5), y: number(180, 0, 1e5), width: number(320, 1, 1e5), height: number(180, 1, 1e5) };
   var motion = (s3) => EASING.enterOut(Math.min(1, s3.progress * 6));
 
   // scripts/lib/compose/templates/title-card.mjs
   var template = define("title-card", "Title card", "Full canvas opening title and subtitle.", { title: string("Your title", 80), subtitle: string("A closer look", 140) }, (ctx, f4, p3, s3) => {
-    const h3 = f4.height;
+    const h3 = Math.min(f4.height, f4.width * 1.25);
     const a3 = anchor(f4, p3);
     panel(ctx, f4, 0, 0, f4.width, f4.height);
     text(ctx, f4, p3.title, a3.x, a3.y - h3 * 0.05, h3 * 0.075, p3.color);
@@ -828,7 +999,7 @@
 
   // scripts/lib/compose/templates/outro-card.mjs
   var template2 = define("outro-card", "Outro card", "Full canvas closing message.", { title: string("Thank you", 80), subtitle: string("Discover more", 140) }, (ctx, f4, p3, s3) => {
-    const h3 = f4.height;
+    const h3 = Math.min(f4.height, f4.width * 1.25);
     const a3 = anchor(f4, p3);
     panel(ctx, f4, 0, 0, f4.width, f4.height);
     ctx.fillStyle = paint(f4, p3.color);
@@ -841,48 +1012,58 @@
 
   // scripts/lib/compose/templates/lower-third.mjs
   var template3 = define("lower-third", "Lower third", "Name and subtitle on a compact plate.", { position: { type: "position", values: POSITIONS, default: "bottom-left" }, name: string("Alex Morgan", 70), subtitle: string("Product designer", 100) }, (ctx, f4, p3, s3) => {
-    const h3 = f4.height;
-    const a3 = anchor(f4, p3), w4 = f4.width * 0.36;
-    panel(ctx, f4, a3.x - w4 * 0.2, a3.y - h3 * 0.05, w4, h3 * 0.13);
-    ctx.fillStyle = paint(f4, p3.color);
-    ctx.fillRect(a3.x - w4 * 0.2, a3.y - h3 * 0.05, h3 * 6e-3, h3 * 0.13);
-    text(ctx, f4, p3.name, a3.x - w4 * 0.15, a3.y, h3 * 0.032, "onSurface", "left");
-    text(ctx, f4, p3.subtitle, a3.x - w4 * 0.15, a3.y + h3 * 0.045, h3 * 0.022, "muted", "left");
+    const lines = [{ text: p3.name, size: f4.height * 0.028 }, { text: p3.subtitle, size: f4.height * 0.02 }];
+    const size4 = measurePlate(ctx, f4, lines, { minWidth: f4.height * 0.12 }), r4 = fitPlate(f4, p3, size4);
+    drawPlate(ctx, f4, r4, size4, p3.color);
+    let y3 = r4.y + size4.py;
+    for (const l3 of lines) {
+      plateText(ctx, f4, l3.text, r4.x + size4.px, y3 + l3.size * 0.625, l3.size, r4.w - 2 * size4.px);
+      y3 += l3.size * 1.25;
+    }
   });
   var { id: id3, label: label3, help: help3, params: params3, defaults: defaults3, defaultDuration: defaultDuration3, draw: draw3 } = template3;
   var lower_third_default = template3;
 
   // scripts/lib/compose/templates/step-badge.mjs
   var template4 = define("step-badge", "Step badge", "Number and label in a chip.", { number: number(1, 0, 999), label: string("Open the report", 80) }, (ctx, f4, p3, s3) => {
-    const h3 = f4.height;
-    const a3 = anchor(f4, p3);
-    panel(ctx, f4, a3.x - f4.width * 0.18, a3.y - h3 * 0.04, f4.width * 0.36, h3 * 0.08);
-    text(ctx, f4, `${p3.number}  ${p3.label}`, a3.x, a3.y, h3 * 0.032, p3.color);
+    const em = f4.height * 0.024, diameter = em * 1.45;
+    const size4 = measurePlate(ctx, f4, [{ text: p3.label, size: em }], { minWidth: em * 4, extraWidth: diameter + em * 0.5 }), r4 = fitPlate(f4, p3, size4);
+    drawPlate(ctx, f4, r4, size4, p3.color, true);
+    const cx2 = r4.x + size4.px + diameter / 2, cy = r4.y + r4.h / 2;
+    ctx.fillStyle = paint(f4, p3.color);
+    ctx.beginPath();
+    ctx.arc(cx2, cy, diameter / 2, 0, Math.PI * 2);
+    ctx.fill();
+    text(ctx, f4, String(p3.number), cx2, cy, em * 0.85, "onAccent");
+    plateText(ctx, f4, p3.label, cx2 + diameter / 2 + em * 0.5, cy, em, r4.w - 2 * size4.px - diameter - em * 0.5);
   });
   var { id: id4, label: label4, help: help4, params: params4, defaults: defaults4, defaultDuration: defaultDuration4, draw: draw4 } = template4;
   var step_badge_default = template4;
 
   // scripts/lib/compose/templates/callout-arrow.mjs
-  var template5 = define("callout-arrow", "Callout arrow", "Label with an arrow to a source point.", { position: { type: "position", values: POSITIONS, default: "top-center" }, x: number(640, 0, 1e5), y: number(360, 0, 1e5), text: string("Look here", 100) }, (ctx, f4, p3, s3) => {
-    const h3 = f4.height;
-    const a3 = anchor(f4, p3), b3 = f4.mapSource(p3), angle = Math.atan2(b3.y - a3.y, b3.x - a3.x);
+  var template5 = define("callout-arrow", "Callout arrow", "Label with an arrow to a source point.", { position: { type: "position", values: ["auto", ...POSITIONS], default: "auto" }, x: number(640, 0, 1e5), y: number(360, 0, 1e5), text: string("Look here", 100) }, (ctx, f4, p3, s3) => {
+    const em = f4.height * 0.024, size4 = measurePlate(ctx, f4, [{ text: p3.text, size: em }], { minWidth: em * 4 });
+    const { plate: r4, start, target } = calloutGeometry(f4, p3, size4, f4.mapSource(p3));
+    const angle = Math.atan2(target.y - start.y, target.x - start.x), head = 12 * f4.height / 1080;
     ctx.strokeStyle = paint(f4, p3.color);
-    ctx.lineWidth = h3 * 4e-3;
+    ctx.lineWidth = 3 * f4.height / 1080;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.beginPath();
-    ctx.moveTo(a3.x, a3.y);
-    ctx.lineTo(b3.x, b3.y);
-    ctx.moveTo(b3.x - Math.cos(angle - 0.5) * h3 * 0.025, b3.y - Math.sin(angle - 0.5) * h3 * 0.025);
-    ctx.lineTo(b3.x, b3.y);
-    ctx.lineTo(b3.x - Math.cos(angle + 0.5) * h3 * 0.025, b3.y - Math.sin(angle + 0.5) * h3 * 0.025);
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(target.x, target.y);
+    ctx.moveTo(target.x - Math.cos(angle - 0.5) * head, target.y - Math.sin(angle - 0.5) * head);
+    ctx.lineTo(target.x, target.y);
+    ctx.lineTo(target.x - Math.cos(angle + 0.5) * head, target.y - Math.sin(angle + 0.5) * head);
     ctx.stroke();
-    panel(ctx, f4, a3.x - f4.width * 0.13, a3.y - h3 * 0.06, f4.width * 0.26, h3 * 0.055);
-    text(ctx, f4, p3.text, a3.x, a3.y - h3 * 0.032, h3 * 0.027, p3.color);
+    drawPlate(ctx, f4, r4, size4, p3.color);
+    plateText(ctx, f4, p3.text, r4.x + size4.px, r4.y + r4.h / 2, em, r4.w - 2 * size4.px);
   });
   var { id: id5, label: label5, help: help5, params: params5, defaults: defaults5, defaultDuration: defaultDuration5, draw: draw5 } = template5;
   var callout_arrow_default = template5;
 
   // scripts/lib/compose/templates/spotlight.mjs
-  var template6 = define("spotlight", "Spotlight", "Dim the canvas around a source rectangle or circle.", { ...sourceRect, shape: enumeration("rect", ["rect", "circle"]), dim: number(0.65, 0, 1), softness: number(12, 0, 80) }, (ctx, f4, p3, s3) => {
+  var template6 = define("spotlight", "Spotlight", "Dim the canvas around a source rectangle or circle. x/y are the TOP-LEFT in page pixels at capture scale 1; origin=center makes them the centre. pad adds breathing room.", { ...sourceRect, shape: enumeration("rect", ["rect", "circle"]), dim: number(0.65, 0, 1), softness: number(12, 0, 80) }, (ctx, f4, p3, s3) => {
     const h3 = f4.height;
     const r4 = box(f4, p3);
     ctx.fillStyle = "#000000";
@@ -907,7 +1088,7 @@
   var spotlight_default = template6;
 
   // scripts/lib/compose/templates/highlight-box.mjs
-  var template7 = define("highlight-box", "Highlight box", "Outline a source rectangle with an optional label.", { ...sourceRect, label: string("Selected", 80), showLabel: boolean(true) }, (ctx, f4, p3, s3) => {
+  var template7 = define("highlight-box", "Highlight box", "Outline a source rectangle with an optional label. x/y are the TOP-LEFT in page pixels at capture scale 1; origin=center makes them the centre. pad adds breathing room.", { ...sourceRect, label: string("Selected", 80), showLabel: boolean(true) }, (ctx, f4, p3, s3) => {
     const h3 = f4.height;
     const r4 = box(f4, p3);
     ctx.strokeStyle = paint(f4, p3.color);
@@ -916,8 +1097,10 @@
     ctx.roundRect(r4.x, r4.y, r4.w, r4.h, h3 * 8e-3);
     ctx.stroke();
     if (p3.showLabel) {
-      panel(ctx, f4, r4.x, r4.y - h3 * 0.045, Math.min(f4.width * 0.3, r4.w), h3 * 0.04);
-      text(ctx, f4, p3.label, r4.x + h3 * 0.01, r4.y - h3 * 0.024, h3 * 0.025, p3.color, "left");
+      const em = h3 * 0.024, size4 = measurePlate(ctx, f4, [{ text: p3.label, size: em }], { minWidth: em * 3 });
+      const plate = fitPlate(f4, { ...p3, position: "bottom-left" }, size4, { x: r4.x, y: r4.y });
+      drawPlate(ctx, f4, plate, size4, p3.color);
+      plateText(ctx, f4, p3.label, plate.x + size4.px, plate.y + plate.h / 2, em, plate.w - 2 * size4.px);
     }
   });
   var { id: id7, label: label7, help: help7, params: params7, defaults: defaults7, defaultDuration: defaultDuration7, draw: draw7 } = template7;
@@ -926,9 +1109,12 @@
   // scripts/lib/compose/templates/number-counter.mjs
   var template8 = define("number-counter", "Number counter", "Count between two values with a suffix.", { from: number(0, -1e9, 1e9), to: number(100, -1e9, 1e9), format: enumeration("integer", ["integer", "decimal", "percent"]), suffix: string("users", 30) }, (ctx, f4, p3, s3) => {
     const h3 = f4.height;
-    const a3 = anchor(f4, p3), v3 = p3.from + (p3.to - p3.from) * EASING.moveInOut(s3.progress);
+    const v3 = p3.from + (p3.to - p3.from) * EASING.moveInOut(s3.progress);
     const value = p3.format === "decimal" ? v3.toFixed(1) : Math.round(v3).toString();
-    text(ctx, f4, `${value}${p3.format === "percent" ? "%" : ""} ${p3.suffix}`, a3.x, a3.y, h3 * 0.085, p3.color);
+    const label13 = `${value}${p3.format === "percent" ? "%" : ""} ${p3.suffix}`, size4 = h3 * 0.085;
+    ctx.font = `${f4.theme.typography.weights.display} ${size4}px "${f4.theme.typography.family}"`;
+    const r4 = fitPlate(f4, p3, { w: ctx.measureText(label13).width, h: size4 * 1.25 });
+    text(ctx, f4, label13, r4.x + r4.w / 2, r4.y + r4.h / 2, Math.min(size4, r4.w / Math.max(1, ctx.measureText(label13).width) * size4), p3.color);
   });
   var { id: id8, label: label8, help: help8, params: params8, defaults: defaults8, defaultDuration: defaultDuration8, draw: draw8 } = template8;
   var number_counter_default = template8;
@@ -936,7 +1122,7 @@
   // scripts/lib/compose/templates/progress-bar.mjs
   var template9 = define("progress-bar", "Progress bar", "Progress from zero to one hundred with a label.", { label: string("Loading", 80), widthPct: number(48, 5, 90) }, (ctx, f4, p3, s3) => {
     const h3 = f4.height;
-    const a3 = anchor(f4, p3), w4 = f4.width * p3.widthPct / 100;
+    const r4 = fitPlate(f4, p3, { w: f4.width * p3.widthPct / 100, h: h3 * 0.09 }), w4 = r4.w, a3 = { x: r4.x + w4 / 2, y: r4.y + h3 * 0.065 };
     panel(ctx, f4, a3.x - w4 / 2, a3.y, w4, h3 * 0.025);
     if (s3.progress > 0) panel(ctx, f4, a3.x - w4 / 2, a3.y, w4 * s3.progress, h3 * 0.025, p3.color);
     text(ctx, f4, `${p3.label} ${Math.round(s3.progress * 100)}%`, a3.x, a3.y - h3 * 0.04, h3 * 0.029, p3.color);
@@ -960,17 +1146,23 @@
 
   // scripts/lib/compose/templates/text-callout.mjs
   var template11 = define("text-callout", "Text callout", "Large phrase with staggered word entrances.", { text: string("Make every moment count", 100) }, (ctx, f4, p3, s3) => {
-    const h3 = f4.height;
-    const a3 = anchor(f4, p3), words = p3.text.split(/\s+/), size4 = Math.min(h3 * 0.065, f4.width * 0.8 / Math.max(1, p3.text.length) * 1.7);
+    const words = p3.text.split(/\s+/), safe = overlaySafeArea(f4, p3.placement);
+    let size4 = Math.min(f4.height * 0.065, safe.w * 0.8 / Math.max(1, p3.text.length) * 1.7);
     ctx.font = `${f4.theme.typography.weights.display} ${size4}px "${f4.theme.typography.family}"`;
-    const gap = size4 * 0.28, total = words.reduce((v3, w4) => v3 + ctx.measureText(w4).width + gap, -gap);
-    let x4 = a3.x - total / 2;
+    let gap = size4 * 0.28, total = words.reduce((v3, w4) => v3 + ctx.measureText(w4).width + gap, -gap);
+    const scale = Math.min(1, safe.w / total, safe.h / (size4 * 1.5));
+    size4 *= scale;
+    gap *= scale;
+    total *= scale;
+    const r4 = fitPlate(f4, p3, { w: total, h: size4 * 1.5 });
+    let x4 = r4.x;
     words.forEach((word, i3) => {
       const v3 = EASING.enterOut(Math.max(0, Math.min(1, s3.progress * 8 - i3 * 0.25)));
       ctx.save();
       ctx.globalAlpha *= v3;
-      text(ctx, f4, word, x4, a3.y + (1 - v3) * size4 * 0.3, size4, p3.color, "left");
+      text(ctx, f4, word, x4, r4.y + r4.h / 2 + (1 - v3) * size4 * 0.3, size4, p3.color, "left");
       ctx.restore();
+      ctx.font = `${f4.theme.typography.weights.display} ${size4}px "${f4.theme.typography.family}"`;
       x4 += ctx.measureText(word).width + gap;
     });
   });
@@ -979,7 +1171,7 @@
 
   // scripts/lib/compose/templates/logo-sting.mjs
   var template12 = define("logo-sting", "Logo sting", "Text mark or preloaded brand logo with a gentle reveal.", { text: string("SHOWREEL", 60), logo: string("brand", 120), useLogo: boolean(false) }, (ctx, f4, p3, s3) => {
-    const h3 = f4.height;
+    const h3 = Math.min(f4.height, f4.width * 1.25);
     const a3 = anchor(f4, p3), scale = 0.92 + 0.08 * motion(s3);
     ctx.translate(a3.x, a3.y);
     ctx.scale(scale, scale);
@@ -1083,6 +1275,9 @@
     run: { id: null },
     output: { preset: null, width: 1920, height: 1080, fps: 60, quality: "standard" },
     theme: "clean",
+    themeSource: "default",
+    brandDefaults: {},
+    watermark: { enabled: false, image: null, position: "top-right", opacity: 0.25, sizePct: 10, marginPct: 3 },
     layout: { safeZones: null },
     frame: {
       paddingXPct: 8,
@@ -1250,13 +1445,14 @@
     });
     if (input.output?.preset === "vertical") themed = merge(themed, {
       frame: { paddingXPct: 4, paddingYPct: 0 },
-      captions: { bandHeightPct: 16 },
+      captions: { bandHeightPct: 16, fontSizePct: 3.9, maxLines: 3 },
       zoom: { depth: 1.5 },
       layout: { safeZones: true }
     });
     delete themed.frame.shadow.color;
     themed.cards.transition = theme2.transition;
     const patch = copy(input);
+    patch.themeSource ??= input.theme ? "user" : "default";
     if (["landscape", "vertical", "square"].includes(patch.output?.preset)) {
       const size4 = Math.max(patch.output.width ?? 0, patch.output.height ?? 0) > 1920 ? "4k" : "1080";
       Object.assign(patch.output, presetOutput(patch.output.preset, size4));
@@ -1299,7 +1495,7 @@
           range2(key, x4, 0, k4 === "duration" ? 30 : 25);
           continue;
         }
-        if (key === "captions.cues" || key === "audio.narration.steps") continue;
+        if (key === "captions.cues" || key === "audio.narration.steps" || key === "brandDefaults") continue;
         if (!Object.hasOwn(model, k4)) {
           fail(key, "is an unknown key");
           continue;
@@ -1324,17 +1520,29 @@
     }
     if (c3.output?.preset !== void 0 && c3.output.preset !== null && !["landscape", "vertical", "square"].includes(c3.output.preset)) fail("output.preset", "must be landscape|vertical|square");
     if (c3.layout?.safeZones !== void 0 && c3.layout.safeZones !== null && typeof c3.layout.safeZones !== "boolean") fail("layout.safeZones", "must be boolean");
+    if (c3.themeSource !== void 0 && !["brand", "user", "default"].includes(c3.themeSource)) fail("themeSource", "must be brand|user|default");
+    if (c3.brandDefaults !== void 0 && !object2(c3.brandDefaults)) fail("brandDefaults", "must be an object");
+    if (c3.watermark !== void 0) {
+      const w4 = resolveComposition(c3).watermark;
+      if (object2(w4)) {
+        if (!["top-left", "top-right", "bottom-left", "bottom-right"].includes(w4.position)) fail("watermark.position", "is invalid");
+        range2("watermark.opacity", w4.opacity, 0.05, 1);
+        range2("watermark.sizePct", w4.sizePct, 3, 30);
+        range2("watermark.marginPct", w4.marginPct, 0, 25);
+        if (w4.enabled && !safeImagePath(w4.image)) fail("watermark.image", "requires a local image");
+      }
+    }
     const d3 = resolveComposition(c3);
-    const get = (p3) => p3.split(".").reduce((v3, k4) => v3?.[k4], d3);
+    const get2 = (p3) => p3.split(".").reduce((v3, k4) => v3?.[k4], d3);
     const enumAt = (p3, values) => {
-      if (!values.includes(get(p3))) fail(p3, `must be ${values.join("|")}`);
+      if (!values.includes(get2(p3))) fail(p3, `must be ${values.join("|")}`);
     };
     enumAt("version", [1]);
     enumAt("theme", Object.keys(THEMES));
     enumAt("output.fps", [30, 60]);
     enumAt("output.quality", ["standard", "high"]);
     if (typeof c3.run?.id !== "string" || !c3.run.id.trim()) fail("run.id", "must be nonempty");
-    for (const [p3, min2, max2, int] of COMPOSITION_RANGES) range2(p3, get(p3), min2, max2, int);
+    for (const [p3, min2, max2, int] of COMPOSITION_RANGES) range2(p3, get2(p3), min2, max2, int);
     range2("zoom.depth", zoomDepth(d3.zoom?.depth), 1.05, 4);
     for (const [p3, values] of Object.entries(COMPOSITION_ENUMS)) enumAt(p3, values);
     const custom = d3.cursor?.custom;
@@ -1351,30 +1559,30 @@
       }
     }
     if (!Array.isArray(d3.zoom?.onlyKinds) || d3.zoom.onlyKinds.some((k4) => !["click", "fill"].includes(k4))) fail("zoom.onlyKinds", "must contain click|fill");
-    for (const p3 of ["frame.border.color", "cursor.fill", "cursor.stroke", "captions.color", "captions.background"]) color2(p3, get(p3));
-    color2("cursor.clickEffect.color", get("cursor.clickEffect.color"), true);
+    for (const p3 of ["frame.border.color", "cursor.fill", "cursor.stroke", "captions.color", "captions.background"]) color2(p3, get2(p3));
+    color2("cursor.clickEffect.color", get2("cursor.clickEffect.color"), true);
     for (const key of ["title", "outro"]) {
       const p3 = `cards.${key}`;
       enumAt(`${p3}.align`, ["center", "left"]);
       enumAt(`${p3}.accent.shape`, ["bar", "underline", "none"]);
-      for (const [k4, min2, max2] of [["durationSec", 0, 30], ["titleSizePct", 1, 20], ["subtitleSizePct", 1, 12], ["accent.widthPct", 0, 100]]) range2(`${p3}.${k4}`, get(`${p3}.${k4}`), min2, max2);
-      for (const k4 of ["titleColor", "subtitleColor", "accent.color"]) color2(`${p3}.${k4}`, get(`${p3}.${k4}`));
+      for (const [k4, min2, max2] of [["durationSec", 0, 30], ["titleSizePct", 1, 20], ["subtitleSizePct", 1, 12], ["accent.widthPct", 0, 100]]) range2(`${p3}.${k4}`, get2(`${p3}.${k4}`), min2, max2);
+      for (const k4 of ["titleColor", "subtitleColor", "accent.color"]) color2(`${p3}.${k4}`, get2(`${p3}.${k4}`));
       for (const k4 of [key === "title" ? "title" : "text", "subtitle"]) {
-        const v3 = get(`${p3}.${k4}`);
+        const v3 = get2(`${p3}.${k4}`);
         if (v3 !== null && (typeof v3 !== "string" || !v3.trim())) fail(`${p3}.${k4}`, "must be nonempty text or null");
       }
-      if (get(`${p3}.enabled`) && !get(`${p3}.${key === "title" ? "title" : "text"}`)) fail(p3, "requires text when enabled");
-      const logo = get(`${p3}.logo`);
+      if (get2(`${p3}.enabled`) && !get2(`${p3}.${key === "title" ? "title" : "text"}`)) fail(p3, "requires text when enabled");
+      const logo = get2(`${p3}.logo`);
       if (object2(logo)) range2(`${p3}.logo.heightPct`, logo.heightPct, 1, 40);
       if (object2(logo) && !safeImagePath(logo.image)) fail(`${p3}.logo.image`, "must be a local path inside the project");
     }
     for (const p3 of ["frame.background", "cards.title.background", "cards.outro.background"]) {
       enumAt(`${p3}.type`, ["theme", "gradient", "solid", "image"]);
-      range2(`${p3}.angle`, get(`${p3}.angle`), 0, 360);
-      const colors = get(`${p3}.colors`);
-      if (!Array.isArray(colors) || colors.length < 1 || colors.length > 16 || get(`${p3}.type`) === "gradient" && colors.length < 2) fail(`${p3}.colors`, "must contain 1 to 16 colors (at least 2 for a gradient)");
+      range2(`${p3}.angle`, get2(`${p3}.angle`), 0, 360);
+      const colors = get2(`${p3}.colors`);
+      if (!Array.isArray(colors) || colors.length < 1 || colors.length > 16 || get2(`${p3}.type`) === "gradient" && colors.length < 2) fail(`${p3}.colors`, "must contain 1 to 16 colors (at least 2 for a gradient)");
       else colors.forEach((v3, i3) => color2(`${p3}.colors.${i3}`, v3));
-      if (get(`${p3}.type`) === "image" && !safeImagePath(get(`${p3}.image`))) fail(`${p3}.image`, "must be a local path inside the project");
+      if (get2(`${p3}.type`) === "image" && !safeImagePath(get2(`${p3}.image`))) fail(`${p3}.image`, "must be a local path inside the project");
     }
     if (c3.captions?.cues !== void 0) {
       const cues = c3.captions.cues;
@@ -1434,7 +1642,7 @@
     function visit(v3, p3 = "") {
       for (const [k4, x4] of Object.entries(v3)) {
         const key = p3 ? `${p3}.${k4}` : k4;
-        if (object2(x4) && key !== "audio.narration.steps") visit(x4, key);
+        if (object2(x4) && !["audio.narration.steps", "brandDefaults"].includes(key)) visit(x4, key);
         else result[key] = x4;
       }
     }
@@ -1463,6 +1671,8 @@
     const keys = path.split(".");
     if (keys.some((k4) => ["__proto__", "constructor", "prototype"].includes(k4))) throw new Error("Invalid composition path");
     const next = copy(c3), last2 = keys.pop();
+    if (path === "theme") next.themeSource = reset ? "default" : "user";
+    for (const p3 of Object.keys(next.brandDefaults ?? {})) if (p3 === path || p3.startsWith(path + ".") || path.startsWith(p3 + ".")) delete next.brandDefaults[p3];
     if (path === "frame.paddingPct") {
       next.frame = {
         ...next.frame,
@@ -1495,17 +1705,108 @@
     return { depth: zoomDepth(zoom.depth), kinds: zoom.onlyKinds, leadIn: zoom.leadInSec, holdAfterClick: zoom.holdAfterClickSec };
   }
 
+  // scripts/lib/brand/apply.mjs
+  var brandImage = (brand, file) => file ? `brand/${brand.name}/${file}` : null;
+  var clone = (v3) => structuredClone(v3);
+  function leafValues(value, prefix = "", out = {}) {
+    for (const [k4, v3] of Object.entries(value)) {
+      const p3 = prefix ? `${prefix}.${k4}` : k4;
+      if (v3 && typeof v3 === "object" && !Array.isArray(v3)) leafValues(v3, p3, out);
+      else out[p3] = clone(v3);
+    }
+    return out;
+  }
+  var get = (v3, p3) => p3.split(".").reduce((n2, k4) => n2?.[k4], v3);
+  function put(v3, p3, x4) {
+    const keys = p3.split(".");
+    if (keys.some((k4) => ["__proto__", "prototype", "constructor"].includes(k4))) throw new Error("Invalid composition path");
+    let n2 = v3;
+    for (const k4 of keys.slice(0, -1)) n2 = n2[k4] ??= {};
+    n2[keys.at(-1)] = clone(x4);
+  }
+  function applyBrandToComposition(composition, brand) {
+    if (!brand) return resolveComposition(composition);
+    const patch = clone(composition), generated = patch.brandDefaults ?? {};
+    for (const [p3, v3] of Object.entries(generated)) {
+      const brandText = { "cards.title.title": brand.intro.title, "cards.title.subtitle": brand.intro.subtitle, "cards.outro.text": brand.outro.text };
+      if (Object.hasOwn(brandText, p3) && brandText[p3] === null) continue;
+      if (JSON.stringify(get(patch, p3)) !== JSON.stringify(v3)) continue;
+      const keys = p3.split(".");
+      const last2 = keys.pop();
+      const parent = keys.reduce((n2, k4) => n2?.[k4], patch);
+      if (parent) delete parent[last2];
+    }
+    delete patch.brandDefaults;
+    const source = composition.themeSource ?? (composition.theme ? "user" : "default");
+    const themeName = source === "user" ? composition.theme : brand.defaultTheme;
+    const c3 = brand.colors;
+    const defaults13 = {
+      theme: themeName,
+      themeSource: source === "user" ? "user" : "brand",
+      frame: { background: { type: "solid", colors: [c3.background] } },
+      cursor: { fill: c3.accent, clickEffect: { color: c3.accent } },
+      captions: brand.fonts.body ? { fontWeight: brand.fonts.body.weight } : {},
+      cards: {},
+      watermark: { ...brand.watermark, image: brandImage(brand, brand.watermark.file ?? brand.logo?.file) }
+    };
+    delete defaults13.watermark.file;
+    for (const k4 of ["title", "outro"]) defaults13.cards[k4] = {
+      titleColor: c3.text,
+      subtitleColor: c3.muted,
+      background: { type: "solid", colors: [c3.background] },
+      accent: { color: c3.primary },
+      ...brand.logo ? { logo: { image: brandImage(brand, brand.logo.file), heightPct: brand.logo.heightPct } } : {}
+    };
+    Object.assign(defaults13.cards.title, Object.fromEntries(Object.entries(brand.intro).filter(([, v3]) => v3 !== null)));
+    Object.assign(defaults13.cards.outro, Object.fromEntries(Object.entries(brand.outro).filter(([, v3]) => v3 !== null)));
+    if (source !== "user") {
+      delete patch.theme;
+      delete patch.themeSource;
+    }
+    for (const [p3, v3] of Object.entries(leafValues(patch))) put(defaults13, p3, v3);
+    return resolveComposition(defaults13);
+  }
+  var brandUrl = (brand, file, base = "brand/") => file ? `${base}${encodeURIComponent(brand.name)}/${file.split("/").map(encodeURIComponent).join("/")}` : null;
+  function planBrand(brand, composition, base = "brand/") {
+    if (!brand) return null;
+    return {
+      name: brand.name,
+      fonts: Object.values(brand.fonts).filter(Boolean).map((f4) => ({ family: f4.family, weight: f4.weight, url: brandUrl(brand, f4.file, base) })),
+      heading: brand.fonts.heading,
+      body: brand.fonts.body,
+      logoUrl: brandUrl(brand, brand.logo?.file, base),
+      assetUrls: Object.fromEntries([brand.logo?.file, brand.watermark.file ?? brand.logo?.file].filter(Boolean).map((file) => [brandImage(brand, file), brandUrl(brand, file, base)])),
+      watermark: { ...composition.watermark, url: composition.watermark.image === brandImage(brand, brand.watermark.file ?? brand.logo?.file) ? brandUrl(brand, brand.watermark.file ?? brand.logo?.file, base) : null }
+    };
+  }
+  function brandTheme(brand, themeName) {
+    const theme2 = clone(THEMES[themeName]);
+    if (!brand) return theme2;
+    theme2.typography.bodyFamily = theme2.typography.family;
+    const c3 = brand.colors;
+    theme2.background.colors = [c3.background, c3.background];
+    theme2.card.background.colors = [c3.background, c3.background];
+    Object.assign(theme2.card, { titleColor: c3.text, subtitleColor: c3.muted, accent: c3.primary });
+    theme2.overlay = { ...theme2.overlay, accent: c3.accent, surface: c3.background, onSurface: c3.text, muted: c3.muted };
+    theme2.ripple.color = c3.accent;
+    if (brand.fonts.heading) {
+      theme2.typography.family = brand.fonts.heading.family;
+      theme2.typography.weights.display = brand.fonts.heading.weight;
+    }
+    return theme2;
+  }
+
   // scripts/lib/compose/camera.mjs
-  var clamp3 = (x4, lo, hi) => Math.max(lo, Math.min(hi, x4));
+  var clamp4 = (x4, lo, hi) => Math.max(lo, Math.min(hi, x4));
   function planCamera({ regions, duration, source: { width, height }, hz = 60, omega = 7 }) {
     if (![width, height, hz, omega].every((v3) => Number.isFinite(v3) && v3 > 0) || !Number.isFinite(duration) || duration < 0) throw new Error("Invalid camera dimensions, duration or spring parameters");
     const maxDepth = Math.max(1, ...regions.map((r4) => r4.depth));
     let state = [width / 2, height / 2, 0], velocity = [0, 0, 0], time = 0;
     const samples = [];
     const sample = (t3) => {
-      const z4 = clamp3(Math.exp(state[2]), 1, maxDepth);
-      const cx2 = clamp3(state[0], width / (2 * z4), width - width / (2 * z4));
-      const cy = clamp3(state[1], height / (2 * z4), height - height / (2 * z4));
+      const z4 = clamp4(Math.exp(state[2]), 1, maxDepth);
+      const cx2 = clamp4(state[0], width / (2 * z4), width - width / (2 * z4));
+      const cy = clamp4(state[1], height / (2 * z4), height - height / (2 * z4));
       samples.push({ t: t3, cx: cx2, cy, z: z4 });
     };
     sample(0);
@@ -1551,7 +1852,7 @@
   var pick = ({ cx: cx2, cy, z: z4 }) => ({ cx: cx2, cy, z: z4 });
 
   // scripts/lib/compose/cursor-track.mjs
-  var smooth = (t3) => t3 * t3 * (3 - 2 * t3);
+  var smooth2 = (t3) => t3 * t3 * (3 - 2 * t3);
   function latest(samples, t3) {
     let lo = 0, hi = samples.length;
     while (lo < hi) {
@@ -1574,7 +1875,7 @@
     for (const click of events.clicks) {
       const age = t3 - click.t;
       if (age < 0 || age >= 0.12) continue;
-      const scale = age <= 0.045 ? 1 - 0.14 * smooth(age / 0.045) : 0.86 + 0.14 * smooth((age - 0.045) / 0.075);
+      const scale = age <= 0.045 ? 1 - 0.14 * smooth2(age / 0.045) : 0.86 + 0.14 * smooth2((age - 0.045) / 0.075);
       amount = Math.min(amount, scale);
     }
     return amount;
@@ -1585,9 +1886,9 @@
   }
 
   // scripts/lib/compose/cursor-director.mjs
-  var clamp4 = (v3, a3, b3) => Math.max(a3, Math.min(b3, v3));
-  var smooth2 = (v3) => {
-    const t3 = clamp4(v3, 0, 1);
+  var clamp5 = (v3, a3, b3) => Math.max(a3, Math.min(b3, v3));
+  var smooth3 = (v3) => {
+    const t3 = clamp5(v3, 0, 1);
     return t3 * t3 * (3 - 2 * t3);
   };
   var mix = (a3, b3, f4) => ({ x: a3.x + (b3.x - a3.x) * f4, y: a3.y + (b3.y - a3.y) * f4 });
@@ -1639,8 +1940,8 @@
       const fraction = Math.min(1, (end - start) / follow.durationSec);
       const marginX = Math.min(24, events.viewport.width / 2), marginY = Math.min(24, events.viewport.height / 2);
       const to = {
-        x: clamp4(c3.x + dx * follow.distancePx * fraction, marginX, events.viewport.width - marginX),
-        y: clamp4(c3.y + dy * follow.distancePx * fraction, marginY, events.viewport.height - marginY)
+        x: clamp5(c3.x + dx * follow.distancePx * fraction, marginX, events.viewport.width - marginX),
+        y: clamp5(c3.y + dy * follow.distancePx * fraction, marginY, events.viewport.height - marginY)
       };
       return [{ start, end, next, from: c3, to }];
     }) : [];
@@ -1653,9 +1954,9 @@
           const age = t3 - drift.end;
           const float = (hz, phase) => 0.75 * (Math.sin(age * 2 * Math.PI * hz + phase) - Math.sin(phase));
           p3 = { x: drift.to.x + float(0.35, 0.73), y: drift.to.y + float(0.55, 1.91) };
-          p3.x = clamp4(p3.x, Math.min(24, events.viewport.width / 2), events.viewport.width - Math.min(24, events.viewport.width / 2));
-          p3.y = clamp4(p3.y, Math.min(24, events.viewport.height / 2), events.viewport.height - Math.min(24, events.viewport.height / 2));
-          if (t3 > drift.next - 0.15) p3 = mix(p3, at2(drift.next), smooth2((t3 - drift.next + 0.15) / 0.15));
+          p3.x = clamp5(p3.x, Math.min(24, events.viewport.width / 2), events.viewport.width - Math.min(24, events.viewport.width / 2));
+          p3.y = clamp5(p3.y, Math.min(24, events.viewport.height / 2), events.viewport.height - Math.min(24, events.viewport.height / 2));
+          if (t3 > drift.next - 0.15) p3 = mix(p3, at2(drift.next), smooth3((t3 - drift.next + 0.15) / 0.15));
         }
       }
       if (o3.microCorrection) {
@@ -1670,7 +1971,7 @@
             y: c3.y - 5 * (n2 > 1e-7 ? (c3.y - before.y) / n2 : Math.SQRT1_2)
           };
           const f4 = (t3 - c3.t + 0.22) / 0.22;
-          p3 = f4 < 0.5 ? mix(a3, short, smooth2(f4 * 2)) : mix(short, c3, smooth2(f4 * 2 - 1));
+          p3 = f4 < 0.5 ? mix(a3, short, smooth3(f4 * 2)) : mix(short, c3, smooth3(f4 * 2 - 1));
         }
       }
       return p3;
@@ -1687,13 +1988,13 @@
       else busy.push({ ...interval });
     }
     function opacity(t3) {
-      const entrance = o3.entrance ? clamp4((t3 - firstMove + 0.4) / 0.3, 0, 1) : 1;
+      const entrance = o3.entrance ? clamp5((t3 - firstMove + 0.4) / 0.3, 0, 1) : 1;
       if (!o3.hideWhenIdleSec) return entrance;
       let idle2 = 1, previousEnd = 0;
       for (const interval of [...busy, { start: Infinity, end: Infinity, wake: 0.15 }]) {
         if (t3 < interval.start + 0.25 - interval.wake) {
-          const faded = 1 - clamp4((t3 - previousEnd - o3.hideWhenIdleSec) / 0.4, 0, 1);
-          const wake = clamp4((t3 - interval.start + interval.wake) / 0.25, 0, 1);
+          const faded = 1 - clamp5((t3 - previousEnd - o3.hideWhenIdleSec) / 0.4, 0, 1);
+          const wake = clamp5((t3 - interval.start + interval.wake) / 0.25, 0, 1);
           idle2 = Math.max(faded, wake);
           break;
         }
@@ -1716,64 +2017,6 @@
       if (shape !== shapes.at(-1).shape) shapes.push({ t: t3, shape });
     }
     return { samples, shapes, alpha };
-  }
-
-  // scripts/lib/compose/captions.mjs
-  var smooth3 = (t3) => t3 * t3 * (3 - 2 * t3);
-  function cuesFromRun({ storyboard, events, captionsEnabled }) {
-    if (!captionsEnabled) return [];
-    const cues = storyboard.steps.flatMap((step) => {
-      const timing = events.steps.find((entry) => entry.id === step.id);
-      return step.caption?.trim() && timing ? [{ id: step.id, text: step.caption, start: timing.tStart + 0.15, end: timing.tEnd - 0.1 }] : [];
-    }).sort((a3, b3) => a3.start - b3.start);
-    return cues.map((cue, i3) => ({ ...cue, end: Math.min(Math.max(cue.end, cue.start + 1), cues[i3 + 1] ? cues[i3 + 1].start - 0.05 : Infinity) })).filter((cue) => cue.end > cue.start);
-  }
-  function captionAlpha(cue, t3) {
-    if (t3 <= cue.start || t3 >= cue.end) return 0;
-    return smooth3(Math.min(1, (t3 - cue.start) / 0.2, (cue.end - t3) / 0.2));
-  }
-  function wrap(text2, width, measure) {
-    const lines = [];
-    let line = "";
-    for (const word of text2.trim().split(/\s+/).filter(Boolean)) {
-      const candidate = line ? `${line} ${word}` : word;
-      if (measure(candidate) <= width) {
-        line = candidate;
-        continue;
-      }
-      if (line) {
-        lines.push(line);
-        line = "";
-      }
-      if (measure(word) <= width) {
-        line = word;
-        continue;
-      }
-      for (const char of word) {
-        if (line && measure(line + char) > width) {
-          lines.push(line);
-          line = "";
-        }
-        line += char;
-      }
-    }
-    if (line) lines.push(line);
-    return lines;
-  }
-  function wrapLines(text2, maxWidth, measure, { maxLines = 2 } = {}) {
-    if (!Number.isFinite(maxWidth) || maxWidth <= 0 || !Number.isInteger(maxLines) || maxLines < 1) throw new Error("Invalid caption wrapping bounds");
-    let lines;
-    for (const scale of [1, 0.9, 0.8]) {
-      lines = wrap(text2, maxWidth / scale, measure);
-      if (lines.length <= maxLines) return { lines, scale };
-    }
-    lines = lines.slice(0, maxLines);
-    let last2 = lines.at(-1);
-    const width = maxWidth / 0.8;
-    while (measure(last2 + "\u2026") > width && last2.includes(" ")) last2 = last2.slice(0, last2.lastIndexOf(" "));
-    while (last2 && measure(last2 + "\u2026") > width) last2 = Array.from(last2).slice(0, -1).join("");
-    lines[lines.length - 1] = measure("\u2026") <= width ? last2 + "\u2026" : "";
-    return { lines, scale: 0.8 };
   }
 
   // scripts/lib/audio/retime.mjs
@@ -1898,13 +2141,16 @@
       captionSpans: placed.captionSpans
     };
   }
-  function planRender({ composition, brief, storyboard, events, record, sourceSize: sourceSize2, assetWarnings = [], voiceClips = null, audioUrls }) {
+  function planRender({ composition, brief, storyboard, events, record, sourceSize: sourceSize2, assetWarnings = [], voiceClips = null, audioUrls, brand = null, brandBase = "brand/" }) {
     const validation = validateComposition(composition, { duration: record.durationSec });
     if (!validation.ok) throw new Error(validation.errors.join("\n"));
     if (![sourceSize2.width, sourceSize2.height, record.scale.used].every((v3) => Number.isFinite(v3) && v3 > 0)) throw new Error("Invalid source size or capture scale");
-    composition = resolveComposition(composition);
+    composition = brand ? applyBrandToComposition(composition, brand) : resolveComposition(composition);
+    const resolvedBrand = planBrand(brand, composition, brandBase);
+    const resolvedTheme = brandTheme(brand, composition.theme);
     const { output, cards } = composition;
-    const layout = layoutFor({ output, source: sourceSize2, composition });
+    const captionTexts = (composition.captions.cues ?? cuesFromRun({ storyboard, events, captionsEnabled: composition.captions.enabled })).map((c3) => c3.text);
+    const layout = layoutFor({ output, source: sourceSize2, composition, captionTexts });
     const timeArgs = (extraHold) => ({
       duration: record.durationSec,
       ...composition.edits,
@@ -1924,8 +2170,8 @@
     });
     if (!regionValidation.ok) throw new Error(regionValidation.errors.join("\n"));
     const cssSource = { width: sourceSize2.width / record.scale.used, height: sourceSize2.height / record.scale.used };
-    const clone3 = (v3) => JSON.parse(JSON.stringify(v3));
-    let cues = !composition.captions.enabled ? [] : composition.captions.cues !== void 0 ? clone3(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true });
+    const clone4 = (v3) => JSON.parse(JSON.stringify(v3));
+    let cues = !composition.captions.enabled ? [] : composition.captions.cues !== void 0 ? clone4(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true });
     let audio = planAudio({ composition, brief, events, timemap, cues, voiceClips, audioUrls });
     const narrationEnd = Math.max(0, ...audio.narration.map((n2) => n2.outStart + n2.durationSec));
     if (narrationEnd > timemap.mainEnd + 0.05) {
@@ -1942,31 +2188,33 @@
     if (audio.captionSpans.length) cues = extendCues(cues, audio.captionSpans, timemap);
     const overlayPlan = planOverlays(composition.overlays, timemap);
     return {
+      brand: resolvedBrand,
+      watermark: clone4(composition.watermark),
       overlays: overlayPlan.overlays,
-      motion: clone3(composition.motion),
-      output: clone3(output),
+      motion: clone4(composition.motion),
+      output: clone4(output),
       layout,
-      theme: THEMES[composition.theme],
-      frame: clone3(composition.frame),
+      theme: resolvedTheme,
+      frame: clone4(composition.frame),
       timemap,
-      regions: clone3(regions),
+      regions: clone4(regions),
       camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
       cues,
       audio,
-      captions: clone3(composition.captions),
+      captions: clone4(composition.captions),
       cursor: {
         ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }),
         sizePx: (isVertical(output) ? output.width : output.height) * (composition.cursor.style === "custom" ? composition.cursor.custom?.heightPct ?? composition.cursor.sizePct : composition.cursor.sizePct) / 100,
         color: THEMES[composition.theme].cursor.fill,
         ...composition.cursor
       },
-      clicks: clone3(events.clicks),
-      ripples: clone3(events.clicks),
+      clicks: clone4(events.clicks),
+      ripples: clone4(events.clicks),
       sourceSize: { ...sourceSize2 },
       viewport: { ...events.viewport },
       scale: record.scale.used,
       warnings: [...profileWarnings(record.profile ?? events.profile, output.preset ?? (isVertical(output) ? "vertical" : "landscape")), ...overlayPlan.notices, ...assetWarnings, ...record.warnings ?? [], ...regionValidation.warnings, ...composition.captions.mode === "overlay" ? ["overlay captions can cover the video"] : []],
-      cards: clone3(cards)
+      cards: clone4(cards)
     };
   }
   function stateAt(plan, tOut) {
@@ -2020,22 +2268,22 @@
     future: [],
     lastChange: null
   });
-  var clone = (value) => structuredClone(value);
+  var clone2 = (value) => structuredClone(value);
   function reducer(state, action) {
     switch (action.type) {
       case "load":
-        return { ...initialState(), project: action.project, composition: clone(action.project.composition) };
+        return { ...initialState(), project: action.project, composition: clone2(action.project.composition) };
       case "change": {
         if (JSON.stringify(action.composition) === JSON.stringify(state.composition)) return state;
         const coalesce = action.path && !state.future.length && state.lastChange?.path === action.path && action.now >= state.lastChange.now && action.now - state.lastChange.now < 600;
         return {
           ...state,
-          composition: clone(action.composition),
+          composition: clone2(action.composition),
           dirty: true,
           error: null,
           errors: [],
           future: [],
-          past: coalesce ? state.past : [...state.past, clone(state.composition)].slice(-100),
+          past: coalesce ? state.past : [...state.past, clone2(state.composition)].slice(-100),
           lastChange: { path: action.path, now: action.now }
         };
       }
@@ -2045,9 +2293,9 @@
         if (!state[from].length) return state;
         return {
           ...state,
-          composition: clone(state[from].at(-1)),
+          composition: clone2(state[from].at(-1)),
           [from]: state[from].slice(0, -1),
-          [to]: [...state[to], clone(state.composition)].slice(-100),
+          [to]: [...state[to], clone2(state.composition)].slice(-100),
           lastChange: null,
           dirty: true,
           error: null,
@@ -2090,7 +2338,7 @@
     function rebuild() {
       if (!state.project || !sourceSize2) return;
       try {
-        publish({ plan: planRender({ ...state.project, composition: state.composition, sourceSize: sourceSize2, voiceClips: state.project.clips ?? null, audioUrls: editorAudioUrls }), error: null, errors: [] });
+        publish({ plan: planRender({ ...state.project, composition: state.composition, sourceSize: sourceSize2, voiceClips: state.project.clips ?? null, audioUrls: editorAudioUrls, brandBase: "/media/brand/" }), error: null, errors: [] });
       } catch (error) {
         publish({ plan: null, error: error.message, errors: error.message.split("\n") });
       }
@@ -2848,7 +3096,7 @@
       }
     };
   };
-  var clamp5 = (value, min2, max2) => {
+  var clamp6 = (value, min2, max2) => {
     return Math.max(min2, Math.min(max2, value));
   };
   var UNDETERMINED_LANGUAGE = "und";
@@ -3241,9 +3489,9 @@
       return this.bytes.length * 8 - this.pos;
     }
     clone() {
-      const clone3 = new _Bitstream(this.bytes);
-      clone3.pos = this.pos;
-      return clone3;
+      const clone4 = new _Bitstream(this.bytes);
+      clone4.pos = this.pos;
+      return clone4;
     }
   };
 
@@ -9801,7 +10049,7 @@
       if (baseSize === null) {
         return this._length !== null ? this._length : null;
       }
-      return clamp5(baseSize - this._offset, 0, this._length ?? Infinity);
+      return clamp6(baseSize - this._offset, 0, this._length ?? Infinity);
     }
     /** @internal */
     _read(start, end, minReadPosition, maxReadPosition) {
@@ -10767,7 +11015,7 @@
           return null;
         }
       }
-      return clamp5(baseSize - this._offset, 0, this._length ?? Infinity);
+      return clamp6(baseSize - this._offset, 0, this._length ?? Infinity);
     }
     /** @internal */
     _read(start, end, minReadPosition, maxReadPosition) {
@@ -13318,7 +13566,7 @@
           const blob = new Blob([`(${colorAlphaMergerWorkerCode.toString()})()`], { type: "application/javascript" });
           mergerWorkerUrl = URL.createObjectURL(blob);
         }
-        const poolSize = clamp5(navigator.hardwareConcurrency, 1, 4);
+        const poolSize = clamp6(navigator.hardwareConcurrency, 1, 4);
         for (let i3 = 0; i3 < poolSize; i3++) {
           const worker2 = new Worker(mergerWorkerUrl);
           worker2.addEventListener("message", (event) => {
@@ -15237,7 +15485,7 @@
         return null;
       }
       if (this.fileSizeNonStrict !== null) {
-        return this.requestSlice(start, clamp5(this.fileSizeNonStrict - start, minLength, maxLength));
+        return this.requestSlice(start, clamp6(this.fileSizeNonStrict - start, minLength, maxLength));
       } else {
         const promisedAttempt = this.requestSlice(start, maxLength);
         const handleAttempt = (attempt) => {
@@ -15245,7 +15493,7 @@
             return attempt;
           }
           assert(this.fileSizeNonStrict !== null);
-          return this.requestSlice(start, clamp5(this.fileSizeNonStrict - start, minLength, maxLength));
+          return this.requestSlice(start, clamp6(this.fileSizeNonStrict - start, minLength, maxLength));
         };
         if (isThenable(promisedAttempt)) {
           return promisedAttempt.then(handleAttempt);
@@ -15525,7 +15773,19 @@
     await fontLoads.get(key);
   }
   var images = /* @__PURE__ */ new Map();
+  var imageLoads = /* @__PURE__ */ new Map();
   var cursorImages = /* @__PURE__ */ new Map();
+  var brandFontLoads = /* @__PURE__ */ new Map();
+  async function loadBrandFonts(plan) {
+    await Promise.all((plan.brand?.fonts ?? []).map(async (font2) => {
+      const key = JSON.stringify(font2);
+      if (!brandFontLoads.has(key)) brandFontLoads.set(key, (async () => {
+        const face = new FontFace(font2.family, `url(${JSON.stringify(font2.url)})`, { weight: String(font2.weight) });
+        document.fonts.add(await face.load());
+      })());
+      await brandFontLoads.get(key);
+    }));
+  }
   var loadCursorImage = (url) => new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => img.naturalWidth && img.naturalHeight ? resolve(img) : reject(new Error("Empty cursor image"));
@@ -15534,6 +15794,7 @@
   });
   async function loadImages(plan, { assetBase = "assets/" } = {}) {
     const specs = [
+      plan.watermark,
       plan.frame.background,
       plan.cards.title.background,
       plan.cards.outro.background,
@@ -15541,20 +15802,24 @@
       plan.cards.outro.logo,
       ...(plan.overlays ?? []).filter((o3) => o3.template === "logo-sting" && o3.params.useLogo).map((o3) => ({ image: o3.params.logo }))
     ];
+    const loadedImages = /* @__PURE__ */ new Map();
     await Promise.all(specs.filter((s3) => s3?.image).map(async ({ image }) => {
-      const url = new URL(`${assetBase}${image.split("/").map(encodeURIComponent).join("/")}`, location.href).href;
-      if (!images.has(image)) images.set(image, new Promise((resolve, reject) => {
+      const brandUrl2 = plan.brand?.assetUrls?.[image];
+      const url = new URL(brandUrl2 ?? `${assetBase}${image.split("/").map(encodeURIComponent).join("/")}`, location.href).href;
+      if (!imageLoads.has(url)) imageLoads.set(url, new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => resolve(img);
         img.onerror = () => reject(new Error(`Cannot load image: ${image}`));
         img.src = url;
       }));
-      const loaded = await images.get(image);
-      images.set(image, loaded);
+      const loaded = await imageLoads.get(url);
+      loadedImages.set(image, loaded);
     }));
+    return loadedImages;
   }
   async function loadAssets(plan, options = {}) {
-    await loadImages(plan, options);
+    await loadBrandFonts(plan);
+    const loadedImages = await loadImages(plan, options);
     const urls = options.cursorImages ?? (options.assetBase ? Object.fromEntries(
       Object.values(plan.cursor.custom ?? {}).filter((s3) => s3?.image).map((s3) => [
         s3.image,
@@ -15562,7 +15827,8 @@
       ])
     ) : void 0);
     cursorImages = await loadCustomCursorImages(plan, urls, loadCursorImage);
-    return { images, cursorImages };
+    images = loadedImages;
+    return { images: loadedImages, cursorImages };
   }
   function background2(ctx, spec, width, height, fallback) {
     if (spec.type === "theme") spec = fallback;
@@ -15596,16 +15862,16 @@
   function drawCaption(ctx, plan, caption) {
     const r4 = plan.layout.caption, spec = plan.captions;
     if (!r4 || !caption || caption.alpha <= 0) return;
-    const size4 = (isVertical(plan.output) ? plan.output.width * 1.25 : plan.output.height) * spec.fontSizePct / 100, padding = size4 * 0.6;
+    const size4 = plan.output.height * spec.fontSizePct / 100, padding = size4 * 0.6;
     ctx.save();
     ctx.beginPath();
     ctx.rect(r4.x, r4.y, r4.w, r4.h);
     ctx.clip();
     ctx.globalAlpha = caption.alpha;
-    ctx.font = `${spec.fontWeight} ${size4}px "${plan.theme.typography.family}"`;
+    ctx.font = `${spec.fontWeight} ${size4}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
     const wrapped = wrapLines(caption.text, r4.w - padding * 2, (text2) => ctx.measureText(text2).width, { maxLines: spec.maxLines });
     const scale = Math.min(wrapped.scale, (r4.h - padding) / (size4 * 1.25 * wrapped.lines.length));
-    ctx.font = `${spec.fontWeight} ${size4 * scale}px "${plan.theme.typography.family}"`;
+    ctx.font = `${spec.fontWeight} ${size4 * scale}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
     const lineH = size4 * scale * 1.25;
     if (spec.mode === "overlay") {
       const w4 = Math.min(r4.w, Math.max(...wrapped.lines.map((s3) => ctx.measureText(s3).width)) + padding * 2);
@@ -15662,6 +15928,36 @@
         (isVertical(plan.output) ? plan.layout.safe.y + plan.layout.safe.h * y3 : height * y3) + (i3 - (wrapped.lines.length - 1) / 2) * size4 * wrapped.scale * 1.2
       ));
     }
+    ctx.restore();
+  }
+  function watermarkRect(plan, image) {
+    const w4 = plan.watermark;
+    if (!w4?.enabled || !image) return null;
+    const f4 = { ...plan.layout.frame }, band = plan.captions.enabled && plan.captions.mode === "band" ? plan.layout.caption : null;
+    if (band && band.y < f4.y + f4.h && band.y + band.h > f4.y) {
+      if (band.y <= f4.y) {
+        const bottom = f4.y + f4.h;
+        f4.y = band.y + band.h;
+        f4.h = bottom - f4.y;
+      } else f4.h = band.y - f4.y;
+    }
+    const margin = Math.min(f4.w, f4.h) * w4.marginPct / 100;
+    const width = Math.min(f4.w * w4.sizePct / 100, Math.max(0, f4.w - 2 * margin));
+    const height = width * image.height / image.width, scale = Math.min(1, Math.max(0, f4.h - 2 * margin) / height);
+    const rw = width * scale, rh = height * scale;
+    return {
+      x: w4.position.endsWith("right") ? f4.x + f4.w - margin - rw : f4.x + margin,
+      y: w4.position.startsWith("bottom") ? f4.y + f4.h - margin - rh : f4.y + margin,
+      w: rw,
+      h: rh
+    };
+  }
+  function drawWatermark(ctx, plan) {
+    const image = images.get(plan.watermark?.image), r4 = watermarkRect(plan, image);
+    if (!r4 || !r4.w || !r4.h) return;
+    ctx.save();
+    ctx.globalAlpha = plan.watermark.opacity;
+    ctx.drawImage(image, r4.x, r4.y, r4.w, r4.h);
     ctx.restore();
   }
   function cursorShape(ctx, style) {
@@ -15746,12 +16042,26 @@
       cursorImages = assets.cursorImages;
     }
     const ctx = canvas.getContext("2d"), { width, height } = plan.output;
+    if (isVertical(plan.output)) {
+      ctx.font = `${plan.captions.fontWeight} ${height * plan.captions.fontSizePct / 100}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
+      plan = { ...plan, layout: layoutFor({
+        output: plan.output,
+        source: plan.sourceSize,
+        composition: { ...plan, layout: { safeZones: plan.layout.safe.y > 0 } },
+        captionTexts: plan.cues.map((c3) => c3.text),
+        measureCaption: (text2) => ctx.measureText(text2).width
+      }) };
+    }
     const state = stateAt(plan, tOut), f4 = plan.layout.frame, cam = state.camera;
+    if (isVertical(plan.output) && plan.layout.caption) {
+      const h3 = state.caption ? verticalCaptionMetrics(plan.output, plan.captions, [state.caption.text], (text2) => ctx.measureText(text2).width).h : 0;
+      plan = { ...plan, layout: { ...plan.layout, caption: { ...plan.layout.caption, h: h3 } } };
+    }
     background2(ctx, plan.frame.background, width, height, plan.theme.background);
     if (plan.captions.enabled && plan.captions.mode === "band") {
       const r4 = plan.layout.caption;
       ctx.fillStyle = plan.captions.background;
-      ctx.fillRect(r4.x, r4.y, r4.w, r4.h);
+      ctx.fillRect(isVertical(plan.output) ? 0 : r4.x, r4.y, isVertical(plan.output) ? width : r4.w, r4.h);
     }
     if (state.section === "main" && decoded) {
       const unit = height / 1080, radius = plan.frame.radiusPx * unit;
@@ -15774,6 +16084,7 @@
       ctx.fillStyle = "#111827";
       ctx.fillRect(f4.x, f4.y, f4.w, f4.h);
       ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, content.x, content.y, content.w, content.h);
+      drawWatermark(ctx, plan);
       const mapped = (point) => mapSourcePoint(plan, cam, point);
       const cursorH = plan.cursor.sizePx * (plan.cursor.scaleWithZoom ? 1 + 0.35 * (cam.z - 1) : 1);
       if (state.ripple) {
@@ -15833,6 +16144,12 @@
         const spec = plan.overlays.find((o3) => o3.id === overlay.id);
         ctx.save();
         ctx.globalAlpha = overlay.alpha;
+        if (overlay.params.placement === "frame" && !["callout-arrow", "spotlight", "highlight-box"].includes(overlay.template)) {
+          const safe = overlaySafeArea({ width, height, layout: plan.layout });
+          ctx.beginPath();
+          ctx.rect(safe.x, safe.y, safe.w, safe.h);
+          ctx.clip();
+        }
         TEMPLATES[overlay.template].draw(ctx, {
           width,
           height,
@@ -15848,6 +16165,7 @@
     }
     card(ctx, plan, state.alphaTitle, plan.cards.title, plan.cards.title.title);
     card(ctx, plan, state.alphaOutro, plan.cards.outro, plan.cards.outro.text);
+    if (state.section !== "main") drawWatermark(ctx, plan);
     return canvas;
   }
 
@@ -21233,10 +21551,10 @@
   // node_modules/@radix-ui/number/dist/index.mjs
   var __defProp12 = Object.defineProperty;
   var __name11 = (target, value) => __defProp12(target, "name", { value, configurable: true });
-  function clamp6(value, [min2, max2]) {
+  function clamp7(value, [min2, max2]) {
     return Math.min(max2, Math.max(min2, value));
   }
-  __name11(clamp6, "clamp");
+  __name11(clamp7, "clamp");
 
   // node_modules/@radix-ui/react-direction/dist/index.mjs
   var __defProp13 = Object.defineProperty;
@@ -21974,10 +22292,10 @@
       function updateValues(value2, atIndex, { commit } = { commit: false }) {
         const decimalCount = getDecimalCount(step);
         const snapToStep = roundValue(Math.round((value2 - min2) / step) * step + min2, decimalCount);
-        const nextValue = clamp6(snapToStep, [min2, max2]);
+        const nextValue = clamp7(snapToStep, [min2, max2]);
         const minStepsDistance = minStepsBetweenThumbs * step;
         function getNextValues(prevValues) {
-          const constrainedValue = preserveThumbOrder ? clamp6(nextValue, [
+          const constrainedValue = preserveThumbOrder ? clamp7(nextValue, [
             prevValues[atIndex - 1] === void 0 ? min2 : prevValues[atIndex - 1] + minStepsDistance,
             prevValues[atIndex + 1] === void 0 ? max2 : prevValues[atIndex + 1] - minStepsDistance
           ]) : nextValue;
@@ -22507,7 +22825,7 @@
     const maxSteps = max2 - min2;
     const percentPerStep = 100 / maxSteps;
     const percentage = percentPerStep * (value - min2);
-    return clamp6(percentage, [0, 100]);
+    return clamp7(percentage, [0, 100]);
   }
   __name14(convertValueToPercentage, "convertValueToPercentage");
   function getLabel(index2, totalValues) {
@@ -23302,7 +23620,7 @@
     bottom: "top",
     top: "bottom"
   };
-  function clamp7(start, value, end) {
+  function clamp8(start, value, end) {
     return max(start, min(value, end));
   }
   function evaluate(value, param) {
@@ -23653,7 +23971,7 @@
       const maxPadding = min(paddingObject[maxProp], largestPossiblePadding);
       const max2 = clientSize - arrowDimensions[length] - maxPadding;
       const center = clientSize / 2 - arrowDimensions[length] / 2 + centerToReference;
-      const offset4 = clamp7(minPadding, center, max2);
+      const offset4 = clamp8(minPadding, center, max2);
       const shouldAddOffset = !middlewareData.arrow && getAlignment(placement) != null && center !== offset4 && rects.reference[length] / 2 - (center < minPadding ? minPadding : maxPadding) - arrowDimensions[length] / 2 < 0;
       const alignmentOffset = shouldAddOffset ? center < minPadding ? center - minPadding : center - max2 : 0;
       return {
@@ -23947,7 +24265,7 @@
         const mainAxis = getOppositeAxis(crossAxis);
         let mainAxisCoord = coords[mainAxis];
         let crossAxisCoord = coords[crossAxis];
-        const clampCoord = (axis, coord) => clamp7(coord + overflow[axis === "y" ? "top" : "left"], coord, coord - overflow[axis === "y" ? "bottom" : "right"]);
+        const clampCoord = (axis, coord) => clamp8(coord + overflow[axis === "y" ? "top" : "left"], coord, coord - overflow[axis === "y" ? "bottom" : "right"]);
         if (checkMainAxis) {
           mainAxisCoord = clampCoord(mainAxis, mainAxisCoord);
         }
@@ -26967,7 +27285,7 @@
           const minContentWidth = triggerRect.width + leftDelta;
           const contentWidth = Math.max(minContentWidth, contentRect.width);
           const rightEdge = window.innerWidth - CONTENT_MARGIN;
-          const clampedLeft = clamp6(left, [
+          const clampedLeft = clamp7(left, [
             CONTENT_MARGIN,
             // Prevents the content from going off the starting edge of the
             // viewport. It may still go off the ending edge, but this can be
@@ -26985,7 +27303,7 @@
           const minContentWidth = triggerRect.width + rightDelta;
           const contentWidth = Math.max(minContentWidth, contentRect.width);
           const leftEdge = window.innerWidth - CONTENT_MARGIN;
-          const clampedRight = clamp6(right, [
+          const clampedRight = clamp7(right, [
             CONTENT_MARGIN,
             Math.max(CONTENT_MARGIN, leftEdge - contentWidth)
           ]);
@@ -28934,6 +29252,7 @@
 
   // scripts/lib/compose/settings-schema.mjs
   var EXCLUDED = [
+    ...["themeSource", "brandDefaults", "watermark", ...["enabled", "image", "position", "opacity", "sizePct", "marginPct"].map((k4) => `watermark.${k4}`)].map((path) => ({ path, reason: "Brand-derived settings and provenance; managed by the brand kit, editor panels follow in Phase 7 E." })),
     { path: "output.preset", reason: "Output format is selected by render --format; editor controls are added in Phase 7 E." },
     { path: "layout.safeZones", reason: "Platform safe areas are selected in composition.json; editor controls are added in Phase 7 E." },
     { path: "overlays", reason: "Source-time overlays edited on the timeline." },
@@ -30526,7 +30845,7 @@
 
   // editor/edit-ops.mjs
   var snapFrame = (t3) => Math.round(t3 * 60) / 60;
-  var clone2 = (c3) => structuredClone(c3);
+  var clone3 = (c3) => structuredClone(c3);
   var overlap = (a3, b3) => a3.start < b3.end && b3.start < a3.end;
   function range(start, end, { duration = Infinity } = {}) {
     start = snapFrame(start);
@@ -30553,7 +30872,7 @@
   ]);
   var splitAt = (c3) => c3;
   function cutRange(c3, start, end, context = {}) {
-    const r4 = range(start, end, context), next = clone2(c3);
+    const r4 = range(start, end, context), next = clone3(c3);
     if (r4.end - r4.start < 0.1 - 1e-9) throw new Error("A cut must be at least 0.1 seconds.");
     next.edits.trims = merge2([...next.edits.trims, r4]);
     if (next.edits.trims.some((t3) => t3.start === 0 && t3.end >= context.duration)) throw new Error("Keep at least one frame of the recording.");
@@ -30563,7 +30882,7 @@
   }
   function restoreRange(c3, index2, context) {
     if (!c3.edits.trims[index2]) throw new Error("Removed range no longer exists.");
-    const next = clone2(c3);
+    const next = clone3(c3);
     next.edits.trims.splice(index2, 1);
     return finish(next, context);
   }
@@ -30571,13 +30890,13 @@
     const r4 = range(start, end, context);
     if (!Number.isFinite(rate) || rate < 0.25 || rate > 8) throw new Error("Speed must be between 0.25 and 8.");
     if (c3.edits.trims.some((t3) => overlap(t3, r4))) throw new Error("Restore the removed range before changing its speed.");
-    const next = clone2(c3);
+    const next = clone3(c3);
     next.edits.speeds = merge2([...subtract(next.edits.speeds, r4), ...rate === 1 ? [] : [{ ...r4, rate }]], true);
     return finish(next, context);
   }
   function clearSpeed(c3, index2, context) {
     if (!c3.edits.speeds[index2]) throw new Error("Speed range no longer exists.");
-    const next = clone2(c3);
+    const next = clone3(c3);
     next.edits.speeds.splice(index2, 1);
     return finish(next, context);
   }
@@ -30587,18 +30906,18 @@
     return `${prefix}${n2}`;
   };
   function addZoomRegion(c3, { tStart, tEnd, x: x4, y: y3, depth }, context = {}) {
-    const r4 = range(tStart, tEnd, context), next = clone2(c3);
+    const r4 = range(tStart, tEnd, context), next = clone3(c3);
     if (next.zoom.regions.some((z4) => overlap({ start: z4.tStart, end: z4.tEnd }, r4))) throw new Error("Zoom regions cannot overlap; choose an empty range.");
     next.zoom.regions.push({ id: uniqueId(next.zoom.regions, "manual-"), tStart: r4.start, tEnd: r4.end, depth, keyframes: [{ t: r4.start, x: x4, y: y3 }], stepIds: [], source: "manual" });
     next.zoom.regions.sort((a3, b3) => a3.tStart - b3.tStart);
     return finish(next, context);
   }
   function updateZoomRegion(c3, id13, patch, context = {}) {
-    const next = clone2(c3), z4 = next.zoom.regions.find((z5) => z5.id === id13);
+    const next = clone3(c3), z4 = next.zoom.regions.find((z5) => z5.id === id13);
     if (!z4) throw new Error("Zoom region no longer exists.");
     for (const k4 of Object.keys(patch)) if (!["tStart", "tEnd", "depth", "keyframes"].includes(k4)) throw new Error(`Cannot edit zoom ${k4}.`);
     const oldStart = z4.tStart;
-    Object.assign(z4, clone2(patch), { source: "manual" });
+    Object.assign(z4, clone3(patch), { source: "manual" });
     const r4 = range(z4.tStart, z4.tEnd, context);
     z4.tStart = r4.start;
     z4.tEnd = r4.end;
@@ -30609,7 +30928,7 @@
     return finish(next, context);
   }
   function deleteZoomRegion(c3, id13, context) {
-    const next = clone2(c3);
+    const next = clone3(c3);
     next.zoom.regions = next.zoom.regions.filter((z4) => z4.id !== id13);
     next.zoom.autoSuggest = false;
     return finish(next, context);
@@ -30623,8 +30942,8 @@
     return updateZoomRegion(c3, id13, { keyframes }, context);
   }
   function withCues(c3, context = {}) {
-    const next = clone2(c3);
-    next.captions.cues ??= clone2(context.plan?.cues ?? context.cues ?? []);
+    const next = clone3(c3);
+    next.captions.cues ??= clone3(context.plan?.cues ?? context.cues ?? []);
     return next;
   }
   function setCaption(c3, id13, patch, context = {}) {
@@ -30648,7 +30967,7 @@
     return finish(next, context);
   }
   function autoZoomRegenerate(c3, events, record) {
-    const next = clone2(c3), manual = next.zoom.regions.filter((z4) => z4.source === "manual");
+    const next = clone3(c3), manual = next.zoom.regions.filter((z4) => z4.source === "manual");
     const auto = suggestZoomRegions({ events, record, options: zoomOptions(next.zoom) }).filter((z4) => !manual.some((m3) => z4.tStart < m3.tEnd && z4.tEnd > m3.tStart));
     auto.forEach((z4, i3) => {
       z4.id = uniqueId([...manual, ...auto.slice(0, i3)], "auto-");
@@ -30666,7 +30985,7 @@
   function fixFreeze(c3, stepId, overrunSec, context = {}) {
     if (!Number.isFinite(overrunSec) || overrunSec <= 0) throw new Error("There is no overrun to fix.");
     const part = lastPart(context, stepId), t3 = Math.max(part.srcStart, part.srcEnd - 1 / 60), extra = Math.ceil(overrunSec * 100) / 100;
-    const next = clone2(c3);
+    const next = clone3(c3);
     next.edits.holds ??= [];
     const existing = next.edits.holds.find((h3) => Math.abs(h3.t - t3) < 1e-9);
     if (existing) existing.duration = +(existing.duration + extra).toFixed(3);
@@ -31354,7 +31673,7 @@
   // editor/Timeline.jsx
   var LABEL_WIDTH = 88;
   var clock = (t3) => `${Math.floor(t3 / 60)}:${(t3 % 60).toFixed(2).padStart(5, "0")}`;
-  var clamp8 = (v3, lo, hi) => Math.max(lo, Math.min(hi, v3));
+  var clamp9 = (v3, lo, hi) => Math.max(lo, Math.min(hi, v3));
   function Timeline({ state, store, time, setTime, setPlaying, selection, setSelection }) {
     const { composition: c3, plan, project } = state;
     const [scale, setScale] = d2(80), [output, setOutput] = d2(false), [error, setError] = d2("");
@@ -31381,17 +31700,17 @@
     const px = (t3) => displayTime(t3) * scale;
     const style = (start, end) => ({ left: px(start), width: Math.max(4, px(end) - px(start)) });
     const fromClient = (x4) => {
-      const t3 = clamp8((x4 - lanes.current.getBoundingClientRect().left) / scale, 0, extent);
+      const t3 = clamp9((x4 - lanes.current.getBoundingClientRect().left) / scale, 0, extent);
       return output && map ? sourceAt(map, t3).t : t3;
     };
     const snap = (t3, alt) => {
-      t3 = clamp8(t3, 0, duration);
+      t3 = clamp9(t3, 0, duration);
       if (!alt) {
         const points = [sourceT, ...steps.flatMap((s3) => [s3.tStart, s3.tEnd]), ...clicks.map((c4) => c4.t), ...splits];
         const nearest = points.reduce((best, p3) => best === null || Math.abs(px(p3) - px(t3)) < Math.abs(px(best) - px(t3)) ? p3 : best, null);
         if (nearest !== null && Math.abs(px(nearest) - px(t3)) < 8) t3 = nearest;
       }
-      return clamp8(snapFrame(t3), 0, duration);
+      return clamp9(snapFrame(t3), 0, duration);
     };
     function commit(operation) {
       try {
@@ -31500,7 +31819,7 @@
           const delta = (e3.key === "ArrowLeft" ? -1 : 1) * (e3.shiftKey ? 10 : 1) / 60;
           const r4 = itemRange(selection);
           if (!r4) return;
-          if (selection.type === "range") setSelection({ ...selection, start: clamp8(r4.start + delta, 0, duration - (r4.end - r4.start)), end: clamp8(r4.start + delta, 0, duration - (r4.end - r4.start)) + (r4.end - r4.start) });
+          if (selection.type === "range") setSelection({ ...selection, start: clamp9(r4.start + delta, 0, duration - (r4.end - r4.start)), end: clamp9(r4.start + delta, 0, duration - (r4.end - r4.start)) + (r4.end - r4.start) });
           else commit(() => {
             const next = moveItem(working, selection, r4.start + delta, r4.end + delta);
             setSelection(movedSelection(next, selection, r4.start + delta));
@@ -31598,7 +31917,7 @@
       if (e3.button !== 0) return;
       const seekRuler = (x4) => {
         setPlaying(false);
-        if (output) setTime(clamp8((x4 - lanes.current.getBoundingClientRect().left) / scale, 0, extent));
+        if (output) setTime(clamp9((x4 - lanes.current.getBoundingClientRect().left) / scale, 0, extent));
         else seek(fromClient(x4));
       };
       e3.preventDefault();
@@ -31617,7 +31936,7 @@
       addEventListener("pointercancel", up);
     }
     function changeScale(value, clientX) {
-      const el = scroller.current, next = clamp8(value, 10, 800), rect = el.getBoundingClientRect();
+      const el = scroller.current, next = clamp9(value, 10, 800), rect = el.getBoundingClientRect();
       const offset4 = clientX === void 0 ? (el.clientWidth + LABEL_WIDTH) / 2 : clientX - rect.left;
       const position = (el.scrollLeft + offset4 - LABEL_WIDTH) / scale;
       setScale(next);
@@ -31715,7 +32034,7 @@
           if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e3.key)) {
             e3.preventDefault();
             e3.stopPropagation();
-            const next = e3.key === "Home" ? 0 : e3.key === "End" ? extent : clamp8((output ? time : sourceT) + (e3.key === "ArrowLeft" ? -1 : 1) * (e3.shiftKey ? 10 : 1) / 60, 0, extent);
+            const next = e3.key === "Home" ? 0 : e3.key === "End" ? extent : clamp9((output ? time : sourceT) + (e3.key === "ArrowLeft" ? -1 : 1) * (e3.shiftKey ? 10 : 1) / 60, 0, extent);
             if (output) {
               setPlaying(false);
               setTime(next);

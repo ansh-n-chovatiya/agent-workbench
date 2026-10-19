@@ -1,3 +1,4 @@
+import { wrapLines } from './captions.mjs';
 export const OUTPUT_PRESETS = Object.freeze({ landscape: [1920, 1080], vertical: [1080, 1920], square: [1080, 1080] });
 export function presetOutput(preset = 'landscape', size = '1080') {
   if (!Object.hasOwn(OUTPUT_PRESETS, preset)) throw new Error('format must be landscape, vertical or square');
@@ -17,24 +18,33 @@ export function containRect(source, bounds) {
   const h = Math.min(bounds.h, Math.round(source.height * scale));
   return { x: bounds.x + Math.round((bounds.w - w) / 2), y: bounds.y + Math.round((bounds.h - h) / 2), w, h };
 }
-export function verticalLayout({ output, source, composition }) {
+export function verticalCaptionMetrics(output, captions, texts = [], measureText) {
+  const size=output.height*(captions?.fontSizePct??3.9)/100, padding=size*.6;
+  const w=Math.round(output.width*.88), maxLines=Math.min(3,captions?.maxLines??3);
+  const measure=measureText??(text=>Array.from(text).length*size*.55);
+  const lines=Math.max(1,...texts.map(text=>wrapLines(text,w-padding*2,measure,{maxLines}).lines.length));
+  return {size,w,lines,h:Math.ceil(lines*size*1.25+padding)};
+}
+export function verticalLayout({ output, source, composition, captionTexts = [], measureCaption }) {
   const { width, height } = output, captions = composition.captions;
   const safe = safeArea(output, composition.layout?.safeZones ?? true);
   const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 4;
-  const pad = Math.round(width * px / 100), gap = Math.round(height * 0.02);
+  const pad = Math.round(width * px / 100), gap = captions?.enabled && captions.mode !== 'band' ? Math.round(height * .012) : 0;
   const py = Math.round(height * (composition.frame?.paddingYPct ?? 0) / 100);
-  const band = captions?.enabled && captions.mode === 'band' ? Math.round(height * (captions.bandHeightPct ?? 16) / 100) : 0;
-  const frame = { x: pad, y: safe.y + py, w: width - pad * 2, h: safe.h - band - gap - py * 2 };
-  const content = containRect(source, frame);
-  const caption = !captions?.enabled ? null : band
-    ? { x: 0, y: safe.y + safe.h - band, w: width, h: band }
-    : { x: pad, y: frame.y + frame.h - Math.round(height * 0.1), w: frame.w, h: Math.round(height * 0.1) };
-  return { canvas: { width, height }, safe, frame, content, caption, scaleFramePx: content.w / source.width };
+  const metrics=verticalCaptionMetrics(output,captions,captionTexts,measureCaption);
+  const captionH=captions?.enabled?metrics.h:0;
+  const available={x:pad,y:safe.y+py,w:width-2*pad,h:Math.max(1,safe.h-2*py-captionH-gap)};
+  // Off-profile landscape recordings retain a letterboxed frame.
+  const frame=source.width>source.height?available:containRect(source,available);
+  frame.y=available.y;
+  const content=source.width>source.height?containRect(source,frame):{...frame};
+  const caption=!captions?.enabled?null:{x:Math.round((width-metrics.w)/2),y:frame.y+frame.h+gap,w:metrics.w,h:captionH};
+  return {canvas:{width,height},safe,frame,content,caption,scaleFramePx:content.w/source.width};
 }
-export function layoutFor({ output, source, composition }) {
+export function layoutFor({ output, source, composition, captionTexts, measureCaption }) {
   const { width, height } = output;
   if (![width, height, source.width, source.height].every((v) => Number.isFinite(v) && v > 0)) throw new Error('Layout dimensions must be finite and positive');
-  if (isVertical(output)) return verticalLayout({ output, source, composition });
+  if (isVertical(output)) return verticalLayout({ output, source, composition, captionTexts, measureCaption });
   const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 8;
   const py = composition.frame?.paddingYPct ?? composition.frame?.paddingPct ?? 5;
   const captions = composition.captions;

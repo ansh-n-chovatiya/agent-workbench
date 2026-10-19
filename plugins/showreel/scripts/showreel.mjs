@@ -17,6 +17,7 @@ import { addGuideStep } from './lib/guide/commands.mjs';
 const help = `Usage: showreel <command>
 
 Commands:
+  brand <init|show|set|list|remove|apply|clear>    Manage reusable brand kits
   templates list [--json]                       List canvas templates and parameters
   overlay <add|list|remove> --name <name>        Manage source-time overlays (remove: --id ID)
   doctor [--name <name>] [--json] [--benchmark]    Check the environment and optional capture performance
@@ -176,6 +177,7 @@ async function snapshotCommand(flags) {
 
 async function main(args) {
   const [command, ...flags] = args;
+  if (command === 'brand') { const { brandCommand } = await import('./lib/brand/commands.mjs'); return brandCommand(flags); }
   if (['record', 'login', 'runs', 'cursor-demo'].includes(command)) {
     return recordingCommand(command, flags);
   }

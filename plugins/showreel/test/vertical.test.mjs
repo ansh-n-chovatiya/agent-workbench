@@ -61,13 +61,15 @@ test('portrait frame and bottom caption band fit safe zones for phone and deskto
   for (const source of [phone, { width: 1920, height: 1080 }]) {
     const input = { output: presetOutput('vertical'), source, composition: { captions: { enabled: true, mode: 'band' } } };
     const { frame: f, content: c, caption: b, safe } = layoutFor(input);
-    assert.equal(f.w, 994); assert.equal(b.h, 307); assert.equal(b.y + b.h, safe.y + safe.h);
+    assert.ok(f.w <= 994); assert.ok(b.h < 307); assert.ok(b.y + b.h <= safe.y + safe.h);
+    assert.equal(b.w,Math.round(1080*.88));
+    if(source.width<source.height){assert.deepEqual(f,c);assert.ok(Math.abs(f.w/f.h-source.width/source.height)/(source.width/source.height)<.005);}
     assert.ok(f.y >= 1920 * .07 && f.y + f.h <= b.y); assert.ok(b.y + b.h <= 1920 * .86);
     assert.ok(c.x >= f.x && c.y >= f.y && c.x + c.w <= f.x + f.w && c.y + c.h <= f.y + f.h);
     assert.ok(Math.abs(c.h - c.w * source.height / source.width) < 2);
     if (source.width > source.height) assert.ok(c.h < f.h);
     const unsafe = layoutFor({ ...input, composition: { ...input.composition, layout: { safeZones: false } } });
-    assert.equal(unsafe.frame.y, 0); assert.equal(unsafe.caption.y + unsafe.caption.h, 1920);
+    assert.equal(unsafe.frame.y, 0); assert.ok(unsafe.caption.y + unsafe.caption.h <= 1920);
   }
 });
 test('square safe zones, preset-only dimensions, and portrait 4k', () => {

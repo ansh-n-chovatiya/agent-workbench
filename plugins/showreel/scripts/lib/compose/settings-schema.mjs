@@ -2,6 +2,7 @@ import { compositionPaths, SETTING_RANGES, SETTING_ENUMS } from './composition.m
 
 export const SETTINGS_VERSION = 1;
 export const EXCLUDED = [
+  ...['themeSource','brandDefaults','watermark', ...['enabled','image','position','opacity','sizePct','marginPct'].map(k=>`watermark.${k}`)].map(path=>({path,reason:'Brand-derived settings and provenance; managed by the brand kit, editor panels follow in Phase 7 E.'})),
   { path: 'output.preset', reason: 'Output format is selected by render --format; editor controls are added in Phase 7 E.' },
   { path: 'layout.safeZones', reason: 'Platform safe areas are selected in composition.json; editor controls are added in Phase 7 E.' },
   { path: 'overlays', reason: 'Source-time overlays edited on the timeline.' },

@@ -1,3 +1,4 @@
+import { loadBriefBrand, resolveBrandRoute } from '../brand/storage.mjs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,6 +72,11 @@ export async function startEditorServer({ name, runId, port = 0, host = '127.0.0
         return serve(await safeFile(path.join(root,'dist/editor'),file));
       }
       if (method === 'GET' && route.startsWith('/fonts/')) return serve(await safeFile(path.join(root,'assets/fonts'),route.slice(7)));
+      if (method === 'GET' && route.startsWith('/media/brand/')) {
+        const found = await resolveBrandRoute(route.slice('/media/brand/'.length));
+        if (!found) return send(404,{error:'Brand asset not found'});
+        response.writeHead(200,{'content-type':found.type}); response.end(await readFile(found.file)); return;
+      }
       if (method === 'GET' && route.startsWith('/media/asset/')) {
         const encoded = route.slice('/media/asset/'.length), relative = safeRelativePath(encoded);
         if (!relative) return send(400,{error:'Invalid asset path'});
@@ -94,7 +100,7 @@ export async function startEditorServer({ name, runId, port = 0, host = '127.0.0
         // A damaged voice index must not stop the editor from opening; the Voice tab reports it instead.
         const {voice,clips} = await voiceApi.snapshot().catch(error => ({voice:{installed:false,error:error.message,voices:[],status:[],installCommand:'showreel voice install --yes'},clips:{version:1,clips:{},steps:{}}}));
         return send(200,{name,runId:project.runId,brief:current.brief,storyboard:current.storyboard,events:current.events,record:current.record,
-          composition:current.composition,runs,settings:SETTINGS,settingsSchemaVersion:SETTINGS_VERSION,voice,clips,lastExport});
+          composition:current.composition,brand:await loadBriefBrand(current.brief),runs,settings:SETTINGS,settingsSchemaVersion:SETTINGS_VERSION,voice,clips,lastExport});
       }
       if (method === 'PUT' && route === '/api/composition') {
         const body = await readBody(request);

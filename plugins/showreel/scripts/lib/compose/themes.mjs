@@ -10,7 +10,7 @@ function theme(name, colors, ink, muted, accent, font, weight, radius, size, spe
     ripple: { color: accent },
     caption: { background: name === 'clean' ? 'rgba(17,24,39,0.86)' : name === 'dark' ? '#202b40' : '#24124b', color: '#ffffff', fontWeight: weight },
     card: { background: { type: 'gradient', angle: 135, colors }, titleColor: ink, subtitleColor: muted, accent },
-    overlay: { accent, surface: name === 'clean' ? '#ffffff' : name === 'dark' ? '#172033' : '#24124b', onSurface: name === 'clean' ? '#111827' : '#ffffff', muted },
+    overlay: { accent, onAccent: name === 'clean' ? '#ffffff' : '#111827', surfaceBorder: name === 'clean' ? '#c2cbd7' : name === 'dark' ? '#0b1220' : '#160b30', surface: name === 'clean' ? '#ffffff' : name === 'dark' ? '#172033' : '#24124b', onSurface: name === 'clean' ? '#111827' : '#ffffff', muted },
     typography: { family: font, weights: { body: 400, display: weight }, captionSizeMultiplier: name === 'bold' ? 1.2 : 1 },
     zoom: { depth, speed }, transition: name === 'bold' ? 'cut' : 'crossfade', font };
 }

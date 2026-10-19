@@ -1,3 +1,4 @@
+import { applyBrandToComposition, planBrand, brandTheme } from '../brand/apply.mjs';
 import { buildTimeMap, sourceAt } from './timemap.mjs';
 import { planCamera, cameraAt } from './camera.mjs';
 import { directCursor } from './cursor-director.mjs';
@@ -40,13 +41,16 @@ export function planAudio({ composition, brief, events, timemap, cues, voiceClip
     duck: { ...music.duck }, loudness: { ...loudness }, warnings: placed.warnings, captionSpans: placed.captionSpans };
 }
 
-export function planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings = [], voiceClips = null, audioUrls }) {
+export function planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings = [], voiceClips = null, audioUrls, brand = null, brandBase = 'brand/' }) {
   const validation = validateComposition(composition, { duration: record.durationSec });
   if (!validation.ok) throw new Error(validation.errors.join('\n'));
   if (![sourceSize.width, sourceSize.height, record.scale.used].every((v) => Number.isFinite(v) && v > 0)) throw new Error('Invalid source size or capture scale');
-  composition = resolveComposition(composition);
+  composition = brand ? applyBrandToComposition(composition,brand) : resolveComposition(composition);
+  const resolvedBrand = planBrand(brand,composition,brandBase);
+  const resolvedTheme = brandTheme(brand,composition.theme);
   const { output, cards } = composition;
-  const layout = layoutFor({ output, source: sourceSize, composition });
+  const captionTexts = (composition.captions.cues ?? cuesFromRun({storyboard,events,captionsEnabled:composition.captions.enabled})).map(c=>c.text);
+  const layout = layoutFor({ output, source: sourceSize, composition, captionTexts });
   const timeArgs = (extraHold) => ({ duration: record.durationSec, ...composition.edits,
     holds: extraHold ? [...(composition.edits.holds ?? []), extraHold] : composition.edits.holds,
     lead: cards.title.enabled ? cards.title.durationSec : 0,
@@ -77,7 +81,7 @@ export function planRender({ composition, brief, storyboard, events, record, sou
   }
   if (audio.captionSpans.length) cues = extendCues(cues, audio.captionSpans, timemap);
   const overlayPlan = planOverlays(composition.overlays, timemap);
-  return { overlays: overlayPlan.overlays, motion: clone(composition.motion), output: clone(output), layout, theme: THEMES[composition.theme], frame: clone(composition.frame), timemap,
+  return { brand: resolvedBrand, watermark: clone(composition.watermark), overlays: overlayPlan.overlays, motion: clone(composition.motion), output: clone(output), layout, theme: resolvedTheme, frame: clone(composition.frame), timemap,
     regions: clone(regions),
     camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
     cues, audio,

@@ -1,3 +1,7 @@
+import { THEMES } from './themes.mjs';
+import { leafValues } from '../brand/apply.mjs';
+import { loadBriefBrand, resolveBrandRoute } from '../brand/storage.mjs';
+import { safeFile } from '../editor/files.mjs';
 import { presetOutput } from './layout.mjs';
 import { profileWarnings } from './plan.mjs';
 import { listRuns } from '../record/commands.mjs';
@@ -63,14 +67,15 @@ export async function resolveImageAssets(composition, dir) {
   const c = resolveComposition(composition), assets = new Map(), root = await realpath(dir);
   assets.warnings = [];
   const custom = c.cursor.style === 'custom' ? ['arrow', 'hand', 'text'].map((shape) => c.cursor.custom?.[shape]).filter(Boolean) : [];
-  for (const spec of [c.frame.background, c.cards.title.background, c.cards.outro.background, c.cards.title.logo, c.cards.outro.logo, ...(c.overlays ?? []).filter(o => o.template === 'logo-sting' && o.params.useLogo).map(o => ({ image:o.params.logo })), ...custom]) {
+  for (const spec of [c.watermark, c.frame.background, c.cards.title.background, c.cards.outro.background, c.cards.title.logo, c.cards.outro.logo, ...(c.overlays ?? []).filter(o => o.template === 'logo-sting' && o.params.useLogo).map(o => ({ image:o.params.logo })), ...custom]) {
     if (!spec?.image) continue;
     if (!safeImagePath(spec.image)) throw new Error('Image must be inside the project');
     const isCursor = custom.includes(spec);
     if (isCursor && !/\.(png|svg|webp)$/i.test(spec.image)) throw new Error(`Unsupported cursor image format: ${spec.image}`);
     let file;
-    try { file = await realpath(path.join(root, spec.image)); }
+    try { file = await safeFile(root, spec.image.split('/').map(encodeURIComponent).join('/'));  }
     catch (error) {
+      if (error.message === 'File must be inside its project') throw new Error('Image must be inside the project');
       if (!isCursor || error.code !== 'ENOENT') throw error;
       assets.warnings.push(cursorImageWarning(spec.image)); continue;
     }
@@ -127,6 +132,10 @@ export async function startRenderServer({ rawFile, outFile, assets = new Map(), 
             stream.on('error', (error) => { failure ??= error; response.destroy(error); });
             response.on('close', () => stream.destroy()); stream.pipe(response);
           }
+        } else if (request.method === 'GET' && route.startsWith(`${prefix}brand/`)) {
+          const found = await resolveBrandRoute(route.slice(`${prefix}brand/`.length));
+          if (!found) { response.writeHead(404); response.end(); return; }
+          response.writeHead(200, { 'content-type': found.type, 'x-content-type-options': 'nosniff' }); response.end(await readFile(found.file));
         } else if (request.method === 'GET' && route.startsWith(`${prefix}assets/`)) {
           const key = decodeURIComponent(route.slice(`${prefix}assets/`.length));
           const asset = assets.get(key);
@@ -237,12 +246,12 @@ export async function renderRun({ name, runId, format = 'landscape', size, fps, 
   if (size !== undefined && !['1080', '4k'].includes(size)) throw new Error('size must be 1080 or 4k');
   if (fps !== undefined && ![30, 60].includes(fps)) throw new Error('fps must be 30 or 60');
   const { dir, compositionFile, rawFile, brief, storyboard, events, record, composition: loaded } = await loadRunComposition({ name, runId, rebuild, rebind: true });
+  const brand = await loadBriefBrand(brief,log);
   let composition = loaded;
   // Keep the editable composition on its original run when exporting another profile.
   let saved;
   try { saved = await json(compositionFile); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (!saved || saved.run.id === composition.run.id) await writeFile(compositionFile, JSON.stringify(composition, null, 2) + '\n');
-  composition = resolveComposition(composition);
   composition = compositionForFormat(composition, format, size, fps);
   for (const warning of profileWarnings(record.profile ?? events.profile, format)) log(`warning: ${warning}`);
   const assets = await resolveImageAssets(composition, dir);
@@ -280,7 +289,7 @@ export async function renderRun({ name, runId, format = 'landscape', size, fps, 
     checkCancelled();
     await page.goto(server.url); await page.waitForFunction(() => typeof window.renderComposition === 'function');
     const sourceSize = await page.evaluate(() => window.probeRenderSource());
-    plan = planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings: assets.warnings, voiceClips });
+    plan = planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings: assets.warnings, voiceClips, brand });
     for (const warning of plan.warnings) if (!profileWarnings(record.profile ?? events.profile, format).includes(warning)) log(`warning: ${warning}`);
     for (const warning of plan.audio.warnings) log(`warning: ${warning.message}`);
     if (stills) {
@@ -336,17 +345,28 @@ export function compositionForFormat(input, format, size, fps) {
       if (c.frame.paddingXPct === 8) c.frame.paddingXPct = 4;
       if (c.frame.paddingYPct === 5) c.frame.paddingYPct = 0;
       if (c.captions.bandHeightPct === 13) c.captions.bandHeightPct = 16;
+      if (c.captions.fontSizePct === 3.4*THEMES[c.theme].typography.captionSizeMultiplier) c.captions.fontSizePct=3.9;
+      if (c.captions.maxLines === 2) c.captions.maxLines=3;
       if (c.zoom.depth === resolveComposition({ theme: c.theme }).zoom.depth) c.zoom.depth = 1.5;
     } else if (previous === 'vertical') {
       if (c.frame.paddingXPct === 4) c.frame.paddingXPct = 8;
       if (c.frame.paddingYPct === 0) c.frame.paddingYPct = 5;
       if (c.captions.bandHeightPct === 16) c.captions.bandHeightPct = 13;
+      if (c.captions.fontSizePct === 3.9) c.captions.fontSizePct=3.4*THEMES[c.theme].typography.captionSizeMultiplier;
+      if (c.captions.maxLines === 3) c.captions.maxLines=2;
       if (c.zoom.depth === 1.5) c.zoom.depth = resolveComposition({ theme: c.theme }).zoom.depth;
-      if (c.layout.safeZones === true) c.layout.safeZones = null;
+      if (c.layout?.safeZones === true) c.layout.safeZones = null;
     }
     if (c.zoom.regions.every(r => r.source === 'auto')) c.zoom.regions = [];
   }
-  return resolveComposition(c);
+  const resolved = resolveComposition(c);
+  // Export expands optional v1 settings. Their newly materialised defaults must
+  // remain inheritable, while every leaf actually saved in an older file stays explicit.
+  for (const [p,v] of Object.entries(leafValues(resolved))) {
+    if (!/^(frame|cursor|captions|cards|watermark)\./.test(p) && !/^zoom\.(speed|depth)$/.test(p)) continue;
+    if (p.split('.').reduce((n,k)=>n?.[k],input) === undefined) resolved.brandDefaults[p] = v;
+  }
+  return resolved;
 }
 export function selectRenderRuns(runs) {
   const latest = (profile) => runs.filter(r => (r.profile ?? 'desktop') === profile).sort((a,b) => a.id.localeCompare(b.id)).at(-1);

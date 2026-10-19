@@ -1,4 +1,4 @@
-// showreel render sources sha256: 6907818bb24ac0fdb77109710c64c164537b3adb2a80f23fb35b65b91bff2cea
+// showreel render sources sha256: 7bef05f43d9abe8d90f5e25c25a00c13984727dc180d53f2933306de7ddc8309
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -31610,66 +31610,11 @@
     };
   }
 
-  // scripts/lib/compose/camera.mjs
-  function cameraAt(plan, t) {
-    const samples = plan.samples;
-    if (!samples?.length) throw new Error("Camera plan must contain samples");
-    let lo = 0, hi = samples.length - 1;
-    if (t <= samples[lo].t) return pick(samples[lo]);
-    if (t >= samples[hi].t) return pick(samples[hi]);
-    while (hi - lo > 1) {
-      const mid = lo + hi >> 1;
-      if (samples[mid].t <= t) lo = mid;
-      else hi = mid;
-    }
-    const a = samples[lo], b = samples[hi], f = (t - a.t) / (b.t - a.t);
-    return {
-      cx: a.cx + (b.cx - a.cx) * f,
-      cy: a.cy + (b.cy - a.cy) * f,
-      z: a.z + (b.z - a.z) * f
-    };
-  }
-  var pick = ({ cx, cy, z }) => ({ cx, cy, z });
-
-  // scripts/lib/compose/cursor-track.mjs
-  var smooth = (t) => t * t * (3 - 2 * t);
-  function latest(samples, t) {
-    let lo = 0, hi = samples.length;
-    while (lo < hi) {
-      const mid = lo + hi >> 1;
-      if (samples[mid].t <= t) lo = mid + 1;
-      else hi = mid;
-    }
-    return lo - 1;
-  }
-  function cursorAt(events, t) {
-    const samples = events.cursor;
-    if (!samples.length) return { x: events.viewport.width / 2, y: events.viewport.height / 2 };
-    const i = latest(samples, t), a = samples[Math.max(0, i)], b = samples[i + 1];
-    if (i < 0 || !b) return { x: a.x, y: a.y };
-    const f = (t - a.t) / (b.t - a.t);
-    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
-  }
-  function pressAmount(events, t) {
-    let amount = 1;
-    for (const click of events.clicks) {
-      const age = t - click.t;
-      if (age < 0 || age >= 0.12) continue;
-      const scale = age <= 0.045 ? 1 - 0.14 * smooth(age / 0.045) : 0.86 + 0.14 * smooth((age - 0.045) / 0.075);
-      amount = Math.min(amount, scale);
-    }
-    return amount;
-  }
-  function rippleAt(events, t, durationSec = 0.55) {
-    const c = events.clicks[latest(events.clicks, t)];
-    return c && t < c.t + durationSec ? { x: c.x, y: c.y, progress: (t - c.t) / durationSec } : null;
-  }
-
   // scripts/lib/compose/captions.mjs
-  var smooth2 = (t) => t * t * (3 - 2 * t);
+  var smooth = (t) => t * t * (3 - 2 * t);
   function captionAlpha(cue, t) {
     if (t <= cue.start || t >= cue.end) return 0;
-    return smooth2(Math.min(1, (t - cue.start) / 0.2, (cue.end - t) / 0.2));
+    return smooth(Math.min(1, (t - cue.start) / 0.2, (cue.end - t) / 0.2));
   }
   function wrap(text2, width, measure) {
     const lines = [];
@@ -31718,6 +31663,62 @@
   // scripts/lib/compose/layout.mjs
   var OUTPUT_PRESETS = Object.freeze({ landscape: [1920, 1080], vertical: [1080, 1920], square: [1080, 1080] });
   var isVertical = (output) => output.preset === "vertical" || output.height > output.width;
+  function safeArea(output, enabled = isVertical(output)) {
+    const top = enabled ? Math.ceil(output.height * 0.07) : 0;
+    const bottom = enabled ? Math.ceil(output.height * 0.14) : 0;
+    return { x: 0, y: top, w: output.width, h: output.height - top - bottom };
+  }
+  function containRect(source, bounds) {
+    const scale = Math.min(bounds.w / source.width, bounds.h / source.height);
+    const w = Math.min(bounds.w, Math.round(source.width * scale));
+    const h = Math.min(bounds.h, Math.round(source.height * scale));
+    return { x: bounds.x + Math.round((bounds.w - w) / 2), y: bounds.y + Math.round((bounds.h - h) / 2), w, h };
+  }
+  function verticalCaptionMetrics(output, captions, texts = [], measureText) {
+    const size = output.height * (captions?.fontSizePct ?? 3.9) / 100, padding = size * 0.6;
+    const w = Math.round(output.width * 0.88), maxLines = Math.min(3, captions?.maxLines ?? 3);
+    const measure = measureText ?? ((text2) => Array.from(text2).length * size * 0.55);
+    const lines = Math.max(1, ...texts.map((text2) => wrapLines(text2, w - padding * 2, measure, { maxLines }).lines.length));
+    return { size, w, lines, h: Math.ceil(lines * size * 1.25 + padding) };
+  }
+  function verticalLayout({ output, source, composition, captionTexts = [], measureCaption }) {
+    const { width, height } = output, captions = composition.captions;
+    const safe = safeArea(output, composition.layout?.safeZones ?? true);
+    const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 4;
+    const pad = Math.round(width * px / 100), gap = captions?.enabled && captions.mode !== "band" ? Math.round(height * 0.012) : 0;
+    const py = Math.round(height * (composition.frame?.paddingYPct ?? 0) / 100);
+    const metrics = verticalCaptionMetrics(output, captions, captionTexts, measureCaption);
+    const captionH = captions?.enabled ? metrics.h : 0;
+    const available = { x: pad, y: safe.y + py, w: width - 2 * pad, h: Math.max(1, safe.h - 2 * py - captionH - gap) };
+    const frame = source.width > source.height ? available : containRect(source, available);
+    frame.y = available.y;
+    const content = source.width > source.height ? containRect(source, frame) : { ...frame };
+    const caption = !captions?.enabled ? null : { x: Math.round((width - metrics.w) / 2), y: frame.y + frame.h + gap, w: metrics.w, h: captionH };
+    return { canvas: { width, height }, safe, frame, content, caption, scaleFramePx: content.w / source.width };
+  }
+  function layoutFor({ output, source, composition, captionTexts, measureCaption }) {
+    const { width, height } = output;
+    if (![width, height, source.width, source.height].every((v) => Number.isFinite(v) && v > 0)) throw new Error("Layout dimensions must be finite and positive");
+    if (isVertical(output)) return verticalLayout({ output, source, composition, captionTexts, measureCaption });
+    const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 8;
+    const py = composition.frame?.paddingYPct ?? composition.frame?.paddingPct ?? 5;
+    const captions = composition.captions;
+    const band = captions?.enabled && captions.mode === "band" ? Math.round(height * (captions.bandHeightPct ?? 13) / 100) : 0;
+    const safe = safeArea(output, composition.layout?.safeZones === true);
+    const availableH = safe.h - band;
+    const scale = Math.min(width * (1 - 2 * px / 100) / source.width, (availableH - 2 * height * py / 100) / source.height);
+    const w = Math.round(source.width * scale), h = Math.round(source.height * scale);
+    const frame = { x: Math.round((width - w) / 2), y: safe.y + Math.round((availableH - h) / 2) + (band && captions.position === "top" ? band : 0), w, h };
+    let caption = null;
+    if (captions?.enabled) {
+      if (band) caption = { x: 0, y: captions.position === "top" ? safe.y : safe.y + safe.h - band, w: width, h: band };
+      else {
+        const w2 = Math.round(frame.w * 0.8), h2 = Math.round(height * 0.075);
+        caption = { x: Math.round(frame.x + (frame.w - w2) / 2), y: Math.round(captions.position === "top" ? frame.y + height * 0.04 : frame.y + frame.h - height * 0.04 - h2), w: w2, h: h2 };
+      }
+    }
+    return { canvas: { width, height }, frame, caption, scaleFramePx: w / source.width };
+  }
 
   // scripts/lib/compose/themes.mjs
   function freeze(value) {
@@ -31727,7 +31728,7 @@
     }
     return value;
   }
-  function theme(name, colors, ink, muted, accent, font, weight, radius, size, speed, depth) {
+  function theme(name, colors, ink, muted, accent, font2, weight, radius, size, speed, depth) {
     return {
       name,
       background: { type: "gradient", angle: 135, colors },
@@ -31740,11 +31741,11 @@
       ripple: { color: accent },
       caption: { background: name === "clean" ? "rgba(17,24,39,0.86)" : name === "dark" ? "#202b40" : "#24124b", color: "#ffffff", fontWeight: weight },
       card: { background: { type: "gradient", angle: 135, colors }, titleColor: ink, subtitleColor: muted, accent },
-      overlay: { accent, surface: name === "clean" ? "#ffffff" : name === "dark" ? "#172033" : "#24124b", onSurface: name === "clean" ? "#111827" : "#ffffff", muted },
-      typography: { family: font, weights: { body: 400, display: weight }, captionSizeMultiplier: name === "bold" ? 1.2 : 1 },
+      overlay: { accent, onAccent: name === "clean" ? "#ffffff" : "#111827", surfaceBorder: name === "clean" ? "#c2cbd7" : name === "dark" ? "#0b1220" : "#160b30", surface: name === "clean" ? "#ffffff" : name === "dark" ? "#172033" : "#24124b", onSurface: name === "clean" ? "#111827" : "#ffffff", muted },
+      typography: { family: font2, weights: { body: 400, display: weight }, captionSizeMultiplier: name === "bold" ? 1.2 : 1 },
       zoom: { depth, speed },
       transition: name === "bold" ? "cut" : "crossfade",
-      font
+      font: font2
     };
   }
   var THEMES = freeze({
@@ -31793,17 +31794,119 @@
   var color = (value = "accent") => ({ type: "color", default: value });
   var boolean = (value) => ({ type: "boolean", default: value });
   function define(id13, label13, help13, params13, draw13, defaultDuration13 = 3) {
-    params13 = { position: { type: "position", values: POSITIONS, default: "center" }, offsetX: number(0, -100, 100), offsetY: number(0, -100, 100), color: color(), ...params13 };
+    const canvas = ["title-card", "outro-card", "animated-gradient", "logo-sting"].includes(id13);
+    params13 = { placement: enumeration(canvas ? "canvas" : "frame", ["frame", "canvas"]), position: { type: "position", values: POSITIONS, default: "center" }, offsetX: number(0, -100, 100), offsetY: number(0, -100, 100), color: color(), ...params13 };
     return Object.freeze({ id: id13, label: label13, help: help13, params: params13, defaults: Object.fromEntries(Object.entries(params13).map(([k, s]) => [k, s.default])), defaultDuration: defaultDuration13, draw: draw13 });
   }
   var paint = (f, c) => f.theme.overlay[c] ?? c;
+  function overlaySafeArea(f, placement = "frame") {
+    if (placement === "canvas" || !f.layout?.frame) return { x: 0, y: 0, w: f.width, h: f.height };
+    const frame = f.layout.frame, margin = frame.w * 0.03;
+    let r = { x: frame.x + margin, y: frame.y + margin, w: Math.max(0, frame.w - 2 * margin), h: Math.max(0, frame.h - 2 * margin) };
+    const c = f.layout.caption;
+    if (c && c.x < r.x + r.w && c.x + c.w > r.x && c.y < r.y + r.h && c.y + c.h > r.y) {
+      const right = r.x + r.w, bottom = r.y + r.h;
+      const parts = [
+        { x: r.x, y: r.y, w: r.w, h: Math.max(0, c.y - r.y) },
+        { x: r.x, y: Math.max(r.y, c.y + c.h), w: r.w, h: Math.max(0, bottom - Math.max(r.y, c.y + c.h)) },
+        { x: r.x, y: r.y, w: Math.max(0, c.x - r.x), h: r.h },
+        { x: Math.max(r.x, c.x + c.w), y: r.y, w: Math.max(0, right - Math.max(r.x, c.x + c.w)), h: r.h }
+      ];
+      r = parts.sort((a, b) => b.w * b.h - a.w * a.h)[0];
+    }
+    return r;
+  }
+  var clamp3 = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   function anchor(f, p) {
-    const pos = f.anchor ?? p.position, x = pos.endsWith("left") ? 0.12 : pos.endsWith("right") ? 0.88 : 0.5;
-    const y = pos.startsWith("top") ? 0.14 : pos.startsWith("bottom") ? 0.82 : 0.5;
-    return { x: f.width * (x + p.offsetX / 100), y: f.height * (y + p.offsetY / 100) };
+    const r = overlaySafeArea(f, p.placement), pos = f.anchor ?? p.position;
+    const x = pos.endsWith("left") ? 0 : pos.endsWith("right") ? 1 : 0.5;
+    const y = pos.startsWith("top") ? 0 : pos.startsWith("bottom") ? 1 : 0.5;
+    return { x: r.x + r.w * clamp3(x + (p.offsetX ?? 0) / 100, 0, 1), y: r.y + r.h * clamp3(y + (p.offsetY ?? 0) / 100, 0, 1) };
+  }
+  function fitPlate(f, p, size, point = anchor(f, p)) {
+    const r = overlaySafeArea(f, p.placement), w = Math.min(size.w, r.w), h = Math.min(size.h, r.h);
+    const pos = f.anchor ?? p.position;
+    return {
+      x: clamp3(point.x - (pos.endsWith("left") ? 0 : pos.endsWith("right") ? w : w / 2), r.x, r.x + r.w - w),
+      y: clamp3(point.y - (pos.startsWith("top") ? 0 : pos.startsWith("bottom") ? h : h / 2), r.y, r.y + r.h - h),
+      w,
+      h
+    };
+  }
+  var font = (f, size) => `${f.theme.typography.weights.display} ${size}px "${f.theme.typography.family}"`;
+  function plateSize(lines, measureText, { minWidth = 0, extraWidth = 0 } = {}) {
+    const em = Math.max(...lines.map((l) => l.size)), px = em * 0.9, py = em * 0.55;
+    return {
+      w: Math.max(minWidth, Math.max(...lines.map((l) => measureText(l.text, l.size).width)) + 2 * px + extraWidth),
+      h: lines.reduce((n, l) => n + l.size * 1.25, 0) + 2 * py,
+      px,
+      py,
+      em
+    };
+  }
+  function measurePlate(ctx, f, lines, options) {
+    return plateSize(lines, (value, size) => {
+      ctx.font = font(f, size);
+      return ctx.measureText(value);
+    }, options);
+  }
+  function drawPlate(ctx, f, r, size, accent = "accent", pill = false) {
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.22)";
+    ctx.shadowBlur = size.em * 0.45;
+    ctx.shadowOffsetY = size.em * 0.15;
+    ctx.fillStyle = paint(f, "surface");
+    ctx.globalAlpha *= 0.96;
+    ctx.beginPath();
+    ctx.roundRect(r.x, r.y, r.w, r.h, pill ? r.h / 2 : size.em * 0.5);
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.strokeStyle = paint(f, "surfaceBorder");
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+    if (!pill) {
+      ctx.fillStyle = paint(f, accent);
+      ctx.fillRect(r.x + 1, r.y + size.em * 0.5, Math.max(2, size.em * 0.12), Math.max(0, r.h - size.em));
+    }
+  }
+  function plateText(ctx, f, value, x, y, size, maxWidth) {
+    ctx.font = font(f, size);
+    ctx.fillStyle = paint(f, "onSurface");
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(value, x, y, Math.max(1, maxWidth));
+  }
+  function calloutGeometry(f, p, size, target) {
+    if ((f.anchor ?? p.position) !== "auto") {
+      const r = fitPlate(f, p, size);
+      return { plate: r, start: leaderStart(r, target), target };
+    }
+    const safe = overlaySafeArea(f, p.placement), gap = 90 * f.height / 1080;
+    const w = Math.min(size.w, safe.w * 0.65), h = Math.min(size.h, safe.h * 0.4);
+    const sides = [
+      ["right", safe.x + safe.w - target.x, w],
+      ["left", target.x - safe.x, w],
+      ["bottom", safe.y + safe.h - target.y, h],
+      ["top", target.y - safe.y, h]
+    ];
+    sides.sort((a, b) => b[1] - b[2] - (a[1] - a[2]));
+    const side = sides[0][0];
+    let x = target.x - w / 2, y = target.y - h / 2;
+    if (side === "right") x = target.x + Math.min(gap, Math.max(8, sides[0][1] - w));
+    if (side === "left") x = target.x - w - Math.min(gap, Math.max(8, sides[0][1] - w));
+    if (side === "bottom") y = target.y + Math.min(gap, Math.max(8, sides[0][1] - h));
+    if (side === "top") y = target.y - h - Math.min(gap, Math.max(8, sides[0][1] - h));
+    const plate = { x: clamp3(x, safe.x, safe.x + safe.w - w), y: clamp3(y, safe.y, safe.y + safe.h - h), w, h };
+    return { plate, start: leaderStart(plate, target), target };
+  }
+  function leaderStart(r, t) {
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2, dx = t.x - cx, dy = t.y - cy;
+    const scale = 1 / Math.max(Math.abs(dx) / (r.w / 2), Math.abs(dy) / (r.h / 2), 1);
+    return { x: cx + dx * scale, y: cy + dy * scale };
   }
   function text(ctx, f, value, x, y, size, c = "onSurface", align = "center") {
-    ctx.font = `${f.theme.typography.weights.display} ${size}px "${f.theme.typography.family}"`;
+    ctx.font = font(f, size);
     ctx.fillStyle = paint(f, c);
     ctx.textAlign = align;
     ctx.textBaseline = "middle";
@@ -31816,15 +31919,16 @@
     ctx.fill();
   }
   function box2(f, p) {
-    const a = f.mapSource({ x: p.x, y: p.y }), b = f.mapSource({ x: p.x + p.width, y: p.y + p.height });
+    const pad = p.pad ?? 6, x = p.x - (p.origin === "center" ? p.width / 2 : 0), y = p.y - (p.origin === "center" ? p.height / 2 : 0);
+    const a = f.mapSource({ x: x - pad, y: y - pad }), b = f.mapSource({ x: x + p.width + pad, y: y + p.height + pad });
     return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
   }
-  var sourceRect = { x: number(320, 0, 1e5), y: number(180, 0, 1e5), width: number(320, 1, 1e5), height: number(180, 1, 1e5) };
+  var sourceRect = { origin: enumeration("topleft", ["topleft", "center"]), pad: number(6, 0, 200), x: number(320, 0, 1e5), y: number(180, 0, 1e5), width: number(320, 1, 1e5), height: number(180, 1, 1e5) };
   var motion = (s) => EASING.enterOut(Math.min(1, s.progress * 6));
 
   // scripts/lib/compose/templates/title-card.mjs
   var template = define("title-card", "Title card", "Full canvas opening title and subtitle.", { title: string("Your title", 80), subtitle: string("A closer look", 140) }, (ctx, f, p, s) => {
-    const h = f.height;
+    const h = Math.min(f.height, f.width * 1.25);
     const a = anchor(f, p);
     panel(ctx, f, 0, 0, f.width, f.height);
     text(ctx, f, p.title, a.x, a.y - h * 0.05, h * 0.075, p.color);
@@ -31835,7 +31939,7 @@
 
   // scripts/lib/compose/templates/outro-card.mjs
   var template2 = define("outro-card", "Outro card", "Full canvas closing message.", { title: string("Thank you", 80), subtitle: string("Discover more", 140) }, (ctx, f, p, s) => {
-    const h = f.height;
+    const h = Math.min(f.height, f.width * 1.25);
     const a = anchor(f, p);
     panel(ctx, f, 0, 0, f.width, f.height);
     ctx.fillStyle = paint(f, p.color);
@@ -31848,48 +31952,58 @@
 
   // scripts/lib/compose/templates/lower-third.mjs
   var template3 = define("lower-third", "Lower third", "Name and subtitle on a compact plate.", { position: { type: "position", values: POSITIONS, default: "bottom-left" }, name: string("Alex Morgan", 70), subtitle: string("Product designer", 100) }, (ctx, f, p, s) => {
-    const h = f.height;
-    const a = anchor(f, p), w = f.width * 0.36;
-    panel(ctx, f, a.x - w * 0.2, a.y - h * 0.05, w, h * 0.13);
-    ctx.fillStyle = paint(f, p.color);
-    ctx.fillRect(a.x - w * 0.2, a.y - h * 0.05, h * 6e-3, h * 0.13);
-    text(ctx, f, p.name, a.x - w * 0.15, a.y, h * 0.032, "onSurface", "left");
-    text(ctx, f, p.subtitle, a.x - w * 0.15, a.y + h * 0.045, h * 0.022, "muted", "left");
+    const lines = [{ text: p.name, size: f.height * 0.028 }, { text: p.subtitle, size: f.height * 0.02 }];
+    const size = measurePlate(ctx, f, lines, { minWidth: f.height * 0.12 }), r = fitPlate(f, p, size);
+    drawPlate(ctx, f, r, size, p.color);
+    let y = r.y + size.py;
+    for (const l of lines) {
+      plateText(ctx, f, l.text, r.x + size.px, y + l.size * 0.625, l.size, r.w - 2 * size.px);
+      y += l.size * 1.25;
+    }
   });
   var { id: id3, label: label3, help: help3, params: params3, defaults: defaults3, defaultDuration: defaultDuration3, draw: draw3 } = template3;
   var lower_third_default = template3;
 
   // scripts/lib/compose/templates/step-badge.mjs
   var template4 = define("step-badge", "Step badge", "Number and label in a chip.", { number: number(1, 0, 999), label: string("Open the report", 80) }, (ctx, f, p, s) => {
-    const h = f.height;
-    const a = anchor(f, p);
-    panel(ctx, f, a.x - f.width * 0.18, a.y - h * 0.04, f.width * 0.36, h * 0.08);
-    text(ctx, f, `${p.number}  ${p.label}`, a.x, a.y, h * 0.032, p.color);
+    const em = f.height * 0.024, diameter = em * 1.45;
+    const size = measurePlate(ctx, f, [{ text: p.label, size: em }], { minWidth: em * 4, extraWidth: diameter + em * 0.5 }), r = fitPlate(f, p, size);
+    drawPlate(ctx, f, r, size, p.color, true);
+    const cx = r.x + size.px + diameter / 2, cy = r.y + r.h / 2;
+    ctx.fillStyle = paint(f, p.color);
+    ctx.beginPath();
+    ctx.arc(cx, cy, diameter / 2, 0, Math.PI * 2);
+    ctx.fill();
+    text(ctx, f, String(p.number), cx, cy, em * 0.85, "onAccent");
+    plateText(ctx, f, p.label, cx + diameter / 2 + em * 0.5, cy, em, r.w - 2 * size.px - diameter - em * 0.5);
   });
   var { id: id4, label: label4, help: help4, params: params4, defaults: defaults4, defaultDuration: defaultDuration4, draw: draw4 } = template4;
   var step_badge_default = template4;
 
   // scripts/lib/compose/templates/callout-arrow.mjs
-  var template5 = define("callout-arrow", "Callout arrow", "Label with an arrow to a source point.", { position: { type: "position", values: POSITIONS, default: "top-center" }, x: number(640, 0, 1e5), y: number(360, 0, 1e5), text: string("Look here", 100) }, (ctx, f, p, s) => {
-    const h = f.height;
-    const a = anchor(f, p), b = f.mapSource(p), angle = Math.atan2(b.y - a.y, b.x - a.x);
+  var template5 = define("callout-arrow", "Callout arrow", "Label with an arrow to a source point.", { position: { type: "position", values: ["auto", ...POSITIONS], default: "auto" }, x: number(640, 0, 1e5), y: number(360, 0, 1e5), text: string("Look here", 100) }, (ctx, f, p, s) => {
+    const em = f.height * 0.024, size = measurePlate(ctx, f, [{ text: p.text, size: em }], { minWidth: em * 4 });
+    const { plate: r, start, target } = calloutGeometry(f, p, size, f.mapSource(p));
+    const angle = Math.atan2(target.y - start.y, target.x - start.x), head = 12 * f.height / 1080;
     ctx.strokeStyle = paint(f, p.color);
-    ctx.lineWidth = h * 4e-3;
+    ctx.lineWidth = 3 * f.height / 1080;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.moveTo(b.x - Math.cos(angle - 0.5) * h * 0.025, b.y - Math.sin(angle - 0.5) * h * 0.025);
-    ctx.lineTo(b.x, b.y);
-    ctx.lineTo(b.x - Math.cos(angle + 0.5) * h * 0.025, b.y - Math.sin(angle + 0.5) * h * 0.025);
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(target.x, target.y);
+    ctx.moveTo(target.x - Math.cos(angle - 0.5) * head, target.y - Math.sin(angle - 0.5) * head);
+    ctx.lineTo(target.x, target.y);
+    ctx.lineTo(target.x - Math.cos(angle + 0.5) * head, target.y - Math.sin(angle + 0.5) * head);
     ctx.stroke();
-    panel(ctx, f, a.x - f.width * 0.13, a.y - h * 0.06, f.width * 0.26, h * 0.055);
-    text(ctx, f, p.text, a.x, a.y - h * 0.032, h * 0.027, p.color);
+    drawPlate(ctx, f, r, size, p.color);
+    plateText(ctx, f, p.text, r.x + size.px, r.y + r.h / 2, em, r.w - 2 * size.px);
   });
   var { id: id5, label: label5, help: help5, params: params5, defaults: defaults5, defaultDuration: defaultDuration5, draw: draw5 } = template5;
   var callout_arrow_default = template5;
 
   // scripts/lib/compose/templates/spotlight.mjs
-  var template6 = define("spotlight", "Spotlight", "Dim the canvas around a source rectangle or circle.", { ...sourceRect, shape: enumeration("rect", ["rect", "circle"]), dim: number(0.65, 0, 1), softness: number(12, 0, 80) }, (ctx, f, p, s) => {
+  var template6 = define("spotlight", "Spotlight", "Dim the canvas around a source rectangle or circle. x/y are the TOP-LEFT in page pixels at capture scale 1; origin=center makes them the centre. pad adds breathing room.", { ...sourceRect, shape: enumeration("rect", ["rect", "circle"]), dim: number(0.65, 0, 1), softness: number(12, 0, 80) }, (ctx, f, p, s) => {
     const h = f.height;
     const r = box2(f, p);
     ctx.fillStyle = "#000000";
@@ -31914,7 +32028,7 @@
   var spotlight_default = template6;
 
   // scripts/lib/compose/templates/highlight-box.mjs
-  var template7 = define("highlight-box", "Highlight box", "Outline a source rectangle with an optional label.", { ...sourceRect, label: string("Selected", 80), showLabel: boolean(true) }, (ctx, f, p, s) => {
+  var template7 = define("highlight-box", "Highlight box", "Outline a source rectangle with an optional label. x/y are the TOP-LEFT in page pixels at capture scale 1; origin=center makes them the centre. pad adds breathing room.", { ...sourceRect, label: string("Selected", 80), showLabel: boolean(true) }, (ctx, f, p, s) => {
     const h = f.height;
     const r = box2(f, p);
     ctx.strokeStyle = paint(f, p.color);
@@ -31923,8 +32037,10 @@
     ctx.roundRect(r.x, r.y, r.w, r.h, h * 8e-3);
     ctx.stroke();
     if (p.showLabel) {
-      panel(ctx, f, r.x, r.y - h * 0.045, Math.min(f.width * 0.3, r.w), h * 0.04);
-      text(ctx, f, p.label, r.x + h * 0.01, r.y - h * 0.024, h * 0.025, p.color, "left");
+      const em = h * 0.024, size = measurePlate(ctx, f, [{ text: p.label, size: em }], { minWidth: em * 3 });
+      const plate = fitPlate(f, { ...p, position: "bottom-left" }, size, { x: r.x, y: r.y });
+      drawPlate(ctx, f, plate, size, p.color);
+      plateText(ctx, f, p.label, plate.x + size.px, plate.y + plate.h / 2, em, plate.w - 2 * size.px);
     }
   });
   var { id: id7, label: label7, help: help7, params: params7, defaults: defaults7, defaultDuration: defaultDuration7, draw: draw7 } = template7;
@@ -31933,9 +32049,12 @@
   // scripts/lib/compose/templates/number-counter.mjs
   var template8 = define("number-counter", "Number counter", "Count between two values with a suffix.", { from: number(0, -1e9, 1e9), to: number(100, -1e9, 1e9), format: enumeration("integer", ["integer", "decimal", "percent"]), suffix: string("users", 30) }, (ctx, f, p, s) => {
     const h = f.height;
-    const a = anchor(f, p), v = p.from + (p.to - p.from) * EASING.moveInOut(s.progress);
+    const v = p.from + (p.to - p.from) * EASING.moveInOut(s.progress);
     const value = p.format === "decimal" ? v.toFixed(1) : Math.round(v).toString();
-    text(ctx, f, `${value}${p.format === "percent" ? "%" : ""} ${p.suffix}`, a.x, a.y, h * 0.085, p.color);
+    const label13 = `${value}${p.format === "percent" ? "%" : ""} ${p.suffix}`, size = h * 0.085;
+    ctx.font = `${f.theme.typography.weights.display} ${size}px "${f.theme.typography.family}"`;
+    const r = fitPlate(f, p, { w: ctx.measureText(label13).width, h: size * 1.25 });
+    text(ctx, f, label13, r.x + r.w / 2, r.y + r.h / 2, Math.min(size, r.w / Math.max(1, ctx.measureText(label13).width) * size), p.color);
   });
   var { id: id8, label: label8, help: help8, params: params8, defaults: defaults8, defaultDuration: defaultDuration8, draw: draw8 } = template8;
   var number_counter_default = template8;
@@ -31943,7 +32062,7 @@
   // scripts/lib/compose/templates/progress-bar.mjs
   var template9 = define("progress-bar", "Progress bar", "Progress from zero to one hundred with a label.", { label: string("Loading", 80), widthPct: number(48, 5, 90) }, (ctx, f, p, s) => {
     const h = f.height;
-    const a = anchor(f, p), w = f.width * p.widthPct / 100;
+    const r = fitPlate(f, p, { w: f.width * p.widthPct / 100, h: h * 0.09 }), w = r.w, a = { x: r.x + w / 2, y: r.y + h * 0.065 };
     panel(ctx, f, a.x - w / 2, a.y, w, h * 0.025);
     if (s.progress > 0) panel(ctx, f, a.x - w / 2, a.y, w * s.progress, h * 0.025, p.color);
     text(ctx, f, `${p.label} ${Math.round(s.progress * 100)}%`, a.x, a.y - h * 0.04, h * 0.029, p.color);
@@ -31967,17 +32086,23 @@
 
   // scripts/lib/compose/templates/text-callout.mjs
   var template11 = define("text-callout", "Text callout", "Large phrase with staggered word entrances.", { text: string("Make every moment count", 100) }, (ctx, f, p, s) => {
-    const h = f.height;
-    const a = anchor(f, p), words = p.text.split(/\s+/), size = Math.min(h * 0.065, f.width * 0.8 / Math.max(1, p.text.length) * 1.7);
+    const words = p.text.split(/\s+/), safe = overlaySafeArea(f, p.placement);
+    let size = Math.min(f.height * 0.065, safe.w * 0.8 / Math.max(1, p.text.length) * 1.7);
     ctx.font = `${f.theme.typography.weights.display} ${size}px "${f.theme.typography.family}"`;
-    const gap = size * 0.28, total = words.reduce((v, w) => v + ctx.measureText(w).width + gap, -gap);
-    let x = a.x - total / 2;
+    let gap = size * 0.28, total = words.reduce((v, w) => v + ctx.measureText(w).width + gap, -gap);
+    const scale = Math.min(1, safe.w / total, safe.h / (size * 1.5));
+    size *= scale;
+    gap *= scale;
+    total *= scale;
+    const r = fitPlate(f, p, { w: total, h: size * 1.5 });
+    let x = r.x;
     words.forEach((word, i) => {
       const v = EASING.enterOut(Math.max(0, Math.min(1, s.progress * 8 - i * 0.25)));
       ctx.save();
       ctx.globalAlpha *= v;
-      text(ctx, f, word, x, a.y + (1 - v) * size * 0.3, size, p.color, "left");
+      text(ctx, f, word, x, r.y + r.h / 2 + (1 - v) * size * 0.3, size, p.color, "left");
       ctx.restore();
+      ctx.font = `${f.theme.typography.weights.display} ${size}px "${f.theme.typography.family}"`;
       x += ctx.measureText(word).width + gap;
     });
   });
@@ -31986,7 +32111,7 @@
 
   // scripts/lib/compose/templates/logo-sting.mjs
   var template12 = define("logo-sting", "Logo sting", "Text mark or preloaded brand logo with a gentle reveal.", { text: string("SHOWREEL", 60), logo: string("brand", 120), useLogo: boolean(false) }, (ctx, f, p, s) => {
-    const h = f.height;
+    const h = Math.min(f.height, f.width * 1.25);
     const a = anchor(f, p), scale = 0.92 + 0.08 * motion(s);
     ctx.translate(a.x, a.y);
     ctx.scale(scale, scale);
@@ -32034,6 +32159,9 @@
     run: { id: null },
     output: { preset: null, width: 1920, height: 1080, fps: 60, quality: "standard" },
     theme: "clean",
+    themeSource: "default",
+    brandDefaults: {},
+    watermark: { enabled: false, image: null, position: "top-right", opacity: 0.25, sizePct: 10, marginPct: 3 },
     layout: { safeZones: null },
     frame: {
       paddingXPct: 8,
@@ -32171,6 +32299,61 @@
   };
   var outputBitrate = ({ width, height, fps, quality }) => Math.min(6e7, Math.round(width * height * fps * (quality === "high" ? 0.12 : 0.07)));
 
+  // scripts/lib/compose/camera.mjs
+  function cameraAt(plan, t) {
+    const samples = plan.samples;
+    if (!samples?.length) throw new Error("Camera plan must contain samples");
+    let lo = 0, hi = samples.length - 1;
+    if (t <= samples[lo].t) return pick(samples[lo]);
+    if (t >= samples[hi].t) return pick(samples[hi]);
+    while (hi - lo > 1) {
+      const mid = lo + hi >> 1;
+      if (samples[mid].t <= t) lo = mid;
+      else hi = mid;
+    }
+    const a = samples[lo], b = samples[hi], f = (t - a.t) / (b.t - a.t);
+    return {
+      cx: a.cx + (b.cx - a.cx) * f,
+      cy: a.cy + (b.cy - a.cy) * f,
+      z: a.z + (b.z - a.z) * f
+    };
+  }
+  var pick = ({ cx, cy, z }) => ({ cx, cy, z });
+
+  // scripts/lib/compose/cursor-track.mjs
+  var smooth2 = (t) => t * t * (3 - 2 * t);
+  function latest(samples, t) {
+    let lo = 0, hi = samples.length;
+    while (lo < hi) {
+      const mid = lo + hi >> 1;
+      if (samples[mid].t <= t) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo - 1;
+  }
+  function cursorAt(events, t) {
+    const samples = events.cursor;
+    if (!samples.length) return { x: events.viewport.width / 2, y: events.viewport.height / 2 };
+    const i = latest(samples, t), a = samples[Math.max(0, i)], b = samples[i + 1];
+    if (i < 0 || !b) return { x: a.x, y: a.y };
+    const f = (t - a.t) / (b.t - a.t);
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+  }
+  function pressAmount(events, t) {
+    let amount = 1;
+    for (const click of events.clicks) {
+      const age = t - click.t;
+      if (age < 0 || age >= 0.12) continue;
+      const scale = age <= 0.045 ? 1 - 0.14 * smooth2(age / 0.045) : 0.86 + 0.14 * smooth2((age - 0.045) / 0.075);
+      amount = Math.min(amount, scale);
+    }
+    return amount;
+  }
+  function rippleAt(events, t, durationSec = 0.55) {
+    const c = events.clicks[latest(events.clicks, t)];
+    return c && t < c.t + durationSec ? { x: c.x, y: c.y, progress: (t - c.t) / durationSec } : null;
+  }
+
   // scripts/lib/compose/plan.mjs
   function stateAt(plan, tOut) {
     const mapped = sourceAt(plan.timemap, tOut), t = mapped.t;
@@ -32244,7 +32427,19 @@
     await fontLoads.get(key);
   }
   var images = /* @__PURE__ */ new Map();
+  var imageLoads = /* @__PURE__ */ new Map();
   var cursorImages = /* @__PURE__ */ new Map();
+  var brandFontLoads = /* @__PURE__ */ new Map();
+  async function loadBrandFonts(plan) {
+    await Promise.all((plan.brand?.fonts ?? []).map(async (font2) => {
+      const key = JSON.stringify(font2);
+      if (!brandFontLoads.has(key)) brandFontLoads.set(key, (async () => {
+        const face = new FontFace(font2.family, `url(${JSON.stringify(font2.url)})`, { weight: String(font2.weight) });
+        document.fonts.add(await face.load());
+      })());
+      await brandFontLoads.get(key);
+    }));
+  }
   var loadCursorImage = (url2) => new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => img.naturalWidth && img.naturalHeight ? resolve(img) : reject(new Error("Empty cursor image"));
@@ -32253,6 +32448,7 @@
   });
   async function loadImages(plan, { assetBase = "assets/" } = {}) {
     const specs = [
+      plan.watermark,
       plan.frame.background,
       plan.cards.title.background,
       plan.cards.outro.background,
@@ -32260,20 +32456,24 @@
       plan.cards.outro.logo,
       ...(plan.overlays ?? []).filter((o) => o.template === "logo-sting" && o.params.useLogo).map((o) => ({ image: o.params.logo }))
     ];
+    const loadedImages = /* @__PURE__ */ new Map();
     await Promise.all(specs.filter((s) => s?.image).map(async ({ image }) => {
-      const url2 = new URL(`${assetBase}${image.split("/").map(encodeURIComponent).join("/")}`, location.href).href;
-      if (!images.has(image)) images.set(image, new Promise((resolve, reject) => {
+      const brandUrl = plan.brand?.assetUrls?.[image];
+      const url2 = new URL(brandUrl ?? `${assetBase}${image.split("/").map(encodeURIComponent).join("/")}`, location.href).href;
+      if (!imageLoads.has(url2)) imageLoads.set(url2, new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => resolve(img);
         img.onerror = () => reject(new Error(`Cannot load image: ${image}`));
         img.src = url2;
       }));
-      const loaded = await images.get(image);
-      images.set(image, loaded);
+      const loaded = await imageLoads.get(url2);
+      loadedImages.set(image, loaded);
     }));
+    return loadedImages;
   }
   async function loadAssets(plan, options = {}) {
-    await loadImages(plan, options);
+    await loadBrandFonts(plan);
+    const loadedImages = await loadImages(plan, options);
     const urls = options.cursorImages ?? (options.assetBase ? Object.fromEntries(
       Object.values(plan.cursor.custom ?? {}).filter((s) => s?.image).map((s) => [
         s.image,
@@ -32281,7 +32481,8 @@
       ])
     ) : void 0);
     cursorImages = await loadCustomCursorImages(plan, urls, loadCursorImage);
-    return { images, cursorImages };
+    images = loadedImages;
+    return { images: loadedImages, cursorImages };
   }
   function background2(ctx, spec, width, height, fallback) {
     if (spec.type === "theme") spec = fallback;
@@ -32315,16 +32516,16 @@
   function drawCaption(ctx, plan, caption) {
     const r = plan.layout.caption, spec = plan.captions;
     if (!r || !caption || caption.alpha <= 0) return;
-    const size = (isVertical(plan.output) ? plan.output.width * 1.25 : plan.output.height) * spec.fontSizePct / 100, padding = size * 0.6;
+    const size = plan.output.height * spec.fontSizePct / 100, padding = size * 0.6;
     ctx.save();
     ctx.beginPath();
     ctx.rect(r.x, r.y, r.w, r.h);
     ctx.clip();
     ctx.globalAlpha = caption.alpha;
-    ctx.font = `${spec.fontWeight} ${size}px "${plan.theme.typography.family}"`;
+    ctx.font = `${spec.fontWeight} ${size}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
     const wrapped = wrapLines(caption.text, r.w - padding * 2, (text2) => ctx.measureText(text2).width, { maxLines: spec.maxLines });
     const scale = Math.min(wrapped.scale, (r.h - padding) / (size * 1.25 * wrapped.lines.length));
-    ctx.font = `${spec.fontWeight} ${size * scale}px "${plan.theme.typography.family}"`;
+    ctx.font = `${spec.fontWeight} ${size * scale}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
     const lineH = size * scale * 1.25;
     if (spec.mode === "overlay") {
       const w = Math.min(r.w, Math.max(...wrapped.lines.map((s) => ctx.measureText(s).width)) + padding * 2);
@@ -32381,6 +32582,36 @@
         (isVertical(plan.output) ? plan.layout.safe.y + plan.layout.safe.h * y : height * y) + (i - (wrapped.lines.length - 1) / 2) * size * wrapped.scale * 1.2
       ));
     }
+    ctx.restore();
+  }
+  function watermarkRect(plan, image) {
+    const w = plan.watermark;
+    if (!w?.enabled || !image) return null;
+    const f = { ...plan.layout.frame }, band = plan.captions.enabled && plan.captions.mode === "band" ? plan.layout.caption : null;
+    if (band && band.y < f.y + f.h && band.y + band.h > f.y) {
+      if (band.y <= f.y) {
+        const bottom = f.y + f.h;
+        f.y = band.y + band.h;
+        f.h = bottom - f.y;
+      } else f.h = band.y - f.y;
+    }
+    const margin = Math.min(f.w, f.h) * w.marginPct / 100;
+    const width = Math.min(f.w * w.sizePct / 100, Math.max(0, f.w - 2 * margin));
+    const height = width * image.height / image.width, scale = Math.min(1, Math.max(0, f.h - 2 * margin) / height);
+    const rw = width * scale, rh = height * scale;
+    return {
+      x: w.position.endsWith("right") ? f.x + f.w - margin - rw : f.x + margin,
+      y: w.position.startsWith("bottom") ? f.y + f.h - margin - rh : f.y + margin,
+      w: rw,
+      h: rh
+    };
+  }
+  function drawWatermark(ctx, plan) {
+    const image = images.get(plan.watermark?.image), r = watermarkRect(plan, image);
+    if (!r || !r.w || !r.h) return;
+    ctx.save();
+    ctx.globalAlpha = plan.watermark.opacity;
+    ctx.drawImage(image, r.x, r.y, r.w, r.h);
     ctx.restore();
   }
   function cursorShape(ctx, style) {
@@ -32465,12 +32696,26 @@
       cursorImages = assets.cursorImages;
     }
     const ctx = canvas.getContext("2d"), { width, height } = plan.output;
+    if (isVertical(plan.output)) {
+      ctx.font = `${plan.captions.fontWeight} ${height * plan.captions.fontSizePct / 100}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
+      plan = { ...plan, layout: layoutFor({
+        output: plan.output,
+        source: plan.sourceSize,
+        composition: { ...plan, layout: { safeZones: plan.layout.safe.y > 0 } },
+        captionTexts: plan.cues.map((c) => c.text),
+        measureCaption: (text2) => ctx.measureText(text2).width
+      }) };
+    }
     const state = stateAt(plan, tOut), f = plan.layout.frame, cam = state.camera;
+    if (isVertical(plan.output) && plan.layout.caption) {
+      const h = state.caption ? verticalCaptionMetrics(plan.output, plan.captions, [state.caption.text], (text2) => ctx.measureText(text2).width).h : 0;
+      plan = { ...plan, layout: { ...plan.layout, caption: { ...plan.layout.caption, h } } };
+    }
     background2(ctx, plan.frame.background, width, height, plan.theme.background);
     if (plan.captions.enabled && plan.captions.mode === "band") {
       const r = plan.layout.caption;
       ctx.fillStyle = plan.captions.background;
-      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.fillRect(isVertical(plan.output) ? 0 : r.x, r.y, isVertical(plan.output) ? width : r.w, r.h);
     }
     if (state.section === "main" && decoded) {
       const unit = height / 1080, radius = plan.frame.radiusPx * unit;
@@ -32493,6 +32738,7 @@
       ctx.fillStyle = "#111827";
       ctx.fillRect(f.x, f.y, f.w, f.h);
       ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, content.x, content.y, content.w, content.h);
+      drawWatermark(ctx, plan);
       const mapped = (point) => mapSourcePoint(plan, cam, point);
       const cursorH = plan.cursor.sizePx * (plan.cursor.scaleWithZoom ? 1 + 0.35 * (cam.z - 1) : 1);
       if (state.ripple) {
@@ -32552,6 +32798,12 @@
         const spec = plan.overlays.find((o) => o.id === overlay.id);
         ctx.save();
         ctx.globalAlpha = overlay.alpha;
+        if (overlay.params.placement === "frame" && !["callout-arrow", "spotlight", "highlight-box"].includes(overlay.template)) {
+          const safe = overlaySafeArea({ width, height, layout: plan.layout });
+          ctx.beginPath();
+          ctx.rect(safe.x, safe.y, safe.w, safe.h);
+          ctx.clip();
+        }
         TEMPLATES[overlay.template].draw(ctx, {
           width,
           height,
@@ -32567,6 +32819,7 @@
     }
     card(ctx, plan, state.alphaTitle, plan.cards.title, plan.cards.title.title);
     card(ctx, plan, state.alphaOutro, plan.cards.outro, plan.cards.outro.text);
+    if (state.section !== "main") drawWatermark(ctx, plan);
     return canvas;
   }
   function canvasFor(plan) {
@@ -32862,6 +33115,7 @@
   }
 
   // scripts/lib/compose/render-page.js
+  window.loadBrandFonts = loadBrandFonts;
   var AUDIO_BITRATE = 192e3;
   async function prepareAudio(plan) {
     const a = plan.audio, warnings = [];

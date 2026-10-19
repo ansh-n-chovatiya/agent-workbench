@@ -23,3 +23,10 @@ Acceptance (from the spec table): three themes render the same storyboard distin
 
 ## Exit criteria
 Three themes render the same storyboard distinctly (side-by-side contact sheet reviewed by the owner); the 12 templates render and keep timing under cuts; a brand applied to a project changes logo, colours, fonts, intro/outro and watermark; a two-scene video exports with transitions and chapters; a vertical video exports at 1080x1920 from a phone-viewport recording; three-OS CI green.
+
+## Status at end of 2026-10-19 (paused by the owner; resume here)
+Done and verified (375 unit, 46 browser tests, real renders reviewed): themes clean/dark/bold (distinct on the real recording); easing tokens; 12 templates and overlays with source-time sync, frame-safe placement,
+measured plates, auto callout leader (reviewed and fixed after a first review round); vertical: phone recording profile (real recording of the live portfolio, 519x1123 at scale 1.33, 59.7 fps) and a source-aspect portrait frame; brand kit (schema, CLI, precedence, logo, fonts, watermark; browser test passes).
+Not done: Task D multi-scene and chapters (scenes.json, scene time map, multi-source compositor, transitions, chapters.txt/.vtt); Task E editor UI (overlays picker and params form, overlays timeline track, theme and brand panels, scenes strip, vertical preview); Task F integration (contact sheet of the three themes for the owner, SKILL.md update, CI confirmation, Phase 7 outcome).
+Known visual items to polish: in vertical, the caption block touches the bottom edge of the frame and its text is large (wraps to two lines at 3.9% of height); the lower-third plate sits inside the frame but could use a little more inset on bold.
+Reminder: `render --rebuild` regenerates the composition and drops saved settings (voice on, overlays, theme); use `composition set` instead.

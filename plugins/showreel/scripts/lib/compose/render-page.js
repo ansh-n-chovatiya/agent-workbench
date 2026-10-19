@@ -1,11 +1,12 @@
 import { Input, UrlSource, ALL_FORMATS, CanvasSink, Output, Mp4OutputFormat,
   StreamTarget, CanvasSource, canEncodeVideo, AudioBufferSource, canEncodeAudio } from 'mediabunny';
 import { stateAt } from './plan.mjs';
-import { loadFonts, loadAssets, drawFrame as draw, canvasFor } from './draw.js';
+import { loadFonts, loadBrandFonts, loadAssets, drawFrame as draw, canvasFor } from './draw.js';
 import { outputBitrate } from './composition.mjs';
 import { loadAudio } from '../audio/decode.js';
 import { mixAudio } from '../audio/mix.mjs';
 
+window.loadBrandFonts = loadBrandFonts;
 const AUDIO_BITRATE = 192000;
 // Decodes the narration and music named by the plan, mixes them offline (pure code, same as the editor preview) and picks
 // an audio codec: AAC when this browser can encode it, otherwise Opus inside the MP4 with a warning.

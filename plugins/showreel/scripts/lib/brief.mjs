@@ -5,7 +5,7 @@ function freeze(value) {
   if (object(value)) { Object.values(value).forEach(freeze); Object.freeze(value); }
   return value;
 }
-export const DEFAULT_BRIEF = freeze({ version: 1, topic: null, audience: null, targetSeconds: 60, baseURL: null, flowMode: null, theme: 'clean', titleCard: { enabled: true, title: null, subtitle: null }, outroCard: { enabled: true, text: 'Thank you' }, captions: { enabled: true, mode: 'band' }, voice: { enabled: null, tier: 'auto', name: null, language: 'en' }, music: { mode: 'none', file: null }, outputs: { landscape: true, vertical: false, gif: false }, notes: null });
+export const DEFAULT_BRIEF = freeze({ version: 1, brand: null, themeSource: null, topic: null, audience: null, targetSeconds: 60, baseURL: null, flowMode: null, theme: 'clean', titleCard: { enabled: true, title: null, subtitle: null }, outroCard: { enabled: true, text: 'Thank you' }, captions: { enabled: true, mode: 'band' }, voice: { enabled: null, tier: 'auto', name: null, language: 'en' }, music: { mode: 'none', file: null }, outputs: { landscape: true, vertical: false, gif: false }, notes: null });
 export function validateBrief(brief) {
   const errors = [];
   const fail = (key, message) => errors.push(`brief.json: "${key}" ${message}`);
@@ -14,6 +14,7 @@ export function validateBrief(brief) {
     for (const key of Object.keys(value)) if (!Object.hasOwn(defaults, key)) fail(prefix + key, 'is an unknown key');
     for (const [key, def] of Object.entries(defaults)) {
       const dotted = prefix + key, v = value[key];
+      if (['brand','themeSource'].includes(dotted) && v === undefined) continue;
       if (object(def)) walk(v, def, dotted + '.');
       else if (dotted === 'voice.enabled') { if (v !== null && typeof v !== 'boolean') fail(dotted, 'must be true, false or null'); }
       else if (typeof def === 'boolean' && typeof v !== 'boolean') fail(dotted, 'must be true or false');
@@ -23,6 +24,8 @@ export function validateBrief(brief) {
   }
   walk(brief, DEFAULT_BRIEF);
   if (!object(brief)) return { ok: false, errors };
+  if (brief.brand != null && (typeof brief.brand !== 'string' || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(brief.brand))) fail('brand','is invalid');
+  if (brief.themeSource != null && !['user','default'].includes(brief.themeSource)) fail('themeSource','must be user|default');
   if (brief.version !== 1) fail('version', 'must be 1');
   if (!Number.isFinite(brief.targetSeconds) || brief.targetSeconds < 10 || brief.targetSeconds > 600) fail('targetSeconds', 'must be a number from 10 to 600');
   for (const [key, v, max] of [['topic', brief.topic, 200], ['titleCard.title', brief.titleCard?.title, 80], ['titleCard.subtitle', brief.titleCard?.subtitle, 80]]) {
@@ -51,6 +54,7 @@ export function setPath(brief, dottedKey, rawValue) {
   else if (typeof def === 'boolean' || dottedKey === 'voice.enabled') value = rawValue === 'true' ? true : rawValue === 'false' ? false : rawValue;
   else if (typeof def === 'number') value = typeof rawValue === 'string' && rawValue.trim() ? Number(rawValue) : NaN;
   const out = structuredClone(brief);
+  if (dottedKey === 'theme') out.themeSource = 'user';
   let parent = out;
   for (const key of keys.slice(0, -1)) parent = parent[key];
   parent[keys.at(-1)] = value;

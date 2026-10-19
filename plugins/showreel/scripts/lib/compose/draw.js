@@ -1,4 +1,5 @@
-import { isVertical } from './layout.mjs';
+import { overlaySafeArea } from './templates/shared.mjs';
+import { isVertical, layoutFor, verticalCaptionMetrics } from './layout.mjs';
 import { TEMPLATES } from './templates/index.mjs';
 import { stateAt } from './plan.mjs';
 import { wrapLines } from './captions.mjs';
@@ -18,31 +19,48 @@ export async function loadFonts(fonts) {
   await fontLoads.get(key);
 }
 let images = new Map();
+const imageLoads = new Map();
 let cursorImages = new Map();
+const brandFontLoads = new Map();
+export async function loadBrandFonts(plan) {
+  await Promise.all((plan.brand?.fonts ?? []).map(async font => {
+    const key = JSON.stringify(font);
+    if (!brandFontLoads.has(key)) brandFontLoads.set(key, (async () => {
+      const face = new FontFace(font.family, `url(${JSON.stringify(font.url)})`, {weight: String(font.weight)});
+      document.fonts.add(await face.load());
+    })());
+    await brandFontLoads.get(key);
+  }));
+}
 const loadCursorImage = (url) => new Promise((resolve, reject) => {
   const img = new Image();
   img.onload = () => img.naturalWidth && img.naturalHeight ? resolve(img) : reject(new Error('Empty cursor image'));
   img.onerror = reject; img.src = new URL(url, location.href).href;
 });
 export async function loadImages(plan, { assetBase = 'assets/' } = {}) {
-  const specs = [plan.frame.background, plan.cards.title.background, plan.cards.outro.background,
+  const specs = [plan.watermark, plan.frame.background, plan.cards.title.background, plan.cards.outro.background,
     plan.cards.title.logo, plan.cards.outro.logo,
     ...(plan.overlays ?? []).filter(o => o.template === 'logo-sting' && o.params.useLogo).map(o => ({ image:o.params.logo }))];
+  const loadedImages = new Map();
   await Promise.all(specs.filter((s) => s?.image).map(async ({ image }) => {
-    const url = new URL(`${assetBase}${image.split('/').map(encodeURIComponent).join('/')}`, location.href).href;
-    if (!images.has(image)) images.set(image, new Promise((resolve, reject) => {
+    const brandUrl = plan.brand?.assetUrls?.[image];
+    const url = new URL(brandUrl ?? `${assetBase}${image.split('/').map(encodeURIComponent).join('/')}`, location.href).href;
+    if (!imageLoads.has(url)) imageLoads.set(url, new Promise((resolve, reject) => {
       const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error(`Cannot load image: ${image}`)); img.src = url;
     }));
-    const loaded = await images.get(image); images.set(image, loaded);
+    const loaded = await imageLoads.get(url); loadedImages.set(image, loaded);
   }));
+  return loadedImages;
 }
 export async function loadAssets(plan, options = {}) {
-  await loadImages(plan, options);
+  await loadBrandFonts(plan);
+  const loadedImages = await loadImages(plan, options);
   const urls = options.cursorImages ?? (options.assetBase ? Object.fromEntries(
     Object.values(plan.cursor.custom ?? {}).filter(s => s?.image).map(s => [s.image,
       `${options.assetBase}${s.image.split('/').map(encodeURIComponent).join('/')}`])) : undefined);
   cursorImages = await loadCustomCursorImages(plan, urls, loadCursorImage);
-  return { images, cursorImages };
+  images = loadedImages;
+  return { images: loadedImages, cursorImages };
 }
 function background(ctx, spec, width, height, fallback) {
   if (spec.type === 'theme') spec = fallback;
@@ -66,12 +84,12 @@ function rounded(ctx, rect, radius) {
 function drawCaption(ctx, plan, caption) {
   const r = plan.layout.caption, spec = plan.captions;
   if (!r || !caption || caption.alpha <= 0) return;
-  const size = (isVertical(plan.output) ? plan.output.width * 1.25 : plan.output.height) * spec.fontSizePct / 100, padding = size * 0.6;
+  const size = plan.output.height * spec.fontSizePct / 100, padding = size * 0.6;
   ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip(); ctx.globalAlpha = caption.alpha;
-  ctx.font = `${spec.fontWeight} ${size}px "${plan.theme.typography.family}"`;
+  ctx.font = `${spec.fontWeight} ${size}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
   const wrapped = wrapLines(caption.text, r.w - padding * 2, (text) => ctx.measureText(text).width, { maxLines: spec.maxLines });
   const scale = Math.min(wrapped.scale, (r.h - padding) / (size * 1.25 * wrapped.lines.length));
-  ctx.font = `${spec.fontWeight} ${size * scale}px "${plan.theme.typography.family}"`;
+  ctx.font = `${spec.fontWeight} ${size * scale}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
   const lineH = size * scale * 1.25;
   if (spec.mode === 'overlay') {
     const w = Math.min(r.w, Math.max(...wrapped.lines.map((s) => ctx.measureText(s).width)) + padding * 2);
@@ -112,6 +130,27 @@ function card(ctx, plan, alpha, spec, title) {
       (isVertical(plan.output) ? (plan.layout.safe.y + plan.layout.safe.h * y) : height * y) + (i - (wrapped.lines.length - 1) / 2) * size * wrapped.scale * 1.2));
   }
   ctx.restore();
+}
+// Watermark uses the video frame bounds, excluding any caption band, and never covers the cursor.
+export function watermarkRect(plan, image) {
+  const w = plan.watermark;
+  if (!w?.enabled || !image) return null;
+  const f = { ...plan.layout.frame }, band = plan.captions.enabled && plan.captions.mode === 'band' ? plan.layout.caption : null;
+  if (band && band.y < f.y + f.h && band.y + band.h > f.y) {
+    if (band.y <= f.y) { const bottom=f.y+f.h; f.y=band.y+band.h; f.h=bottom-f.y; }
+    else f.h=band.y-f.y;
+  }
+  const margin=Math.min(f.w,f.h)*w.marginPct/100;
+  const width=Math.min(f.w*w.sizePct/100,Math.max(0,f.w-2*margin));
+  const height=width*image.height/image.width, scale=Math.min(1,Math.max(0,f.h-2*margin)/height);
+  const rw=width*scale,rh=height*scale;
+  return {x:w.position.endsWith('right')?f.x+f.w-margin-rw:f.x+margin,
+    y:w.position.startsWith('bottom')?f.y+f.h-margin-rh:f.y+margin,w:rw,h:rh};
+}
+function drawWatermark(ctx,plan) {
+  const image=images.get(plan.watermark?.image), r=watermarkRect(plan,image);
+  if (!r || !r.w || !r.h) return;
+  ctx.save();ctx.globalAlpha=plan.watermark.opacity;ctx.drawImage(image,r.x,r.y,r.w,r.h);ctx.restore();
 }
 function cursorShape(ctx, style) {
   ctx.beginPath();
@@ -157,11 +196,21 @@ export function mapSourcePoint(plan, cam, point) {
 export function drawFrame(canvas, plan, tOut, decoded, assets) {
   if (assets) { images = assets.images; cursorImages = assets.cursorImages; }
   const ctx = canvas.getContext('2d'), { width, height } = plan.output;
+  if (isVertical(plan.output)) {
+    ctx.font=`${plan.captions.fontWeight} ${height*plan.captions.fontSizePct/100}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
+    plan={...plan,layout:layoutFor({output:plan.output,source:plan.sourceSize,composition:{...plan,layout:{safeZones:plan.layout.safe.y>0}},
+      captionTexts:plan.cues.map(c=>c.text),measureCaption:text=>ctx.measureText(text).width})};
+  }
   const state = stateAt(plan, tOut), f = plan.layout.frame, cam = state.camera;
+  // Reserve room for the longest cue, but fit the visible band to this cue's lines.
+  if (isVertical(plan.output) && plan.layout.caption) {
+    const h=state.caption ? verticalCaptionMetrics(plan.output,plan.captions,[state.caption.text],text=>ctx.measureText(text).width).h : 0;
+    plan={...plan,layout:{...plan.layout,caption:{...plan.layout.caption,h}}};
+  }
   background(ctx, plan.frame.background, width, height, plan.theme.background);
   if (plan.captions.enabled && plan.captions.mode === 'band') {
     const r = plan.layout.caption;
-    ctx.fillStyle = plan.captions.background; ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = plan.captions.background; ctx.fillRect(isVertical(plan.output)?0:r.x, r.y, isVertical(plan.output)?width:r.w, r.h);
   }
   if (state.section === 'main' && decoded) {
     const unit = height / 1080, radius = plan.frame.radiusPx * unit;
@@ -178,6 +227,7 @@ export function drawFrame(canvas, plan, tOut, decoded, assets) {
     const content = plan.layout.content ?? f;
     ctx.fillStyle = '#111827'; ctx.fillRect(f.x, f.y, f.w, f.h);
     ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, content.x, content.y, content.w, content.h);
+    drawWatermark(ctx,plan);
     const mapped = point => mapSourcePoint(plan,cam,point);
     const cursorH = plan.cursor.sizePx * (plan.cursor.scaleWithZoom ? 1 + 0.35 * (cam.z - 1) : 1);
     if (state.ripple) {
@@ -220,6 +270,9 @@ export function drawFrame(canvas, plan, tOut, decoded, assets) {
     for (const overlay of state.overlays) {
       const spec = plan.overlays.find(o => o.id === overlay.id);
       ctx.save(); ctx.globalAlpha = overlay.alpha;
+      if (overlay.params.placement === 'frame' && !['callout-arrow','spotlight','highlight-box'].includes(overlay.template)) {
+        const safe=overlaySafeArea({width,height,layout:plan.layout});ctx.beginPath();ctx.rect(safe.x,safe.y,safe.w,safe.h);ctx.clip();
+      }
       TEMPLATES[overlay.template].draw(ctx, { width, height, theme:plan.theme, layout:plan.layout,
         mapSource: point => mapSourcePoint(plan,cam,point), anchor:spec.anchor, images }, overlay.params, overlay);
       ctx.restore();
@@ -228,6 +281,7 @@ export function drawFrame(canvas, plan, tOut, decoded, assets) {
   }
   card(ctx, plan, state.alphaTitle, plan.cards.title, plan.cards.title.title);
   card(ctx, plan, state.alphaOutro, plan.cards.outro, plan.cards.outro.text);
+  if (state.section !== 'main') drawWatermark(ctx,plan);
   return canvas;
 }
 export function canvasFor(plan) {
