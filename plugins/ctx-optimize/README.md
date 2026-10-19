@@ -55,3 +55,14 @@ counts only, never prompts or answers. (The built-in `/agents` is untouched, hen
 
 `claude plugin install ctx-optimize@agent-workbench`; tests: `pytest plugins/ctx-optimize/tests` and
 `claude plugin test plugins/ctx-optimize`.
+
+## Subagent router (experimental, off by default)
+
+Set the plugin option `route` to `true` and the mod picks a model for subagents that ctx does not name
+(general-purpose, Explore and the like) from the short task label: mechanical wording (find, list, grep, rename)
+goes to Haiku, implementation wording (implement, add, fix) to Sonnet, and a label that mentions a hard problem
+(debug, root cause, architecture, security, concurrency) is left to the main model. Rules, in order: a model set
+explicitly on the call wins; ctx's own agents (`ctx:*`) are left to the ledger; the router only ever picks a model
+cheaper than the main one, never dearer; if the main model is not recognised it does nothing; any error passes the
+spawn through unchanged. Each decision is logged to the plugin store (label cut to 60 characters, never the prompt).
+It ships off because D18 requires the same change to be run with and without it before any default moves.
