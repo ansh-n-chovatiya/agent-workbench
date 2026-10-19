@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `spec.failure_modes` (default `false`): new specs carry a `## Failure modes` checklist that must be answered (a criterion, or `n/a` with a reason) before `ctx plan` runs. Recorded in each spec when created. First slice of the review-system work (docs/22).
+
 ## 1.3.0
 
 ### Fixed

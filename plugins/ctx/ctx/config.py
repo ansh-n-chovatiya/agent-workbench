@@ -62,6 +62,12 @@ DEFAULTS = {
         # killed hook returns no decision, so the gate silently stopped applying.
         "timeout_seconds": 240,
     },
+    "spec": {
+        # Require a `## Failure modes` pass (error paths, concurrency, existing data, callers, UI states, cleanup)
+        # before a spec can be planned. Off by default (D20): measured first, then flipped. Recorded in each spec
+        # when it is created, so changing this never retroactively blocks or unblocks an existing spec.
+        "failure_modes": False,
+    },
     "plan": {
         "wave_budget_tokens": 250000,
         # Two different failure modes need two different caps. A wave can be
@@ -846,5 +852,10 @@ def render(config):
         "# review.stop_rule stops after two reviewed rounds unless a critical\n"
         "# finding is open (hard ceiling four), and skips unchanged re-reviews.\n"
         "# Ships false; enable only after the D18/D20 quality gate.\n"
+        "# spec.failure_modes makes each new spec carry a `## Failure modes`\n"
+        "# checklist (error paths, concurrency, existing data, callers, UI\n"
+        "# states, cleanup) that must be answered before `ctx plan` will run.\n"
+        "# Ships false for the same reason; it is recorded in each spec when\n"
+        "# the spec is created.\n"
     )
     return header + body + "\n"

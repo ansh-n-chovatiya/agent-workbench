@@ -1481,7 +1481,10 @@ def cmd_spec(args):
     # printed a name no `ls` would ever show.
     slug = spec_mod.normalise_slug(bundle.slugify(args.name))
     intent = args.intent or _free_text(args.rest)
-    path, qpath = spec_mod.create(layout, slug, intent, config.get("verify"))
+    path, qpath = spec_mod.create(
+        layout, slug, intent, config.get("verify"),
+        failure_modes=bool((config.get("spec") or {}).get("failure_modes", False)),
+    )
     state.update(layout, level="2", spec=slug)
     journal.append(layout, config, "spec", slug, "opened")
     _echo(f"L2 planned · spec {slug}")

@@ -38,7 +38,15 @@ Now do the work this command exists for: **surface what you would otherwise assu
    planning start while any of them is unaddressed, the same way it refuses
    on an open blocking question.
 
-5. **Ask them.** Use AskUserQuestion, recommending an option where you have a
+5. **If the spec has a `## Failure modes` section** (the project turned on
+   `spec.failure_modes`), walk every item before asking. For each, either point at
+   the acceptance criterion that covers it (add one if none does) —
+   `- [x] error and timeout paths: criterion 3` — or mark it
+   `- [x] async UI states: n/a — no UI in this change`. Never tick an item without
+   an answer or an `n/a` without a reason; `ctx spec-ready` treats both as open.
+   Items you cannot answer yourself become blocking questions.
+
+6. **Ask them.** Use AskUserQuestion, recommending an option where you have a
    view. Then record each answer:
    `ctx resolve <slug> --question "<substring>" --answer "<what they chose>"`
 
