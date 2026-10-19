@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+from .plans import load_windows
 from .report import render_text, render_units
 from .status import render as render_status
 from .snapshot import build_summary, snapshot_dir, write_snapshot
@@ -23,6 +24,7 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--session")
     r.add_argument("--day")
     r.add_argument("--units", action="store_true", help="tokens per ledger unit, stage and review round")
+    r.add_argument("--ledger", help="project dir (containing .ctx) or .ctx dir; names units by plan")
     r.add_argument("--json", action="store_true")
     r.add_argument("--no-snapshot", action="store_true")
     r.add_argument("--snapshot-dir")
@@ -59,7 +61,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.day and not any(r.ts.startswith(args.day) for r in reqs):
             continue
         per_session[sid] = reqs
-    summary = build_summary(per_session, stats)
+    windows = None
+    if args.ledger:
+        lp = Path(args.ledger)
+        led = lp / ".ctx" if (lp / ".ctx").is_dir() else lp
+        windows = load_windows(led)
+        if not windows:
+            print(f"--ledger: no plan journal found under {led}; units keep the session prefix", file=sys.stderr)
+    summary = build_summary(per_session, stats, windows)
     text = render_units(summary) if args.units else render_text(summary)
     print(json.dumps(summary, indent=2, sort_keys=True) if args.json else text, end="\n" if args.json else "")
     if not args.no_snapshot and per_session:
