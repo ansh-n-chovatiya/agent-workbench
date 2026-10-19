@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { THEMES } from '../scripts/lib/compose/themes.mjs';
 test('themes contain drawing tokens and are deeply frozen', () => {
-  assert.deepEqual(Object.keys(THEMES), ['clean', 'dark']);
+  assert.deepEqual(Object.keys(THEMES), ['clean', 'dark', 'bold']);
   for (const [name, theme] of Object.entries(THEMES)) {
-    assert.equal(theme.name, name); assert.equal(theme.font, 'Inter');
+    assert.equal(theme.name, name); assert.equal(theme.font, name === 'bold' ? 'Space Grotesk' : 'Inter');
     assert.equal(theme.background.type, 'gradient'); assert.equal(theme.background.colors.length, 2);
     for (const key of ['frame', 'cursor', 'ripple', 'caption', 'card']) assert.ok(theme[key]);
     assert.equal(Object.isFrozen(theme.background.colors), true);

@@ -1,4 +1,4 @@
-// showreel render sources sha256: 50902a774c6f79d34cc10780f794e12b5b6c752f2ef9870d5978f957fbca0820
+// showreel render sources sha256: 6907818bb24ac0fdb77109710c64c164537b3adb2a80f23fb35b65b91bff2cea
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -177,8 +177,8 @@
     }
   };
   var TextDecoder = typeof globalThis.TextDecoder !== "undefined" ? globalThis.TextDecoder : class TextDecoder2 {
-    constructor(label = "utf-8") {
-      const normalized = label.trim().toLowerCase();
+    constructor(label13 = "utf-8") {
+      const normalized = label13.trim().toLowerCase();
       if (normalized === "utf-8" || normalized === "utf8" || normalized === "unicode-1-1-utf-8") {
         this.encoding = "utf-8";
       } else if (normalized === "utf-16le" || normalized === "utf-16") {
@@ -186,7 +186,7 @@
       } else if (normalized === "utf-16be") {
         this.encoding = "utf-16be";
       } else {
-        throw new RangeError(`The encoding label provided ('${label}') is invalid.`);
+        throw new RangeError(`The encoding label provided ('${label13}') is invalid.`);
       }
     }
     decode(input) {
@@ -3264,14 +3264,14 @@
     for (let i = 0; i < listLength; i++) {
       const stringLength = commentView.getUint32(commentPos, true);
       commentPos += 4;
-      const string = textDecoder.decode(bytes2.subarray(commentPos, commentPos + stringLength));
+      const string2 = textDecoder.decode(bytes2.subarray(commentPos, commentPos + stringLength));
       commentPos += stringLength;
-      const separatorIndex = string.indexOf("=");
+      const separatorIndex = string2.indexOf("=");
       if (separatorIndex === -1) {
         continue;
       }
-      const key = string.slice(0, separatorIndex).toUpperCase();
-      const value = string.slice(separatorIndex + 1);
+      const key = string2.slice(0, separatorIndex).toUpperCase();
+      const value = string2.slice(separatorIndex + 1);
       metadataTags.raw ??= {};
       if (Array.isArray(metadataTags.raw[key])) {
         metadataTags.raw[key] = [...metadataTags.raw[key], value];
@@ -4460,12 +4460,12 @@
       const transferCharacteristics = vp9CodecInfo.transferCharacteristics.toString().padStart(2, "0");
       const matrixCoefficients = vp9CodecInfo.matrixCoefficients.toString().padStart(2, "0");
       const videoFullRangeFlag = vp9CodecInfo.videoFullRangeFlag.toString().padStart(2, "0");
-      let string = `vp09.${profile}.${level}.${bitDepth}.${chromaSubsampling}`;
-      string += `.${colourPrimaries}.${transferCharacteristics}.${matrixCoefficients}.${videoFullRangeFlag}`;
-      if (string.endsWith(VP9_DEFAULT_SUFFIX)) {
-        string = string.slice(0, -VP9_DEFAULT_SUFFIX.length);
+      let string2 = `vp09.${profile}.${level}.${bitDepth}.${chromaSubsampling}`;
+      string2 += `.${colourPrimaries}.${transferCharacteristics}.${matrixCoefficients}.${videoFullRangeFlag}`;
+      if (string2.endsWith(VP9_DEFAULT_SUFFIX)) {
+        string2 = string2.slice(0, -VP9_DEFAULT_SUFFIX.length);
       }
-      return string;
+      return string2;
     } else if (codec === "av1") {
       if (!av1CodecInfo) {
         const pictureSize = trackInfo.width * trackInfo.height;
@@ -4499,16 +4499,16 @@
         matrixCoefficients = colorSpace?.matrix ? MATRIX_COEFFICIENTS_MAP[colorSpace.matrix] : 1;
         videoFullRangeFlag = colorSpace?.fullRange ? 1 : 0;
       }
-      let string = `av01.${profile}.${level}${tier}.${bitDepth}`;
-      string += `.${monochrome}.${chromaSubsampling.toString().padStart(3, "0")}`;
-      string += `.${colorPrimaries.toString().padStart(2, "0")}`;
-      string += `.${transferCharacteristics.toString().padStart(2, "0")}`;
-      string += `.${matrixCoefficients.toString().padStart(2, "0")}`;
-      string += `.${videoFullRangeFlag}`;
-      if (string.endsWith(AV1_DEFAULT_SUFFIX)) {
-        string = string.slice(0, -AV1_DEFAULT_SUFFIX.length);
+      let string2 = `av01.${profile}.${level}${tier}.${bitDepth}`;
+      string2 += `.${monochrome}.${chromaSubsampling.toString().padStart(3, "0")}`;
+      string2 += `.${colorPrimaries.toString().padStart(2, "0")}`;
+      string2 += `.${transferCharacteristics.toString().padStart(2, "0")}`;
+      string2 += `.${matrixCoefficients.toString().padStart(2, "0")}`;
+      string2 += `.${videoFullRangeFlag}`;
+      if (string2.endsWith(AV1_DEFAULT_SUFFIX)) {
+        string2 = string2.slice(0, -AV1_DEFAULT_SUFFIX.length);
       }
-      return string;
+      return string2;
     } else if (codec === "prores") {
       return proresFormat ?? "apch";
     } else if (codec !== null) {
@@ -5422,12 +5422,12 @@
   // node_modules/mediabunny/dist/modules/src/isobmff/isobmff-misc.js
   var buildIsobmffMimeType = (info) => {
     const base = info.hasVideo ? "video/" : info.hasAudio ? "audio/" : "application/";
-    let string = base + (info.isQuickTime ? "quicktime" : "mp4");
+    let string2 = base + (info.isQuickTime ? "quicktime" : "mp4");
     if (info.codecStrings.length > 0) {
       const uniqueCodecMimeTypes = [...new Set(info.codecStrings)];
-      string += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
+      string2 += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
     }
-    return string;
+    return string2;
   };
   var parsePsshBoxContents = (contents) => {
     const view2 = toDataView(contents);
@@ -7334,14 +7334,14 @@
             if (!track) {
               break;
             }
-            const defaults2 = this.fragmentTrackDefaults.find((x) => x.trackId === trackId);
+            const defaults14 = this.fragmentTrackDefaults.find((x) => x.trackId === trackId);
             this.currentTrack = track;
             track.currentFragmentState = {
               baseDataOffset: this.currentFragment.implicitBaseDataOffset,
-              sampleDescriptionIndex: defaults2?.defaultSampleDescriptionIndex ?? null,
-              defaultSampleDuration: defaults2?.defaultSampleDuration ?? null,
-              defaultSampleSize: defaults2?.defaultSampleSize ?? null,
-              defaultSampleFlags: defaults2?.defaultSampleFlags ?? null,
+              sampleDescriptionIndex: defaults14?.defaultSampleDescriptionIndex ?? null,
+              defaultSampleDuration: defaults14?.defaultSampleDuration ?? null,
+              defaultSampleSize: defaults14?.defaultSampleSize ?? null,
+              defaultSampleFlags: defaults14?.defaultSampleFlags ?? null,
               startTimestamp: null,
               encryptionAuxInfo: null
             };
@@ -7930,16 +7930,16 @@
     getNumber() {
       const demuxer = this.internalTrack.demuxer;
       const trackType = this.internalTrack.trackBacking.getType();
-      let number = 0;
+      let number2 = 0;
       for (const track of demuxer.tracks) {
         if (track.trackBacking.getType() === trackType) {
-          number++;
+          number2++;
         }
         if (track === this.internalTrack) {
           break;
         }
       }
-      return number;
+      return number2;
     }
     getCodec() {
       throw new Error("Not implemented on base class.");
@@ -8999,8 +8999,8 @@
     if (slice.remainingLength < size) {
       return null;
     }
-    const id = readUnsignedInt(slice, size);
-    return id;
+    const id13 = readUnsignedInt(slice, size);
+    return id13;
   };
   var readElementSize = (slice) => {
     if (slice.remainingLength < 1) {
@@ -9022,15 +9022,15 @@
   };
   var readElementHeader = (slice) => {
     assert(slice.remainingLength >= MIN_HEADER_SIZE);
-    const id = readElementId(slice);
-    if (id === null) {
+    const id13 = readElementId(slice);
+    if (id13 === null) {
       return null;
     }
     const size = readElementSize(slice);
     if (size === null) {
       return null;
     }
-    return { id, size };
+    return { id: id13, size };
   };
   var readAsciiString = (slice, length) => {
     const bytes2 = readBytes(slice, length);
@@ -9136,12 +9136,12 @@
   // node_modules/mediabunny/dist/modules/src/matroska/matroska-misc.js
   var buildMatroskaMimeType = (info) => {
     const base = info.hasVideo ? "video/" : info.hasAudio ? "audio/" : "application/";
-    let string = base + (info.isWebM ? "webm" : "x-matroska");
+    let string2 = base + (info.isWebM ? "webm" : "x-matroska");
     if (info.codecStrings.length > 0) {
       const uniqueCodecMimeTypes = [...new Set(info.codecStrings.filter(Boolean))];
-      string += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
+      string2 += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
     }
-    return string;
+    return string2;
   };
 
   // node_modules/mediabunny/dist/modules/src/matroska/matroska-demuxer.js
@@ -9235,10 +9235,10 @@
           if (!header) {
             break;
           }
-          const id = header.id;
+          const id13 = header.id;
           let size = header.size;
           const dataStartPos = slice.filePos;
-          if (id === EBMLId.EBML) {
+          if (id13 === EBMLId.EBML) {
             assertDefinedSize(size);
             let slice2 = this.reader.requestSlice(dataStartPos, size);
             if (isThenable(slice2))
@@ -9246,7 +9246,7 @@
             if (!slice2)
               break;
             this.readContiguousElements(slice2);
-          } else if (id === EBMLId.Segment) {
+          } else if (id13 === EBMLId.Segment) {
             await this.readSegment(dataStartPos, size);
             if (size === void 0) {
               break;
@@ -9254,7 +9254,7 @@
             if (this.reader.fileSize === null) {
               break;
             }
-          } else if (id === EBMLId.Cluster) {
+          } else if (id13 === EBMLId.Cluster) {
             if (this.reader.fileSize === null) {
               break;
             }
@@ -9313,13 +9313,13 @@
             break;
           }
         }
-        const { id, size } = header;
+        const { id: id13, size } = header;
         const dataStartPos = slice.filePos;
-        const metadataElementIndex = METADATA_ELEMENTS.findIndex((x) => x.id === id);
+        const metadataElementIndex = METADATA_ELEMENTS.findIndex((x) => x.id === id13);
         if (metadataElementIndex !== -1) {
           const field = METADATA_ELEMENTS[metadataElementIndex].flag;
           this.currentSegment[field] = true;
-          if (id === EBMLId.SeekHead) {
+          if (id13 === EBMLId.SeekHead) {
             visitedSeekHeadPositions.add(elementStartPos - segmentDataStart);
           }
           assertDefinedSize(size);
@@ -9329,8 +9329,8 @@
           if (slice2) {
             this.readContiguousElements(slice2);
           }
-        } else if (id === EBMLId.Tags || id === EBMLId.Attachments) {
-          if (id === EBMLId.Tags) {
+        } else if (id13 === EBMLId.Tags || id13 === EBMLId.Attachments) {
+          if (id13 === EBMLId.Tags) {
             this.currentSegment.tagsSeen = true;
           } else {
             this.currentSegment.attachmentsSeen = true;
@@ -9342,7 +9342,7 @@
           if (slice2) {
             this.readContiguousElements(slice2);
           }
-        } else if (id === EBMLId.Cluster) {
+        } else if (id13 === EBMLId.Cluster) {
           this.currentSegment.clusterSeekStartPos = elementStartPos;
           break;
         }
@@ -9394,8 +9394,8 @@
           const header = readElementHeader(slice);
           if (!header)
             continue;
-          const { id, size } = header;
-          if (id !== target.id)
+          const { id: id13, size } = header;
+          if (id13 !== target.id)
             continue;
           assertDefinedSize(size);
           this.currentSegment[target.flag] = true;
@@ -9460,8 +9460,8 @@
       const elementStartPos = startPos;
       const elementHeader = readElementHeader(headerSlice);
       assert(elementHeader);
-      const id = elementHeader.id;
-      assert(id === EBMLId.Cluster);
+      const id13 = elementHeader.id;
+      assert(id13 === EBMLId.Cluster);
       let size = elementHeader.size;
       const dataStartPos = headerSlice.filePos;
       if (size === void 0) {
@@ -9693,10 +9693,10 @@
       if (stopIds && stopIds.includes(header.id)) {
         return false;
       }
-      const { id, size } = header;
+      const { id: id13, size } = header;
       const dataStartPos = slice.filePos;
       assertDefinedSize(size);
-      switch (id) {
+      switch (id13) {
         case EBMLId.DocType:
           {
             this.isWebM = readAsciiString(slice, size) === "webm";
@@ -10823,18 +10823,18 @@
     getNumber() {
       const demuxer = this.internalTrack.demuxer;
       const trackType = this.internalTrack.trackBacking.getType();
-      let number = 0;
+      let number2 = 0;
       for (const segment of demuxer.segments) {
         for (const track of segment.tracks) {
           if (track.trackBacking.getType() === trackType) {
-            number++;
+            number2++;
           }
           if (track === this.internalTrack) {
             break;
           }
         }
       }
-      return number;
+      return number2;
     }
     getCodec() {
       throw new Error("Not implemented on base class.");
@@ -11099,10 +11099,10 @@
             break;
           }
         }
-        const id = elementHeader.id;
+        const id13 = elementHeader.id;
         let size = elementHeader.size;
         const dataStartPos = slice.filePos;
-        if (id === EBMLId.Cluster) {
+        if (id13 === EBMLId.Cluster) {
           currentCluster = await demuxer.readCluster(elementStartPos, segment);
           size = currentCluster.elementEndPos - dataStartPos;
           const { blockIndex, correctBlockFound } = getMatchInCluster(currentCluster);
@@ -11115,7 +11115,7 @@
           }
         }
         if (size === void 0) {
-          assert(id !== EBMLId.Cluster);
+          assert(id13 !== EBMLId.Cluster);
           const nextElementPos = await searchForNextElementId(demuxer.reader, dataStartPos, LEVEL_0_AND_1_EBML_IDS, segment.elementEndPos);
           size = nextElementPos.pos - dataStartPos;
         }
@@ -11669,12 +11669,12 @@
     };
   };
   var buildOggMimeType = (info) => {
-    let string = "audio/ogg";
+    let string2 = "audio/ogg";
     if (info.codecStrings) {
       const uniqueCodecMimeTypes = [...new Set(info.codecStrings)];
-      string += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
+      string2 += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
     }
-    return string;
+    return string2;
   };
 
   // node_modules/mediabunny/dist/modules/src/ogg/ogg-reader.js
@@ -13809,12 +13809,12 @@
   var TIMESTAMP_MODULUS = 2 ** 33;
   var TS_PACKET_SIZE = 188;
   var buildMpegTsMimeType = (codecStrings) => {
-    let string = "video/MP2T";
+    let string2 = "video/MP2T";
     const uniqueCodecStrings = [...new Set(codecStrings.filter(Boolean))];
     if (uniqueCodecStrings.length > 0) {
-      string += `; codecs="${uniqueCodecStrings.join(", ")}"`;
+      string2 += `; codecs="${uniqueCodecStrings.join(", ")}"`;
     }
-    return string;
+    return string2;
   };
 
   // node_modules/mediabunny/dist/modules/src/mpeg-ts/mpeg-ts-demuxer.js
@@ -13909,12 +13909,12 @@
             while (8 * (sectionLength + BYTES_BEFORE_SECTION_LENGTH) - bitstream.pos > BITS_IN_CRC_32) {
               const programNumber = bitstream.readBits(16);
               bitstream.skipBits(3);
-              const id = bitstream.readBits(13);
+              const id13 = bitstream.readBits(13);
               if (programNumber !== 0) {
                 if (programMapPid !== null) {
                   throw new Error("Only files with a single program are supported.");
                 } else {
-                  programMapPid = id;
+                  programMapPid = id13;
                 }
               }
             }
@@ -14548,17 +14548,17 @@
     getNumber() {
       const demuxer = this.elementaryStream.demuxer;
       const trackType = this.elementaryStream.info.type;
-      let number = 0;
+      let number2 = 0;
       for (const backing of demuxer.trackBackingEntries) {
         if (backing.getType() === trackType) {
-          number++;
+          number2++;
         }
         assert(backing instanceof _MpegTsTrackBacking);
         if (backing.elementaryStream === this.elementaryStream) {
           break;
         }
       }
-      return number;
+      return number2;
     }
     getCodec() {
       throw new Error("Not implemented on base class.");
@@ -15790,11 +15790,11 @@
         if (this.trackDeclarations) {
           for (const decl of this.trackDeclarations) {
             if (decl.type === "video") {
-              const number = arrayCount(backings, (x) => x.getType() === "video") + 1;
-              backings.push(new SegmentedInputInputVideoTrackBacking(this, decl, number));
+              const number2 = arrayCount(backings, (x) => x.getType() === "video") + 1;
+              backings.push(new SegmentedInputInputVideoTrackBacking(this, decl, number2));
             } else if (decl.type === "audio") {
-              const number = arrayCount(backings, (x) => x.getType() === "audio") + 1;
-              backings.push(new SegmentedInputInputAudioTrackBacking(this, decl, number));
+              const number2 = arrayCount(backings, (x) => x.getType() === "audio") + 1;
+              backings.push(new SegmentedInputInputAudioTrackBacking(this, decl, number2));
             }
           }
         } else {
@@ -15806,17 +15806,17 @@
           const inputTracks = await input.getTracks();
           for (const track of inputTracks) {
             if (track.type === "video") {
-              const number = arrayCount(backings, (x) => x.getType() === "video") + 1;
+              const number2 = arrayCount(backings, (x) => x.getType() === "video") + 1;
               backings.push(new SegmentedInputInputVideoTrackBacking(this, {
                 id: backings.length + 1,
                 type: "video"
-              }, number));
+              }, number2));
             } else if (track.type === "audio") {
-              const number = arrayCount(backings, (x) => x.getType() === "audio") + 1;
+              const number2 = arrayCount(backings, (x) => x.getType() === "audio") + 1;
               backings.push(new SegmentedInputInputAudioTrackBacking(this, {
                 id: backings.length + 1,
                 type: "audio"
-              }, number));
+              }, number2));
             }
           }
         }
@@ -15864,14 +15864,14 @@
     }
   };
   var SegmentedInputInputTrackBacking = class {
-    constructor(segmentedInput, decl, number) {
+    constructor(segmentedInput, decl, number2) {
       this.packetInfos = /* @__PURE__ */ new WeakMap();
       this.hydrationPromise = null;
       this.firstInputTrack = null;
       this.firstSegment = null;
       this.segmentedInput = segmentedInput;
       this.decl = decl;
-      this.number = number;
+      this.number = number2;
     }
     hydrate() {
       return this.hydrationPromise ??= (async () => {
@@ -17619,11 +17619,11 @@
         }
         return { length, offset };
       };
-      const setNextSequenceNumber = (number) => {
-        nextSequenceNumber = number;
+      const setNextSequenceNumber = (number2) => {
+        nextSequenceNumber = number2;
         if (prevLastSegment) {
           assert(prevLastSegment.sequenceNumber !== null);
-          if (prevLastSegment.sequenceNumber < number) {
+          if (prevLastSegment.sequenceNumber < number2) {
             accumulatedTime = prevLastSegment.timestamp + prevLastSegment.duration;
             currentFirstSegment = prevLastSegment.firstSegment;
             currentInitSegment = prevLastSegment.initSegment;
@@ -17815,11 +17815,11 @@
           }
         } else if (line.startsWith(TAG_MEDIA_SEQUENCE)) {
           const value = line.slice(TAG_MEDIA_SEQUENCE.length);
-          const number = Number(value);
-          if (!Number.isInteger(number) || number < 0) {
+          const number2 = Number(value);
+          if (!Number.isInteger(number2) || number2 < 0) {
             throw new Error(`Invalid EXT-X-MEDIA-SEQUENCE value '${value}'.`);
           }
-          setNextSequenceNumber(number);
+          setNextSequenceNumber(number2);
         } else if (line.startsWith(TAG_BYTERANGE)) {
           const parsed = parseByteRange(line.slice(TAG_BYTERANGE.length));
           if (parsed.offset === null) {
@@ -18503,16 +18503,16 @@
     getNumber() {
       assert(this.internalTrack.demuxer.internalTracks);
       const trackType = this.internalTrack.info.type;
-      let number = 0;
+      let number2 = 0;
       for (const track of this.internalTrack.demuxer.internalTracks) {
         if (track.info.type === trackType) {
-          number++;
+          number2++;
         }
         if (track === this.internalTrack) {
           break;
         }
       }
-      return number;
+      return number2;
     }
     getTimeResolution() {
       return this.delegate(() => this.internalTrack.backingTrack.getTimeResolution());
@@ -18798,8 +18798,8 @@
       if (varIntSize < 1 || varIntSize > 8) {
         return false;
       }
-      const id = readUnsignedInt(headerSlice, varIntSize);
-      if (id !== EBMLId.EBML) {
+      const id13 = readUnsignedInt(headerSlice, varIntSize);
+      if (id13 !== EBMLId.EBML) {
         return false;
       }
       const dataSize = readElementSize(headerSlice);
@@ -18816,11 +18816,11 @@
         const header = readElementHeader(dataSlice);
         if (!header)
           break;
-        const { id: id2, size } = header;
+        const { id: id14, size } = header;
         const dataStartPos = dataSlice.filePos;
         if (size === void 0)
           return false;
-        switch (id2) {
+        switch (id14) {
           case EBMLId.EBMLVersion:
             {
               const ebmlVersion = readUnsignedInt(dataSlice, size);
@@ -20515,7 +20515,7 @@
     return ComputeLayoutAndAllocationSize(parsedRect, format, optLayout);
   };
   var ParseVisibleRect = (defaultRect, overrideRect, codedWidth, codedHeight, format) => {
-    const sourceRect = { ...defaultRect };
+    const sourceRect2 = { ...defaultRect };
     if (overrideRect !== void 0) {
       if (overrideRect.width === 0 || overrideRect.height === 0) {
         throw new TypeError("visibleRect dimensions cannot be zero.");
@@ -20526,16 +20526,16 @@
       if ((overrideRect.y || 0) + (overrideRect.height || 0) > codedHeight) {
         throw new TypeError("visibleRect exceeds codedHeight.");
       }
-      sourceRect.x = overrideRect.x || 0;
-      sourceRect.y = overrideRect.y || 0;
-      sourceRect.width = overrideRect.width || 0;
-      sourceRect.height = overrideRect.height || 0;
+      sourceRect2.x = overrideRect.x || 0;
+      sourceRect2.y = overrideRect.y || 0;
+      sourceRect2.width = overrideRect.width || 0;
+      sourceRect2.height = overrideRect.height || 0;
     }
-    const validAlignment = VerifyRectOffsetAlignment(format, sourceRect);
+    const validAlignment = VerifyRectOffsetAlignment(format, sourceRect2);
     if (!validAlignment) {
       throw new TypeError("visibleRect alignment is invalid for the format.");
     }
-    return sourceRect;
+    return sourceRect2;
   };
   var VerifyRectOffsetAlignment = (format, rect) => {
     if (format === null)
@@ -21945,24 +21945,24 @@
   var toUlaw = (s16) => {
     const MULAW_MAX = 8191;
     const MULAW_BIAS = 33;
-    let number = s16 >> 2;
+    let number2 = s16 >> 2;
     let mask = 4096;
     let sign = 0;
     let position = 12;
     let lsb = 0;
-    if (number < 0) {
-      number = -number;
+    if (number2 < 0) {
+      number2 = -number2;
       sign = 128;
     }
-    number += MULAW_BIAS;
-    if (number > MULAW_MAX) {
-      number = MULAW_MAX;
+    number2 += MULAW_BIAS;
+    if (number2 > MULAW_MAX) {
+      number2 = MULAW_MAX;
     }
-    while ((number & mask) !== mask && position >= 5) {
+    while ((number2 & mask) !== mask && position >= 5) {
       mask >>= 1;
       position--;
     }
-    lsb = number >> position - 4 & 15;
+    lsb = number2 >> position - 4 & 15;
     return ~(sign | position - 5 << 4 | lsb) & 255;
   };
   var toAlaw = (s16) => {
@@ -21971,20 +21971,20 @@
     let sign = 0;
     let position = 11;
     let lsb = 0;
-    let number = s16 >> 3;
-    if (number < 0) {
-      number = -number - 1;
+    let number2 = s16 >> 3;
+    if (number2 < 0) {
+      number2 = -number2 - 1;
     } else {
       sign = 128;
     }
-    if (number > ALAW_MAX) {
-      number = ALAW_MAX;
+    if (number2 > ALAW_MAX) {
+      number2 = ALAW_MAX;
     }
-    while ((number & mask) !== mask && position >= 5) {
+    while ((number2 & mask) !== mask && position >= 5) {
       mask >>= 1;
       position--;
     }
-    lsb = number >> (position === 4 ? 1 : position - 4) & 15;
+    lsb = number2 >> (position === 4 ? 1 : position - 4) & 15;
     return (sign | position - 4 << 4 | lsb) ^ 85;
   };
 
@@ -22868,17 +22868,17 @@
       sample.setFlip(this.flip);
       this.onSample(sample);
     }
-    async mergeAlpha(color, alpha) {
+    async mergeAlpha(color2, alpha) {
       const resolver = promiseWithResolvers();
       this.mergeAlphaPromises.push(resolver.promise);
       const result = { sample: null };
       this.finalSamples.push(result);
       try {
         if (!alpha) {
-          result.sample = new VideoSample(color);
+          result.sample = new VideoSample(color2);
         } else {
           assert(this.merger);
-          const finalFrame = await this.merger.merge(color, alpha);
+          const finalFrame = await this.merger.merge(color2, alpha);
           result.sample = new VideoSample(finalFrame);
         }
         while (this.finalSamples.length > 0 && this.finalSamples[0].sample !== null) {
@@ -22954,7 +22954,7 @@
       this.pendingRequests = /* @__PURE__ */ new Map();
       this.nextRequestId = 0;
     }
-    merge(color, alpha) {
+    merge(color2, alpha) {
       if (this.workers.length === 0) {
         if (!mergerWorkerUrl) {
           const blob = new Blob([`(${colorAlphaMergerWorkerCode.toString()})()`], { type: "application/javascript" });
@@ -22986,12 +22986,12 @@
           this.workers.push(worker2);
         }
       }
-      const id = this.nextRequestId++;
+      const id13 = this.nextRequestId++;
       const pending = promiseWithResolvers();
-      this.pendingRequests.set(id, pending);
+      this.pendingRequests.set(id13, pending);
       const worker = this.workers[this.nextWorkerIndex];
       this.nextWorkerIndex = (this.nextWorkerIndex + 1) % this.workers.length;
-      worker.postMessage({ id, color, alpha }, { transfer: [color, alpha] });
+      worker.postMessage({ id: id13, color: color2, alpha }, { transfer: [color2, alpha] });
       return pending.promise;
     }
     close() {
@@ -23011,21 +23011,21 @@
     let cpuColorBuffer = null;
     let chain = Promise.resolve();
     self.addEventListener("message", (event) => {
-      const { id, color, alpha } = event.data;
+      const { id: id13, color: color2, alpha } = event.data;
       chain = chain.then(async () => {
         try {
-          const frame = await merge(color, alpha);
-          self.postMessage({ id, frame }, { transfer: [frame] });
+          const frame = await merge(color2, alpha);
+          self.postMessage({ id: id13, frame }, { transfer: [frame] });
         } catch (error) {
-          self.postMessage({ id, error: error.message });
+          self.postMessage({ id: id13, error: error.message });
         } finally {
-          color.close();
+          color2.close();
           alpha.close();
         }
       });
     });
-    const merge = async (color, alpha) => {
-      const format = color.format;
+    const merge = async (color2, alpha) => {
+      const format = color2.format;
       const alphaFormat = alpha.format;
       if (!format || !alphaFormat) {
         throw new Error("CPU color/alpha merging requires a known VideoFrame format.");
@@ -23038,20 +23038,20 @@
         throw new Error(`CPU color/alpha merging requires the alpha frame to have the same bit depth as the color frame (color: '${format}', alpha: '${alphaFormat}').`);
       }
       if (format === "RGBX" || format === "RGBA" || format === "BGRX" || format === "BGRA") {
-        return await mergeInterleavedRgba(color, alpha, format);
+        return await mergeInterleavedRgba(color2, alpha, format);
       } else if (format === "I420" || format === "I420P10" || format === "I420P12" || format === "I422" || format === "I422P10" || format === "I422P12" || format === "I444" || format === "I444P10" || format === "I444P12") {
-        return await mergePlanarYuv(color, alpha, format);
+        return await mergePlanarYuv(color2, alpha, format);
       } else if (format === "NV12") {
-        return await mergeNv12(color, alpha);
+        return await mergeNv12(color2, alpha);
       }
       throw new Error(`CPU color/alpha merging does not support format '${format}'.`);
     };
-    const mergeInterleavedRgba = async (color, alpha, format) => {
-      const width = color.visibleRect?.width ?? color.codedWidth;
-      const height = color.visibleRect?.height ?? color.codedHeight;
+    const mergeInterleavedRgba = async (color2, alpha, format) => {
+      const width = color2.visibleRect?.width ?? color2.codedWidth;
+      const height = color2.visibleRect?.height ?? color2.codedHeight;
       const pixelCount = width * height;
       const output = new Uint8Array(pixelCount * 4);
-      await color.copyTo(output);
+      await color2.copyTo(output);
       const alphaY = await readAlpha(alpha, width, height, 1);
       for (let i = 0, j = 3; i < pixelCount; i++, j += 4) {
         output[j] = alphaY[i];
@@ -23061,15 +23061,15 @@
         format: outputFormat,
         codedWidth: width,
         codedHeight: height,
-        timestamp: color.timestamp,
-        duration: color.duration ?? void 0,
+        timestamp: color2.timestamp,
+        duration: color2.duration ?? void 0,
         transfer: [output.buffer]
       };
       return new VideoFrame(output, init);
     };
-    const mergePlanarYuv = async (color, alpha, format) => {
-      const width = color.visibleRect?.width ?? color.codedWidth;
-      const height = color.visibleRect?.height ?? color.codedHeight;
+    const mergePlanarYuv = async (color2, alpha, format) => {
+      const width = color2.visibleRect?.width ?? color2.codedWidth;
+      const height = color2.visibleRect?.height ?? color2.codedHeight;
       const is10 = format.includes("P10");
       const is12 = format.includes("P12");
       const bytesPerSample = is10 || is12 ? 2 : 1;
@@ -23092,7 +23092,7 @@
       const aBytes = ySamples * bytesPerSample;
       const outputBytes = yBytes + 2 * uvBytes + aBytes;
       const output = new Uint8Array(outputBytes);
-      await color.copyTo(output);
+      await color2.copyTo(output);
       const alphaY = await readAlpha(alpha, width, height, bytesPerSample);
       const aOffset = yBytes + 2 * uvBytes;
       output.set(alphaY, aOffset);
@@ -23101,24 +23101,24 @@
         format: outputFormat,
         codedWidth: width,
         codedHeight: height,
-        timestamp: color.timestamp,
-        duration: color.duration ?? void 0,
+        timestamp: color2.timestamp,
+        duration: color2.duration ?? void 0,
         transfer: [output.buffer]
       };
       return new VideoFrame(output, init);
     };
-    const mergeNv12 = async (color, alpha) => {
-      const width = color.visibleRect?.width ?? color.codedWidth;
-      const height = color.visibleRect?.height ?? color.codedHeight;
+    const mergeNv12 = async (color2, alpha) => {
+      const width = color2.visibleRect?.width ?? color2.codedWidth;
+      const height = color2.visibleRect?.height ?? color2.codedHeight;
       const ySize = width * height;
       const chromaW = Math.ceil(width / 2);
       const chromaH = Math.ceil(height / 2);
       const uvSize = chromaW * chromaH;
-      const sourceSize2 = color.allocationSize();
+      const sourceSize2 = color2.allocationSize();
       if (!cpuColorBuffer || cpuColorBuffer.byteLength !== sourceSize2) {
         cpuColorBuffer = new Uint8Array(sourceSize2);
       }
-      await color.copyTo(cpuColorBuffer);
+      await color2.copyTo(cpuColorBuffer);
       const output = new Uint8Array(ySize + 2 * uvSize + ySize);
       output.set(cpuColorBuffer.subarray(0, ySize), 0);
       const uOffset = ySize;
@@ -23134,8 +23134,8 @@
         format: "I420A",
         codedWidth: width,
         codedHeight: height,
-        timestamp: color.timestamp,
-        duration: color.duration ?? void 0,
+        timestamp: color2.timestamp,
+        duration: color2.duration ?? void 0,
         transfer: [output.buffer]
       };
       return new VideoFrame(output, init);
@@ -25082,8 +25082,8 @@
     return str;
   };
   var readAllLines = (slice, length, options) => {
-    const text = textDecoder.decode(readBytes(slice, length));
-    const lines = text.split("\n").map((x) => x.trim()).filter((x) => x.length > 0 && !options?.ignore?.(x));
+    const text2 = textDecoder.decode(readBytes(slice, length));
+    const lines = text2.split("\n").map((x) => x.trim()).filter((x) => x.length > 0 && !options?.ignore?.(x));
     return lines;
   };
 
@@ -25692,15 +25692,15 @@
     }
     readId3V2Frame() {
       if (this.header.majorVersion === 2) {
-        const id = this.readAscii(3);
-        if (id === "\0\0\0") {
+        const id13 = this.readAscii(3);
+        if (id13 === "\0\0\0") {
           return null;
         }
         const size = this.readU24();
-        return { id, size, flags: 0 };
+        return { id: id13, size, flags: 0 };
       } else {
-        const id = this.readAscii(4);
-        if (id === "\0\0\0\0") {
+        const id13 = this.readAscii(4);
+        if (id13 === "\0\0\0\0") {
           return null;
         }
         const sizeRaw = this.readU32();
@@ -25728,15 +25728,15 @@
           }
         }
         this.pos = headerEndPos;
-        return { id, size, flags };
+        return { id: id13, size, flags };
       }
     }
     readId3V2TextEncoding() {
-      const number = this.readU8();
-      if (number > 3) {
-        throw new Error(`Unsupported text encoding: ${number}`);
+      const number2 = this.readU8();
+      if (number2 > 3) {
+        throw new Error(`Unsupported text encoding: ${number2}`);
       }
-      return number;
+      return number2;
     }
     readId3V2Text(encoding, until) {
       const startPos = this.pos;
@@ -25853,65 +25853,65 @@
       this.helperView.setUint32(4, value, false);
       this.writer.write(this.helper.subarray(0, 8));
     }
-    writeAscii(text) {
-      for (let i = 0; i < text.length; i++) {
-        this.helperView.setUint8(i % 8, text.charCodeAt(i));
+    writeAscii(text2) {
+      for (let i = 0; i < text2.length; i++) {
+        this.helperView.setUint8(i % 8, text2.charCodeAt(i));
         if (i % 8 === 7)
           this.writer.write(this.helper);
       }
-      if (text.length % 8 !== 0) {
-        this.writer.write(this.helper.subarray(0, text.length % 8));
+      if (text2.length % 8 !== 0) {
+        this.writer.write(this.helper.subarray(0, text2.length % 8));
       }
     }
-    writeBox(box2) {
-      this.offsets.set(box2, this.writer.getPos());
-      if (box2.contents && !box2.children) {
-        this.writeBoxHeader(box2, box2.size ?? box2.contents.byteLength + 8);
-        this.writer.write(box2.contents);
+    writeBox(box3) {
+      this.offsets.set(box3, this.writer.getPos());
+      if (box3.contents && !box3.children) {
+        this.writeBoxHeader(box3, box3.size ?? box3.contents.byteLength + 8);
+        this.writer.write(box3.contents);
       } else {
         const startPos = this.writer.getPos();
-        this.writeBoxHeader(box2, 0);
-        if (box2.contents)
-          this.writer.write(box2.contents);
-        if (box2.children) {
-          for (const child of box2.children)
+        this.writeBoxHeader(box3, 0);
+        if (box3.contents)
+          this.writer.write(box3.contents);
+        if (box3.children) {
+          for (const child of box3.children)
             if (child)
               this.writeBox(child);
         }
         const endPos = this.writer.getPos();
-        const size = box2.size ?? endPos - startPos;
+        const size = box3.size ?? endPos - startPos;
         this.writer.seek(startPos);
-        this.writeBoxHeader(box2, size);
+        this.writeBoxHeader(box3, size);
         this.writer.seek(endPos);
       }
     }
-    writeBoxHeader(box2, size) {
-      this.writeU32(box2.largeSize ? 1 : size);
-      this.writeAscii(box2.type);
-      if (box2.largeSize)
+    writeBoxHeader(box3, size) {
+      this.writeU32(box3.largeSize ? 1 : size);
+      this.writeAscii(box3.type);
+      if (box3.largeSize)
         this.writeU64(size);
     }
-    measureBoxHeader(box2) {
-      return 8 + (box2.largeSize ? 8 : 0);
+    measureBoxHeader(box3) {
+      return 8 + (box3.largeSize ? 8 : 0);
     }
-    patchBox(box2) {
-      const boxOffset = this.offsets.get(box2);
+    patchBox(box3) {
+      const boxOffset = this.offsets.get(box3);
       assert(boxOffset !== void 0);
       const endPos = this.writer.getPos();
       this.writer.seek(boxOffset);
-      this.writeBox(box2);
+      this.writeBox(box3);
       this.writer.seek(endPos);
     }
-    measureBox(box2) {
-      if (box2.contents && !box2.children) {
-        const headerSize = this.measureBoxHeader(box2);
-        return headerSize + box2.contents.byteLength;
+    measureBox(box3) {
+      if (box3.contents && !box3.children) {
+        const headerSize = this.measureBoxHeader(box3);
+        return headerSize + box3.contents.byteLength;
       } else {
-        let result = this.measureBoxHeader(box2);
-        if (box2.contents)
-          result += box2.contents.byteLength;
-        if (box2.children) {
-          for (const child of box2.children)
+        let result = this.measureBoxHeader(box3);
+        if (box3.contents)
+          result += box3.contents.byteLength;
+        if (box3.children) {
+          for (const child of box3.children)
             if (child)
               result += this.measureBox(child);
         }
@@ -25982,8 +25982,8 @@
     } while (remaining > 0 || byteLength);
     return bytes2.reverse();
   };
-  var ascii = (text, nullTerminated = false) => {
-    const bytes2 = Array(text.length).fill(null).map((_, i) => text.charCodeAt(i));
+  var ascii = (text2, nullTerminated = false) => {
+    const bytes2 = Array(text2.length).fill(null).map((_, i) => text2.charCodeAt(i));
     if (nullTerminated)
       bytes2.push(0);
     return bytes2;
@@ -27294,8 +27294,8 @@
         case "trackNumber":
           {
             if (isMdta) {
-              const string = tags.tracksTotal !== void 0 ? `${value}/${tags.tracksTotal}` : value.toString();
-              pairs.push({ key: "track", value: dataStringBoxLong(string) });
+              const string2 = tags.tracksTotal !== void 0 ? `${value}/${tags.tracksTotal}` : value.toString();
+              pairs.push({ key: "track", value: dataStringBoxLong(string2) });
             } else {
               pairs.push({ key: "trkn", value: box("data", [
                 u32(0),
@@ -28511,8 +28511,8 @@
         }
         if (trackData.lastCueEndTimestamp < sampleStart) {
           this.auxWriter.seek(0);
-          const box2 = vtte();
-          this.auxBoxWriter.writeBox(box2);
+          const box3 = vtte();
+          this.auxBoxWriter.writeBox(box3);
           const body2 = this.auxTarget._getSlice(0, this.auxWriter.getPos());
           const sample2 = this.createSampleForTrack(trackData, body2, trackData.lastCueEndTimestamp, sampleStart - trackData.lastCueEndTimestamp, "key");
           await this.registerSample(trackData, sample2);
@@ -28533,11 +28533,11 @@
             trackData.cueToSourceId.set(cue, sourceId);
           }
           if (cue.notes) {
-            const box3 = vtta(cue.notes);
-            this.auxBoxWriter.writeBox(box3);
+            const box4 = vtta(cue.notes);
+            this.auxBoxWriter.writeBox(box4);
           }
-          const box2 = vttc(cue.text, containsTimestamp ? sampleStart : null, cue.identifier ?? null, cue.settings ?? null, sourceId ?? null);
-          this.auxBoxWriter.writeBox(box2);
+          const box3 = vttc(cue.text, containsTimestamp ? sampleStart : null, cue.identifier ?? null, cue.settings ?? null, sourceId ?? null);
+          this.auxBoxWriter.writeBox(box3);
           if (endTimestamp === sampleEnd) {
             trackData.cueQueue.splice(i--, 1);
           }
@@ -30145,10 +30145,10 @@
           this.pendingRequests.clear();
         });
       }
-      const id = this.nextRequestId++;
+      const id13 = this.nextRequestId++;
       const pending = promiseWithResolvers();
-      this.pendingRequests.set(id, pending);
-      this.worker.postMessage({ id, sourceFrame }, { transfer: [sourceFrame] });
+      this.pendingRequests.set(id13, pending);
+      this.worker.postMessage({ id: id13, sourceFrame }, { transfer: [sourceFrame] });
       return pending.promise;
     }
     close() {
@@ -30165,13 +30165,13 @@
     let cpuSourceBuffer = null;
     let chain = Promise.resolve();
     self.addEventListener("message", (event) => {
-      const { id, sourceFrame } = event.data;
+      const { id: id13, sourceFrame } = event.data;
       chain = chain.then(async () => {
         try {
           const { colorFrame, alphaFrame } = await split(sourceFrame);
-          self.postMessage({ id, colorFrame, alphaFrame }, { transfer: [colorFrame, alphaFrame] });
+          self.postMessage({ id: id13, colorFrame, alphaFrame }, { transfer: [colorFrame, alphaFrame] });
         } catch (error) {
-          self.postMessage({ id, error: error.message });
+          self.postMessage({ id: id13, error: error.message });
         } finally {
           sourceFrame.close();
         }
@@ -31049,8 +31049,8 @@
   var ALL_TRACK_TYPES = ["video", "audio", "subtitle"];
   var OutputTrack = class _OutputTrack {
     /** @internal */
-    constructor(id, output, type, source, metadata) {
-      this.id = id;
+    constructor(id13, output, type, source, metadata) {
+      this.id = id13;
       this.output = output;
       this.type = type;
       this.source = source;
@@ -31096,20 +31096,20 @@
   };
   var OutputVideoTrack = class extends OutputTrack {
     /** @internal */
-    constructor(id, output, source, metadata) {
-      super(id, output, "video", source, metadata);
+    constructor(id13, output, source, metadata) {
+      super(id13, output, "video", source, metadata);
     }
   };
   var OutputAudioTrack = class extends OutputTrack {
     /** @internal */
-    constructor(id, output, source, metadata) {
-      super(id, output, "audio", source, metadata);
+    constructor(id13, output, source, metadata) {
+      super(id13, output, "audio", source, metadata);
     }
   };
   var OutputSubtitleTrack = class extends OutputTrack {
     /** @internal */
-    constructor(id, output, source, metadata) {
-      super(id, output, "subtitle", source, metadata);
+    constructor(id13, output, source, metadata) {
+      super(id13, output, "subtitle", source, metadata);
     }
   };
   var OutputTrackGroup = class _OutputTrackGroup {
@@ -31671,10 +31671,10 @@
     if (t <= cue.start || t >= cue.end) return 0;
     return smooth2(Math.min(1, (t - cue.start) / 0.2, (cue.end - t) / 0.2));
   }
-  function wrap(text, width, measure) {
+  function wrap(text2, width, measure) {
     const lines = [];
     let line = "";
-    for (const word of text.trim().split(/\s+/).filter(Boolean)) {
+    for (const word of text2.trim().split(/\s+/).filter(Boolean)) {
       const candidate = line ? `${line} ${word}` : word;
       if (measure(candidate) <= width) {
         line = candidate;
@@ -31699,11 +31699,11 @@
     if (line) lines.push(line);
     return lines;
   }
-  function wrapLines(text, maxWidth, measure, { maxLines = 2 } = {}) {
+  function wrapLines(text2, maxWidth, measure, { maxLines = 2 } = {}) {
     if (!Number.isFinite(maxWidth) || maxWidth <= 0 || !Number.isInteger(maxLines) || maxLines < 1) throw new Error("Invalid caption wrapping bounds");
     let lines;
     for (const scale of [1, 0.9, 0.8]) {
-      lines = wrap(text, maxWidth / scale, measure);
+      lines = wrap(text2, maxWidth / scale, measure);
       if (lines.length <= maxLines) return { lines, scale };
     }
     lines = lines.slice(0, maxLines);
@@ -31715,6 +31715,10 @@
     return { lines, scale: 0.8 };
   }
 
+  // scripts/lib/compose/layout.mjs
+  var OUTPUT_PRESETS = Object.freeze({ landscape: [1920, 1080], vertical: [1080, 1920], square: [1080, 1080] });
+  var isVertical = (output) => output.preset === "vertical" || output.height > output.width;
+
   // scripts/lib/compose/themes.mjs
   function freeze(value) {
     if (value && typeof value === "object") {
@@ -31723,28 +31727,288 @@
     }
     return value;
   }
+  function theme(name, colors, ink, muted, accent, font, weight, radius, size, speed, depth) {
+    return {
+      name,
+      background: { type: "gradient", angle: 135, colors },
+      frame: {
+        radiusPx: radius,
+        shadow: { enabled: true, blurPx: radius * 2.8, offsetYPx: radius, opacity: 0.25, color: "rgba(0,0,0,0.25)" },
+        border: { enabled: name !== "clean", color: accent, widthPx: name === "bold" ? 4 : 1 }
+      },
+      cursor: { fill: name === "clean" ? "#ffffff" : accent, stroke: name === "bold" ? "#24124b" : "#111827", sizePct: size },
+      ripple: { color: accent },
+      caption: { background: name === "clean" ? "rgba(17,24,39,0.86)" : name === "dark" ? "#202b40" : "#24124b", color: "#ffffff", fontWeight: weight },
+      card: { background: { type: "gradient", angle: 135, colors }, titleColor: ink, subtitleColor: muted, accent },
+      overlay: { accent, surface: name === "clean" ? "#ffffff" : name === "dark" ? "#172033" : "#24124b", onSurface: name === "clean" ? "#111827" : "#ffffff", muted },
+      typography: { family: font, weights: { body: 400, display: weight }, captionSizeMultiplier: name === "bold" ? 1.2 : 1 },
+      zoom: { depth, speed },
+      transition: name === "bold" ? "cut" : "crossfade",
+      font
+    };
+  }
   var THEMES = freeze({
-    clean: {
-      name: "clean",
-      background: { type: "gradient", angle: 135, colors: ["#eef2f7", "#dbe4f0"] },
-      frame: { radiusPx: 14, shadow: { blurPx: 40, offsetYPx: 16, color: "rgba(17,24,39,0.22)" } },
-      cursor: { fill: "#ffffff", stroke: "#111827" },
-      ripple: { color: "#0f766e" },
-      caption: { background: "rgba(17,24,39,0.86)", color: "#ffffff", fontWeight: 600 },
-      card: { background: { type: "gradient", colors: ["#eef2f7", "#dbe4f0"] }, titleColor: "#111827", subtitleColor: "#4b5563", accent: "#0f766e" },
-      font: "Inter"
+    clean: theme("clean", ["#eef2f7", "#dbe4f0"], "#111827", "#4b5563", "#0f766e", "Inter", 600, 14, 3.4, "normal", "medium"),
+    dark: theme("dark", ["#0b1220", "#172033"], "#f9fafb", "#cbd5e1", "#2dd4bf", "Inter", 400, 8, 3.1, "slow", "subtle"),
+    bold: theme("bold", ["#6d28d9", "#ea3788"], "#ffffff", "#f5d0fe", "#facc15", "Space Grotesk", 700, 24, 4.2, "fast", "strong")
+  });
+
+  // scripts/lib/compose/easing.mjs
+  var clamp01 = (t) => Math.max(0, Math.min(1, t));
+  var EASING = Object.freeze({
+    standard: (t) => {
+      t = clamp01(t);
+      return t * t * (3 - 2 * t);
     },
-    dark: {
-      name: "dark",
-      background: { type: "gradient", angle: 135, colors: ["#0b1220", "#172033"] },
-      frame: { radiusPx: 14, shadow: { blurPx: 40, offsetYPx: 16, color: "rgba(0,0,0,0.45)" } },
-      cursor: { fill: "#ffffff", stroke: "#111827" },
-      ripple: { color: "#2dd4bf" },
-      caption: { background: "rgba(255,255,255,0.14)", color: "#ffffff", fontWeight: 600 },
-      card: { background: { type: "gradient", colors: ["#0b1220", "#172033"] }, titleColor: "#f9fafb", subtitleColor: "#cbd5e1", accent: "#2dd4bf" },
-      font: "Inter"
+    enterOut: (t) => 1 - (1 - clamp01(t)) ** 3,
+    moveInOut: (t) => {
+      t = clamp01(t);
+      return t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+    },
+    exitIn: (t) => clamp01(t) ** 3,
+    springSoft: (t) => {
+      t = clamp01(t);
+      return (1 - (1 + 8 * t) * Math.exp(-8 * t)) / (1 - 9 * Math.exp(-8));
+    },
+    none: clamp01
+  });
+  var DURATIONS = Object.freeze({ enter: 0.5, exit: 0.3, move: 0.6 });
+  function enterExit(t, start, end, { enter = DURATIONS.enter, exit = DURATIONS.exit, ease = "enterOut" } = {}) {
+    if (t < start || t >= end || end <= start) return { progress: 0, phase: "off", alpha: 0 };
+    const factor = Math.min(1, (end - start) / Math.max(enter + exit, Number.EPSILON));
+    enter *= factor;
+    exit *= factor;
+    const progress = clamp01((t - start) / (end - start));
+    const curve = typeof ease === "function" ? ease : EASING[ease] ?? EASING.enterOut;
+    if (enter > 0 && t < start + enter) return { progress, phase: "enter", alpha: curve((t - start) / enter) };
+    if (exit > 0 && t > end - exit) return { progress, phase: "exit", alpha: 1 - EASING.exitIn((t - end + exit) / exit) };
+    return { progress, phase: "hold", alpha: 1 };
+  }
+
+  // scripts/lib/compose/templates/shared.mjs
+  var POSITIONS = ["top-left", "top-center", "top-right", "center-left", "center", "center-right", "bottom-left", "bottom-center", "bottom-right"];
+  var string = (value, maxLength = 140) => ({ type: "string", maxLength, default: value });
+  var number = (value, min = 0, max = 100) => ({ type: "number", min, max, default: value });
+  var enumeration = (value, values) => ({ type: "enum", values, default: value });
+  var color = (value = "accent") => ({ type: "color", default: value });
+  var boolean = (value) => ({ type: "boolean", default: value });
+  function define(id13, label13, help13, params13, draw13, defaultDuration13 = 3) {
+    params13 = { position: { type: "position", values: POSITIONS, default: "center" }, offsetX: number(0, -100, 100), offsetY: number(0, -100, 100), color: color(), ...params13 };
+    return Object.freeze({ id: id13, label: label13, help: help13, params: params13, defaults: Object.fromEntries(Object.entries(params13).map(([k, s]) => [k, s.default])), defaultDuration: defaultDuration13, draw: draw13 });
+  }
+  var paint = (f, c) => f.theme.overlay[c] ?? c;
+  function anchor(f, p) {
+    const pos = f.anchor ?? p.position, x = pos.endsWith("left") ? 0.12 : pos.endsWith("right") ? 0.88 : 0.5;
+    const y = pos.startsWith("top") ? 0.14 : pos.startsWith("bottom") ? 0.82 : 0.5;
+    return { x: f.width * (x + p.offsetX / 100), y: f.height * (y + p.offsetY / 100) };
+  }
+  function text(ctx, f, value, x, y, size, c = "onSurface", align = "center") {
+    ctx.font = `${f.theme.typography.weights.display} ${size}px "${f.theme.typography.family}"`;
+    ctx.fillStyle = paint(f, c);
+    ctx.textAlign = align;
+    ctx.textBaseline = "middle";
+    ctx.fillText(value, x, y, f.width * 0.84);
+  }
+  function panel(ctx, f, x, y, w, h, c = "surface") {
+    ctx.fillStyle = paint(f, c);
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, f.height * 0.012);
+    ctx.fill();
+  }
+  function box2(f, p) {
+    const a = f.mapSource({ x: p.x, y: p.y }), b = f.mapSource({ x: p.x + p.width, y: p.y + p.height });
+    return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+  }
+  var sourceRect = { x: number(320, 0, 1e5), y: number(180, 0, 1e5), width: number(320, 1, 1e5), height: number(180, 1, 1e5) };
+  var motion = (s) => EASING.enterOut(Math.min(1, s.progress * 6));
+
+  // scripts/lib/compose/templates/title-card.mjs
+  var template = define("title-card", "Title card", "Full canvas opening title and subtitle.", { title: string("Your title", 80), subtitle: string("A closer look", 140) }, (ctx, f, p, s) => {
+    const h = f.height;
+    const a = anchor(f, p);
+    panel(ctx, f, 0, 0, f.width, f.height);
+    text(ctx, f, p.title, a.x, a.y - h * 0.05, h * 0.075, p.color);
+    text(ctx, f, p.subtitle, a.x, a.y + h * 0.07, h * 0.032, "muted");
+  });
+  var { id, label, help, params, defaults, defaultDuration, draw } = template;
+  var title_card_default = template;
+
+  // scripts/lib/compose/templates/outro-card.mjs
+  var template2 = define("outro-card", "Outro card", "Full canvas closing message.", { title: string("Thank you", 80), subtitle: string("Discover more", 140) }, (ctx, f, p, s) => {
+    const h = f.height;
+    const a = anchor(f, p);
+    panel(ctx, f, 0, 0, f.width, f.height);
+    ctx.fillStyle = paint(f, p.color);
+    ctx.fillRect(f.width * 0.42, h * 0.3, f.width * 0.16, h * 9e-3);
+    text(ctx, f, p.title, a.x, a.y, h * 0.075);
+    text(ctx, f, p.subtitle, a.x, a.y + h * 0.11, h * 0.032, "muted");
+  });
+  var { id: id2, label: label2, help: help2, params: params2, defaults: defaults2, defaultDuration: defaultDuration2, draw: draw2 } = template2;
+  var outro_card_default = template2;
+
+  // scripts/lib/compose/templates/lower-third.mjs
+  var template3 = define("lower-third", "Lower third", "Name and subtitle on a compact plate.", { position: { type: "position", values: POSITIONS, default: "bottom-left" }, name: string("Alex Morgan", 70), subtitle: string("Product designer", 100) }, (ctx, f, p, s) => {
+    const h = f.height;
+    const a = anchor(f, p), w = f.width * 0.36;
+    panel(ctx, f, a.x - w * 0.2, a.y - h * 0.05, w, h * 0.13);
+    ctx.fillStyle = paint(f, p.color);
+    ctx.fillRect(a.x - w * 0.2, a.y - h * 0.05, h * 6e-3, h * 0.13);
+    text(ctx, f, p.name, a.x - w * 0.15, a.y, h * 0.032, "onSurface", "left");
+    text(ctx, f, p.subtitle, a.x - w * 0.15, a.y + h * 0.045, h * 0.022, "muted", "left");
+  });
+  var { id: id3, label: label3, help: help3, params: params3, defaults: defaults3, defaultDuration: defaultDuration3, draw: draw3 } = template3;
+  var lower_third_default = template3;
+
+  // scripts/lib/compose/templates/step-badge.mjs
+  var template4 = define("step-badge", "Step badge", "Number and label in a chip.", { number: number(1, 0, 999), label: string("Open the report", 80) }, (ctx, f, p, s) => {
+    const h = f.height;
+    const a = anchor(f, p);
+    panel(ctx, f, a.x - f.width * 0.18, a.y - h * 0.04, f.width * 0.36, h * 0.08);
+    text(ctx, f, `${p.number}  ${p.label}`, a.x, a.y, h * 0.032, p.color);
+  });
+  var { id: id4, label: label4, help: help4, params: params4, defaults: defaults4, defaultDuration: defaultDuration4, draw: draw4 } = template4;
+  var step_badge_default = template4;
+
+  // scripts/lib/compose/templates/callout-arrow.mjs
+  var template5 = define("callout-arrow", "Callout arrow", "Label with an arrow to a source point.", { position: { type: "position", values: POSITIONS, default: "top-center" }, x: number(640, 0, 1e5), y: number(360, 0, 1e5), text: string("Look here", 100) }, (ctx, f, p, s) => {
+    const h = f.height;
+    const a = anchor(f, p), b = f.mapSource(p), angle = Math.atan2(b.y - a.y, b.x - a.x);
+    ctx.strokeStyle = paint(f, p.color);
+    ctx.lineWidth = h * 4e-3;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.moveTo(b.x - Math.cos(angle - 0.5) * h * 0.025, b.y - Math.sin(angle - 0.5) * h * 0.025);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineTo(b.x - Math.cos(angle + 0.5) * h * 0.025, b.y - Math.sin(angle + 0.5) * h * 0.025);
+    ctx.stroke();
+    panel(ctx, f, a.x - f.width * 0.13, a.y - h * 0.06, f.width * 0.26, h * 0.055);
+    text(ctx, f, p.text, a.x, a.y - h * 0.032, h * 0.027, p.color);
+  });
+  var { id: id5, label: label5, help: help5, params: params5, defaults: defaults5, defaultDuration: defaultDuration5, draw: draw5 } = template5;
+  var callout_arrow_default = template5;
+
+  // scripts/lib/compose/templates/spotlight.mjs
+  var template6 = define("spotlight", "Spotlight", "Dim the canvas around a source rectangle or circle.", { ...sourceRect, shape: enumeration("rect", ["rect", "circle"]), dim: number(0.65, 0, 1), softness: number(12, 0, 80) }, (ctx, f, p, s) => {
+    const h = f.height;
+    const r = box2(f, p);
+    ctx.fillStyle = "#000000";
+    ctx.globalAlpha *= p.dim;
+    ctx.beginPath();
+    ctx.rect(0, 0, f.width, h);
+    if (p.shape === "circle") ctx.arc(r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) / 2, 0, Math.PI * 2);
+    else ctx.roundRect(r.x, r.y, r.w, r.h, h * 0.012);
+    ctx.fill("evenodd");
+    if (p.softness) {
+      ctx.shadowColor = "#000000";
+      ctx.shadowBlur = p.softness * h / 1080;
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      if (p.shape === "circle") ctx.arc(r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) / 2, 0, Math.PI * 2);
+      else ctx.roundRect(r.x, r.y, r.w, r.h, h * 0.012);
+      ctx.stroke();
     }
   });
+  var { id: id6, label: label6, help: help6, params: params6, defaults: defaults6, defaultDuration: defaultDuration6, draw: draw6 } = template6;
+  var spotlight_default = template6;
+
+  // scripts/lib/compose/templates/highlight-box.mjs
+  var template7 = define("highlight-box", "Highlight box", "Outline a source rectangle with an optional label.", { ...sourceRect, label: string("Selected", 80), showLabel: boolean(true) }, (ctx, f, p, s) => {
+    const h = f.height;
+    const r = box2(f, p);
+    ctx.strokeStyle = paint(f, p.color);
+    ctx.lineWidth = h * 5e-3;
+    ctx.beginPath();
+    ctx.roundRect(r.x, r.y, r.w, r.h, h * 8e-3);
+    ctx.stroke();
+    if (p.showLabel) {
+      panel(ctx, f, r.x, r.y - h * 0.045, Math.min(f.width * 0.3, r.w), h * 0.04);
+      text(ctx, f, p.label, r.x + h * 0.01, r.y - h * 0.024, h * 0.025, p.color, "left");
+    }
+  });
+  var { id: id7, label: label7, help: help7, params: params7, defaults: defaults7, defaultDuration: defaultDuration7, draw: draw7 } = template7;
+  var highlight_box_default = template7;
+
+  // scripts/lib/compose/templates/number-counter.mjs
+  var template8 = define("number-counter", "Number counter", "Count between two values with a suffix.", { from: number(0, -1e9, 1e9), to: number(100, -1e9, 1e9), format: enumeration("integer", ["integer", "decimal", "percent"]), suffix: string("users", 30) }, (ctx, f, p, s) => {
+    const h = f.height;
+    const a = anchor(f, p), v = p.from + (p.to - p.from) * EASING.moveInOut(s.progress);
+    const value = p.format === "decimal" ? v.toFixed(1) : Math.round(v).toString();
+    text(ctx, f, `${value}${p.format === "percent" ? "%" : ""} ${p.suffix}`, a.x, a.y, h * 0.085, p.color);
+  });
+  var { id: id8, label: label8, help: help8, params: params8, defaults: defaults8, defaultDuration: defaultDuration8, draw: draw8 } = template8;
+  var number_counter_default = template8;
+
+  // scripts/lib/compose/templates/progress-bar.mjs
+  var template9 = define("progress-bar", "Progress bar", "Progress from zero to one hundred with a label.", { label: string("Loading", 80), widthPct: number(48, 5, 90) }, (ctx, f, p, s) => {
+    const h = f.height;
+    const a = anchor(f, p), w = f.width * p.widthPct / 100;
+    panel(ctx, f, a.x - w / 2, a.y, w, h * 0.025);
+    if (s.progress > 0) panel(ctx, f, a.x - w / 2, a.y, w * s.progress, h * 0.025, p.color);
+    text(ctx, f, `${p.label} ${Math.round(s.progress * 100)}%`, a.x, a.y - h * 0.04, h * 0.029, p.color);
+  });
+  var { id: id9, label: label9, help: help9, params: params9, defaults: defaults9, defaultDuration: defaultDuration9, draw: draw9 } = template9;
+  var progress_bar_default = template9;
+
+  // scripts/lib/compose/templates/animated-gradient.mjs
+  var template10 = define("animated-gradient", "Animated gradient", "Moving colour band behind a canvas area.", { widthPct: number(70, 1, 100), heightPct: number(20, 1, 100), color2: color("surface") }, (ctx, f, p, s) => {
+    const h = f.height;
+    const a = anchor(f, p), w = f.width * p.widthPct / 100, bh = h * p.heightPct / 100;
+    const shift = (EASING.moveInOut(s.progress) - 0.5) * w * 0.4;
+    const g = ctx.createLinearGradient(a.x - w / 2 + shift, a.y, a.x + w / 2 + shift, a.y + bh);
+    g.addColorStop(0, paint(f, p.color));
+    g.addColorStop(1, paint(f, p.color2));
+    ctx.fillStyle = g;
+    ctx.fillRect(a.x - w / 2, a.y - bh / 2, w, bh);
+  });
+  var { id: id10, label: label10, help: help10, params: params10, defaults: defaults10, defaultDuration: defaultDuration10, draw: draw10 } = template10;
+  var animated_gradient_default = template10;
+
+  // scripts/lib/compose/templates/text-callout.mjs
+  var template11 = define("text-callout", "Text callout", "Large phrase with staggered word entrances.", { text: string("Make every moment count", 100) }, (ctx, f, p, s) => {
+    const h = f.height;
+    const a = anchor(f, p), words = p.text.split(/\s+/), size = Math.min(h * 0.065, f.width * 0.8 / Math.max(1, p.text.length) * 1.7);
+    ctx.font = `${f.theme.typography.weights.display} ${size}px "${f.theme.typography.family}"`;
+    const gap = size * 0.28, total = words.reduce((v, w) => v + ctx.measureText(w).width + gap, -gap);
+    let x = a.x - total / 2;
+    words.forEach((word, i) => {
+      const v = EASING.enterOut(Math.max(0, Math.min(1, s.progress * 8 - i * 0.25)));
+      ctx.save();
+      ctx.globalAlpha *= v;
+      text(ctx, f, word, x, a.y + (1 - v) * size * 0.3, size, p.color, "left");
+      ctx.restore();
+      x += ctx.measureText(word).width + gap;
+    });
+  });
+  var { id: id11, label: label11, help: help11, params: params11, defaults: defaults11, defaultDuration: defaultDuration11, draw: draw11 } = template11;
+  var text_callout_default = template11;
+
+  // scripts/lib/compose/templates/logo-sting.mjs
+  var template12 = define("logo-sting", "Logo sting", "Text mark or preloaded brand logo with a gentle reveal.", { text: string("SHOWREEL", 60), logo: string("brand", 120), useLogo: boolean(false) }, (ctx, f, p, s) => {
+    const h = f.height;
+    const a = anchor(f, p), scale = 0.92 + 0.08 * motion(s);
+    ctx.translate(a.x, a.y);
+    ctx.scale(scale, scale);
+    const img = p.useLogo ? f.images?.get(p.logo) : null;
+    if (img) {
+      const bh = h * 0.16;
+      ctx.drawImage(img, -bh * img.width / img.height / 2, -bh / 2, bh * img.width / img.height, bh);
+    } else text(ctx, f, p.text, 0, 0, h * 0.085, p.color);
+  });
+  var { id: id12, label: label12, help: help12, params: params12, defaults: defaults12, defaultDuration: defaultDuration12, draw: draw12 } = template12;
+  var logo_sting_default = template12;
+
+  // scripts/lib/compose/templates/index.mjs
+  var TEMPLATES = Object.freeze(Object.fromEntries([title_card_default, outro_card_default, lower_third_default, step_badge_default, callout_arrow_default, spotlight_default, highlight_box_default, number_counter_default, progress_bar_default, animated_gradient_default, text_callout_default, logo_sting_default].map((t) => [t.id, t])));
+
+  // scripts/lib/compose/overlays.mjs
+  function overlayStates(overlays, t, pace = 1) {
+    return overlays.flatMap((o) => {
+      const state = enterExit(t, o.outStart, o.outEnd, { enter: DURATIONS.enter * pace, exit: DURATIONS.exit * pace });
+      return state.phase === "off" ? [] : [{ id: o.id, template: o.template, ...state, params: o.params }];
+    });
+  }
 
   // scripts/lib/compose/composition.mjs
   function freeze2(value) {
@@ -31768,8 +32032,9 @@
   var DEFAULT_COMPOSITION = freeze2({
     version: 1,
     run: { id: null },
-    output: { width: 1920, height: 1080, fps: 60, quality: "standard" },
+    output: { preset: null, width: 1920, height: 1080, fps: 60, quality: "standard" },
     theme: "clean",
+    layout: { safeZones: null },
     frame: {
       paddingXPct: 8,
       paddingYPct: 5,
@@ -31823,6 +32088,8 @@
       fade: 0.4,
       transition: "crossfade"
     },
+    motion: { pace: 1 },
+    overlays: [],
     edits: { trims: [], speeds: [], holds: [] },
     audio: {
       voice: { enabled: null, voiceId: "af_heart", speed: 1, gainDb: 0 },
@@ -31840,6 +32107,7 @@
     }
   });
   var COMPOSITION_RANGES = [
+    ["motion.pace", 1, 1.6],
     ["output.width", 2, 7680, true],
     ["output.height", 2, 4320, true],
     ["frame.paddingXPct", 0, 25],
@@ -31925,9 +32193,10 @@
     const effect = plan.cursor.clickEffect;
     const ripple = effect.style !== "none" ? rippleAt(events, t, effect.durationSec) : null;
     return {
+      overlays: mapped.section === "main" ? overlayStates(plan.overlays ?? [], tOut, plan.motion?.pace ?? 1) : [],
       section: mapped.section,
-      alphaTitle: mapped.alphaTitle,
-      alphaOutro: mapped.alphaOutro,
+      alphaTitle: EASING.standard(mapped.alphaTitle),
+      alphaOutro: EASING.standard(mapped.alphaOutro),
       sourceT: t,
       rate: mapped.rate,
       camera: cameraAt(plan.camera, t),
@@ -31963,10 +32232,13 @@
   async function loadFonts(fonts) {
     const key = JSON.stringify(fonts);
     if (!fontLoads.has(key)) fontLoads.set(key, Promise.all([
-      ["regular", "400"],
-      ["semibold", "600"]
-    ].map(async ([name, weight]) => {
-      const face = new FontFace("Inter", `url(${JSON.stringify(fonts[name])})`, { weight });
+      ["regular", "400", "Inter"],
+      ["semibold", "600", "Inter"],
+      ["displaySemibold", "600", "Space Grotesk"],
+      ["displayBold", "700", "Space Grotesk"]
+    ].map(async ([name, weight, family]) => {
+      const url2 = fonts[name] ?? new URL(name === "displayBold" ? "SpaceGrotesk-Bold.woff2" : "SpaceGrotesk-SemiBold.woff2", new URL(fonts.semibold, location.href)).href;
+      const face = new FontFace(family, `url(${JSON.stringify(url2)})`, { weight });
       document.fonts.add(await face.load());
     })));
     await fontLoads.get(key);
@@ -31985,7 +32257,8 @@
       plan.cards.title.background,
       plan.cards.outro.background,
       plan.cards.title.logo,
-      plan.cards.outro.logo
+      plan.cards.outro.logo,
+      ...(plan.overlays ?? []).filter((o) => o.template === "logo-sting" && o.params.useLogo).map((o) => ({ image: o.params.logo }))
     ];
     await Promise.all(specs.filter((s) => s?.image).map(async ({ image }) => {
       const url2 = new URL(`${assetBase}${image.split("/").map(encodeURIComponent).join("/")}`, location.href).href;
@@ -32031,7 +32304,7 @@
       width / 2 + dx * length / 2,
       height / 2 + dy * length / 2
     );
-    spec.colors.forEach((color, i) => gradient.addColorStop(i / Math.max(1, spec.colors.length - 1), color));
+    spec.colors.forEach((color2, i) => gradient.addColorStop(i / Math.max(1, spec.colors.length - 1), color2));
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
   }
@@ -32042,16 +32315,16 @@
   function drawCaption(ctx, plan, caption) {
     const r = plan.layout.caption, spec = plan.captions;
     if (!r || !caption || caption.alpha <= 0) return;
-    const size = plan.output.height * spec.fontSizePct / 100, padding = size * 0.6;
+    const size = (isVertical(plan.output) ? plan.output.width * 1.25 : plan.output.height) * spec.fontSizePct / 100, padding = size * 0.6;
     ctx.save();
     ctx.beginPath();
     ctx.rect(r.x, r.y, r.w, r.h);
     ctx.clip();
     ctx.globalAlpha = caption.alpha;
-    ctx.font = `${spec.fontWeight} ${size}px Inter`;
-    const wrapped = wrapLines(caption.text, r.w - padding * 2, (text) => ctx.measureText(text).width, { maxLines: spec.maxLines });
+    ctx.font = `${spec.fontWeight} ${size}px "${plan.theme.typography.family}"`;
+    const wrapped = wrapLines(caption.text, r.w - padding * 2, (text2) => ctx.measureText(text2).width, { maxLines: spec.maxLines });
     const scale = Math.min(wrapped.scale, (r.h - padding) / (size * 1.25 * wrapped.lines.length));
-    ctx.font = `${spec.fontWeight} ${size * scale}px Inter`;
+    ctx.font = `${spec.fontWeight} ${size * scale}px "${plan.theme.typography.family}"`;
     const lineH = size * scale * 1.25;
     if (spec.mode === "overlay") {
       const w = Math.min(r.w, Math.max(...wrapped.lines.map((s) => ctx.measureText(s).width)) + padding * 2);
@@ -32092,20 +32365,20 @@
     }
     ctx.textAlign = spec.align;
     ctx.textBaseline = "middle";
-    for (const [text, fraction, weight, color, y] of [
-      [title, spec.titleSizePct / 100, 600, spec.titleColor, 0.48],
+    for (const [text2, fraction, weight, color2, y] of [
+      [title, spec.titleSizePct / 100, plan.theme.typography.weights.display, spec.titleColor, 0.48],
       [spec.subtitle, spec.subtitleSizePct / 100, 400, spec.subtitleColor, 0.64]
     ]) {
-      if (!text) continue;
-      const size = height * fraction;
-      ctx.font = `${weight} ${size}px Inter`;
-      const wrapped = wrapLines(text, width * 0.84, (s) => ctx.measureText(s).width);
-      ctx.font = `${weight} ${size * wrapped.scale}px Inter`;
-      ctx.fillStyle = color;
+      if (!text2) continue;
+      const size = (isVertical(plan.output) ? width * 1.25 : height) * fraction;
+      ctx.font = `${weight} ${size}px "${plan.theme.typography.family}"`;
+      const wrapped = wrapLines(text2, width * 0.84, (s) => ctx.measureText(s).width);
+      ctx.font = `${weight} ${size * wrapped.scale}px "${plan.theme.typography.family}"`;
+      ctx.fillStyle = color2;
       wrapped.lines.forEach((line, i) => ctx.fillText(
         line,
         x,
-        height * y + (i - (wrapped.lines.length - 1) / 2) * size * wrapped.scale * 1.2
+        (isVertical(plan.output) ? plan.layout.safe.y + plan.layout.safe.h * y : height * y) + (i - (wrapped.lines.length - 1) / 2) * size * wrapped.scale * 1.2
       ));
     }
     ctx.restore();
@@ -32179,6 +32452,13 @@
       height: h * sy
     };
   }
+  function mapSourcePoint(plan, cam, point) {
+    const f = plan.layout.content ?? plan.layout.frame, w = plan.sourceSize.width / cam.z, h = plan.sourceSize.height / cam.z;
+    return {
+      x: f.x + (point.x * plan.scale - (cam.cx * plan.scale - w / 2)) * f.w / w,
+      y: f.y + (point.y * plan.scale - (cam.cy * plan.scale - h / 2)) * f.h / h
+    };
+  }
   function drawFrame(canvas, plan, tOut, decoded, assets) {
     if (assets) {
       images = assets.images;
@@ -32209,11 +32489,11 @@
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       const crop = sourceCrop(plan, cam, decoded);
-      ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, f.x, f.y, f.w, f.h);
-      const mapped = ({ x, y }) => ({
-        x: f.x + (x * plan.scale - (cam.cx * plan.scale - cropW / 2)) * f.w / cropW,
-        y: f.y + (y * plan.scale - (cam.cy * plan.scale - cropH / 2)) * f.h / cropH
-      });
+      const content = plan.layout.content ?? f;
+      ctx.fillStyle = "#111827";
+      ctx.fillRect(f.x, f.y, f.w, f.h);
+      ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, content.x, content.y, content.w, content.h);
+      const mapped = (point) => mapSourcePoint(plan, cam, point);
       const cursorH = plan.cursor.sizePx * (plan.cursor.scaleWithZoom ? 1 + 0.35 * (cam.z - 1) : 1);
       if (state.ripple) {
         const p = mapped(state.ripple), progress = state.ripple.progress;
@@ -32266,6 +32546,21 @@
         ctx.strokeStyle = plan.frame.border.color;
         ctx.lineWidth = plan.frame.border.widthPx * unit;
         ctx.stroke();
+        ctx.restore();
+      }
+      for (const overlay of state.overlays) {
+        const spec = plan.overlays.find((o) => o.id === overlay.id);
+        ctx.save();
+        ctx.globalAlpha = overlay.alpha;
+        TEMPLATES[overlay.template].draw(ctx, {
+          width,
+          height,
+          theme: plan.theme,
+          layout: plan.layout,
+          mapSource: (point) => mapSourcePoint(plan, cam, point),
+          anchor: spec.anchor,
+          images
+        }, overlay.params, overlay);
         ctx.restore();
       }
       drawCaption(ctx, plan, state.caption);
@@ -32588,7 +32883,7 @@
     for (let c = 0; c < 2; c++) buffer.copyToChannel(mix.channels[c].subarray(from, to), c);
     return buffer;
   }
-  var defaults = () => ({
+  var defaults13 = () => ({
     source: new URL("raw.mp4", location.href).href,
     fonts: {
       regular: new URL("fonts/Inter-Regular.woff2", location.href).href,
@@ -32608,7 +32903,7 @@
       throw error;
     }
   }
-  window.probeRenderSource = async (url2 = defaults().source) => {
+  window.probeRenderSource = async (url2 = defaults13().source) => {
     const { input, track } = await openVideo(url2);
     try {
       return { width: await track.getDisplayWidth(), height: await track.getDisplayHeight(), duration: await track.computeDuration() };
@@ -32617,7 +32912,7 @@
     }
   };
   window.renderStill = async (plan, tOut, overrides = {}) => {
-    const options = { ...stillOptions ?? defaults(), ...overrides };
+    const options = { ...stillOptions ?? defaults13(), ...overrides };
     await loadFonts(options.fonts);
     await loadAssets(plan, options);
     const { input, sink } = await openVideo(options.source);
@@ -32629,7 +32924,7 @@
     }
   };
   window.renderComposition = async (plan, options = {}) => {
-    options = { ...defaults(), ...options };
+    options = { ...defaults13(), ...options };
     stillOptions = options;
     await loadFonts(options.fonts);
     await loadAssets(plan, options);

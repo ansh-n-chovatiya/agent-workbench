@@ -1,6 +1,8 @@
+import { presetOutput } from './layout.mjs';
 import { suggestZoomRegions, validateRegions } from './zoom.mjs';
 import { buildTimeMap } from './timemap.mjs';
 import { THEMES } from './themes.mjs';
+import { validateOverlays, storyboardOverlays } from './overlays.mjs';
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 function freeze(value) {
   if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); }
@@ -13,7 +15,8 @@ const cardDefaults = { align: 'center', titleSizePct: 7, subtitleSizePct: 3.6,
   titleColor: '#111827', subtitleColor: '#4b5563', background,
   accent: { enabled: true, color: '#0f766e', shape: 'bar', widthPct: 12 }, logo: null };
 export const DEFAULT_COMPOSITION = freeze({
-  version: 1, run: { id: null }, output: { width: 1920, height: 1080, fps: 60, quality: 'standard' }, theme: 'clean',
+  version: 1, run: { id: null }, output: { preset: null, width: 1920, height: 1080, fps: 60, quality: 'standard' }, theme: 'clean',
+  layout: { safeZones: null },
   frame: { paddingXPct: 8, paddingYPct: 5, radiusPx: 14,
     shadow: { enabled: true, blurPx: 40, offsetYPx: 16, opacity: 0.25 },
     border: { enabled: false, color: '#ffffff', widthPx: 1 }, background },
@@ -27,6 +30,7 @@ export const DEFAULT_COMPOSITION = freeze({
     fontWeight: 600, color: '#ffffff', background: 'rgba(17,24,39,0.86)', maxLines: 2, align: 'center' },
   cards: { title: { ...cardDefaults, enabled: true, title: null, subtitle: null, durationSec: 2.2 },
     outro: { ...cardDefaults, enabled: true, text: 'Thank you', subtitle: null, durationSec: 2 }, fade: 0.4, transition: 'crossfade' },
+  motion: { pace: 1 }, overlays: [],
   edits: { trims: [], speeds: [], holds: [] },
   audio: { voice: { enabled: null, voiceId: 'af_heart', speed: 1, gainDb: 0 },
     music: { enabled: false, file: null, gainDb: -18, loop: true, fadeInSec: 1, fadeOutSec: 2,
@@ -35,7 +39,7 @@ export const DEFAULT_COMPOSITION = freeze({
     narration: { steps: {} } },
 });
 export const COMPOSITION_RANGES = [
-    ['output.width',2,7680,true],['output.height',2,4320,true],['frame.paddingXPct',0,25],['frame.paddingYPct',0,25],
+    ['motion.pace',1,1.6], ['output.width',2,7680,true],['output.height',2,4320,true],['frame.paddingXPct',0,25],['frame.paddingYPct',0,25],
     ['frame.radiusPx',0,300],['frame.shadow.blurPx',0,300],['frame.shadow.offsetYPx',-300,300],['frame.shadow.opacity',0,1],['frame.border.widthPx',0,30],
     ['cursor.followThrough.distancePx',0,500],['cursor.followThrough.durationSec',0.1,5],['cursor.followThrough.startAfterClickSec',0,5],
     ['cursor.sizePct',1,8],['cursor.hideWhenIdleSec',0,60],['cursor.pressScale',0.1,1],['cursor.clickEffect.sizeMult',0.1,10],['cursor.clickEffect.durationSec',0.05,5],
@@ -77,10 +81,19 @@ export const safeMusicPath = (v) => safeImagePath(v) && new RegExp(`\\.(${MUSIC_
 const narrationStepModel = { text: '', muted: false };
 export function resolveComposition(input) {
   const theme = typeof input.theme === 'string' && Object.hasOwn(THEMES, input.theme) ? THEMES[input.theme] : THEMES.clean;
-  const themed = merge(DEFAULT_COMPOSITION, { frame: { background: { colors: theme.background.colors, angle: theme.background.angle }, radiusPx: theme.frame.radiusPx, shadow: { blurPx: theme.frame.shadow.blurPx, offsetYPx: theme.frame.shadow.offsetYPx } }, cursor: theme.cursor, captions: theme.caption,
+  let themed = merge(DEFAULT_COMPOSITION, { frame: { ...theme.frame, shadow: { ...theme.frame.shadow }, background: { colors: theme.background.colors, angle: theme.background.angle } }, cursor: theme.cursor, zoom: theme.zoom, captions: { ...theme.caption, fontSizePct: DEFAULT_COMPOSITION.captions.fontSizePct * theme.typography.captionSizeMultiplier },
     cards: Object.fromEntries(['title', 'outro'].map((key) => [key, { titleColor: theme.card.titleColor,
       subtitleColor: theme.card.subtitleColor, background: { colors: theme.card.background.colors, angle: theme.card.background.angle ?? 135 }, accent: { color: theme.card.accent } }])) });
+  if (input.output?.preset === 'vertical') themed = merge(themed, {
+    frame: { paddingXPct: 4, paddingYPct: 0 }, captions: { bandHeightPct: 16 }, zoom: { depth: 1.5 }, layout: { safeZones: true },
+  });
+  delete themed.frame.shadow.color;
+  themed.cards.transition = theme.transition;
   const patch = copy(input);
+  if (['landscape', 'vertical', 'square'].includes(patch.output?.preset)) {
+    const size = Math.max(patch.output.width ?? 0, patch.output.height ?? 0) > 1920 ? '4k' : '1080';
+    Object.assign(patch.output, presetOutput(patch.output.preset, size));
+  }
   if (patch.frame?.paddingPct !== undefined) {
     patch.frame.paddingXPct ??= patch.frame.paddingPct; patch.frame.paddingYPct ??= patch.frame.paddingPct;
     delete patch.frame.paddingPct;
@@ -127,8 +140,10 @@ export function validateComposition(c, { duration = Number.MAX_VALUE } = {}) {
   if (!object(c)) return { ok: false, errors, warnings };
   // These original v1 fields remain required. All newly introduced settings are optional.
   for (const p of ['version','run.id','output.width','output.height','output.fps','theme','frame','cursor.visible','cursor.sizePct','cursor.clickEffect','zoom.enabled','zoom.depth','zoom.autoSuggest','zoom.regions','captions.enabled','captions.mode','cards.title.enabled','cards.outro.enabled','cards.fade','edits.trims','edits.speeds']) {
-    if (p.split('.').reduce((v,k) => v?.[k], c) === undefined) fail(p, 'is required');
+    if (p.split('.').reduce((v,k) => v?.[k], c) === undefined && !(['output.width', 'output.height'].includes(p) && c.output?.preset)) fail(p, 'is required');
   }
+  if (c.output?.preset !== undefined && c.output.preset !== null && !['landscape', 'vertical', 'square'].includes(c.output.preset)) fail('output.preset', 'must be landscape|vertical|square');
+  if (c.layout?.safeZones !== undefined && c.layout.safeZones !== null && typeof c.layout.safeZones !== 'boolean') fail('layout.safeZones', 'must be boolean');
   const d = resolveComposition(c);
   const get = (p) => p.split('.').reduce((v,k) => v?.[k], d);
   const enumAt = (p, values) => { if (!values.includes(get(p))) fail(p, `must be ${values.join('|')}`); };
@@ -202,6 +217,10 @@ export function validateComposition(c, { duration = Number.MAX_VALUE } = {}) {
       if (entry?.muted !== undefined && typeof entry.muted !== 'boolean') fail(`${p}.muted`, 'must be boolean');
     }
   }
+  errors.push(...validateOverlays(c.overlays ?? [], { duration }).map(e => `composition.json: ${e}`));
+  for (const [i,o] of (Array.isArray(c.overlays) ? c.overlays : []).entries()) {
+    if (o?.template === 'logo-sting' && o.params?.useLogo && !safeImagePath(o.params.logo)) fail(`overlays.${i}.params.logo`, 'must be a local path inside the project');
+  }
   const regions = validateRegions(c.zoom?.regions); errors.push(...regions.errors); warnings.push(...regions.warnings);
   for (const [k,model] of [['trims',{start:0,end:0}],['speeds',{start:0,end:0,rate:1}],['holds',{t:0,duration:0}]]) if (Array.isArray(c.edits?.[k])) c.edits[k].forEach((v,i) => {
     walk(v,model,`edits.${k}.${i}`);
@@ -269,9 +288,9 @@ export function zoomOptions(zoom) {
 export const outputBitrate = ({ width, height, fps, quality }) => Math.min(60e6, Math.round(width * height * fps * (quality === 'high' ? 0.12 : 0.07)));
 export function buildComposition({ brief, storyboard, events, record, edits = {}, overrides = {} }) {
   // Storyboard captions are resolved later, against recorded step IDs rather than guideSteps.
-  void storyboard;
+  const overlays = storyboardOverlays(storyboard, events);
   const c = resolveComposition(merge({
-    run: { id: record.runId }, theme: brief.theme,
+    run: { id: record.runId }, theme: brief.theme, overlays,
     captions: brief.captions,
     cards: { title: { ...brief.titleCard, title: brief.titleCard.title ?? brief.topic }, outro: brief.outroCard }, edits,
     // Choices made at intake seed the audio settings; overrides still win.

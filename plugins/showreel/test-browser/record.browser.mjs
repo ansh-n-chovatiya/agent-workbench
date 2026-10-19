@@ -156,7 +156,7 @@ test('rehearsal error names the step and selector without making a video', { tim
     const dir = await project('bad-selector', url, [step('s1', [go(url)]),
       step('s2', [click('#does-not-exist')])]);
     await assert.rejects(recordScenario({ name: 'bad-selector', scale: 1, log() {} }),
-      /rehearsal failed in step s2 \(selector #does-not-exist\)/);
+      /rehearsal failed in step s2 \(profile desktop, selector #does-not-exist\)/);
     for (const run of await readdir(path.join(dir, 'runs'))) {
       await assert.rejects(stat(path.join(dir, 'runs', run, 'raw.mp4')), { code: 'ENOENT' });
     }

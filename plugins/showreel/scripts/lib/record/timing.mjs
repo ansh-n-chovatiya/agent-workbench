@@ -14,9 +14,9 @@ export function scaledViewport(viewport, scale) {
   return { width: Math.round(viewport.width * scale), height: Math.round(viewport.height * scale) };
 }
 
-export function emptyEvents(viewport, scale) {
+export function emptyEvents(viewport, scale, profile = 'desktop') {
   return {
-    version: 1, viewport, scale, steps: [], cursor: [], clicks: [], keys: [],
+    version: 1, profile, viewport, scale, steps: [], cursor: [], clicks: [], keys: [],
     targets: [], moves: [], blocked: [], tabs: [],
   };
 }

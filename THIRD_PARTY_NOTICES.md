@@ -9,6 +9,7 @@ software. Nothing below is copied into this repository's source; each is a depen
 | `playwright` 1.63.0 | `plugins/showreel` | Apache-2.0 | https://github.com/microsoft/playwright |
 | `esbuild` | `plugins/showreel` (dev only) | MIT | https://github.com/evanw/esbuild |
 | Inter font (via `@fontsource/inter` 5.3.0) | `plugins/showreel/assets/fonts` (redistributed woff2) | SIL OFL 1.1 (`OFL.txt` alongside) | https://github.com/rsms/inter |
+| Space Grotesk (latin 600/700), @fontsource/space-grotesk 5.3.0 | `plugins/showreel/assets/fonts` (redistributed woff2) | SIL OFL 1.1 (`SpaceGrotesk-OFL.txt` alongside) | https://www.npmjs.com/package/@fontsource/space-grotesk |
 | `mediabunny` | `plugins/showreel` (dev only for now) | MPL-2.0 | https://github.com/Vanilagy/mediabunny |
 
 `plugins/ctx` is standard-library Python and has no third-party runtime dependencies. CI tooling (GitHub Actions and

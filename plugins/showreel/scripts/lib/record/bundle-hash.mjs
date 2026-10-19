@@ -7,6 +7,7 @@ export const bundleInputs = [
 ];
 
 export const renderBundleInputs = [...bundleInputs,
+  ...['easing','overlays', ...['index','shared','title-card','outro-card','lower-third','step-badge','callout-arrow','spotlight','highlight-box','number-counter','progress-bar','animated-gradient','text-callout','logo-sting'].map(n => `templates/${n}`)].map(n => `scripts/lib/compose/${n}.mjs`),
   'scripts/lib/compose/render-page.js', 'scripts/lib/compose/draw.js',
   'scripts/lib/audio/decode.js', ...['loudness', 'duck', 'mix', 'retime'].map((name) => `scripts/lib/audio/${name}.mjs`),
   ...['timemap', 'zoom', 'camera', 'cursor-track', 'cursor-director', 'custom-cursor', 'captions', 'themes', 'layout', 'composition', 'plan']

@@ -1,3 +1,5 @@
+import { isVertical } from './layout.mjs';
+import { TEMPLATES } from './templates/index.mjs';
 import { stateAt } from './plan.mjs';
 import { wrapLines } from './captions.mjs';
 import { customCursorSpec, loadCustomCursorImages } from './custom-cursor.mjs';
@@ -6,9 +8,11 @@ const fontLoads = new Map();
 export async function loadFonts(fonts) {
   const key = JSON.stringify(fonts);
   if (!fontLoads.has(key)) fontLoads.set(key, Promise.all([
-    ['regular', '400'], ['semibold', '600'],
-  ].map(async ([name, weight]) => {
-    const face = new FontFace('Inter', `url(${JSON.stringify(fonts[name])})`, { weight });
+    ['regular', '400', 'Inter'], ['semibold', '600', 'Inter'],
+    ['displaySemibold', '600', 'Space Grotesk'], ['displayBold', '700', 'Space Grotesk'],
+  ].map(async ([name, weight, family]) => {
+    const url = fonts[name] ?? new URL(name === 'displayBold' ? 'SpaceGrotesk-Bold.woff2' : 'SpaceGrotesk-SemiBold.woff2', new URL(fonts.semibold, location.href)).href;
+    const face = new FontFace(family, `url(${JSON.stringify(url)})`, { weight });
     document.fonts.add(await face.load());
   })));
   await fontLoads.get(key);
@@ -22,7 +26,8 @@ const loadCursorImage = (url) => new Promise((resolve, reject) => {
 });
 export async function loadImages(plan, { assetBase = 'assets/' } = {}) {
   const specs = [plan.frame.background, plan.cards.title.background, plan.cards.outro.background,
-    plan.cards.title.logo, plan.cards.outro.logo];
+    plan.cards.title.logo, plan.cards.outro.logo,
+    ...(plan.overlays ?? []).filter(o => o.template === 'logo-sting' && o.params.useLogo).map(o => ({ image:o.params.logo }))];
   await Promise.all(specs.filter((s) => s?.image).map(async ({ image }) => {
     const url = new URL(`${assetBase}${image.split('/').map(encodeURIComponent).join('/')}`, location.href).href;
     if (!images.has(image)) images.set(image, new Promise((resolve, reject) => {
@@ -61,12 +66,12 @@ function rounded(ctx, rect, radius) {
 function drawCaption(ctx, plan, caption) {
   const r = plan.layout.caption, spec = plan.captions;
   if (!r || !caption || caption.alpha <= 0) return;
-  const size = plan.output.height * spec.fontSizePct / 100, padding = size * 0.6;
+  const size = (isVertical(plan.output) ? plan.output.width * 1.25 : plan.output.height) * spec.fontSizePct / 100, padding = size * 0.6;
   ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip(); ctx.globalAlpha = caption.alpha;
-  ctx.font = `${spec.fontWeight} ${size}px Inter`;
+  ctx.font = `${spec.fontWeight} ${size}px "${plan.theme.typography.family}"`;
   const wrapped = wrapLines(caption.text, r.w - padding * 2, (text) => ctx.measureText(text).width, { maxLines: spec.maxLines });
   const scale = Math.min(wrapped.scale, (r.h - padding) / (size * 1.25 * wrapped.lines.length));
-  ctx.font = `${spec.fontWeight} ${size * scale}px Inter`;
+  ctx.font = `${spec.fontWeight} ${size * scale}px "${plan.theme.typography.family}"`;
   const lineH = size * scale * 1.25;
   if (spec.mode === 'overlay') {
     const w = Math.min(r.w, Math.max(...wrapped.lines.map((s) => ctx.measureText(s).width)) + padding * 2);
@@ -96,15 +101,15 @@ function card(ctx, plan, alpha, spec, title) {
   }
   ctx.textAlign = spec.align; ctx.textBaseline = 'middle';
   for (const [text, fraction, weight, color, y] of [
-    [title, spec.titleSizePct / 100, 600, spec.titleColor, 0.48], [spec.subtitle, spec.subtitleSizePct / 100, 400, spec.subtitleColor, 0.64],
+    [title, spec.titleSizePct / 100, plan.theme.typography.weights.display, spec.titleColor, 0.48], [spec.subtitle, spec.subtitleSizePct / 100, 400, spec.subtitleColor, 0.64],
   ]) {
     if (!text) continue;
-    const size = height * fraction;
-    ctx.font = `${weight} ${size}px Inter`;
+    const size = (isVertical(plan.output) ? width * 1.25 : height) * fraction;
+    ctx.font = `${weight} ${size}px "${plan.theme.typography.family}"`;
     const wrapped = wrapLines(text, width * 0.84, (s) => ctx.measureText(s).width);
-    ctx.font = `${weight} ${size * wrapped.scale}px Inter`; ctx.fillStyle = color;
+    ctx.font = `${weight} ${size * wrapped.scale}px "${plan.theme.typography.family}"`; ctx.fillStyle = color;
     wrapped.lines.forEach((line, i) => ctx.fillText(line, x,
-      height * y + (i - (wrapped.lines.length - 1) / 2) * size * wrapped.scale * 1.2));
+      (isVertical(plan.output) ? (plan.layout.safe.y + plan.layout.safe.h * y) : height * y) + (i - (wrapped.lines.length - 1) / 2) * size * wrapped.scale * 1.2));
   }
   ctx.restore();
 }
@@ -144,6 +149,11 @@ export function sourceCrop(plan, camera, decoded) {
     y: (camera.cy * plan.scale - h / 2) * sy, width: w * sx, height: h * sy };
 }
 
+export function mapSourcePoint(plan, cam, point) {
+  const f = plan.layout.content ?? plan.layout.frame, w = plan.sourceSize.width / cam.z, h = plan.sourceSize.height / cam.z;
+  return { x:f.x+(point.x*plan.scale-(cam.cx*plan.scale-w/2))*f.w/w,
+    y:f.y+(point.y*plan.scale-(cam.cy*plan.scale-h/2))*f.h/h };
+}
 export function drawFrame(canvas, plan, tOut, decoded, assets) {
   if (assets) { images = assets.images; cursorImages = assets.cursorImages; }
   const ctx = canvas.getContext('2d'), { width, height } = plan.output;
@@ -165,9 +175,10 @@ export function drawFrame(canvas, plan, tOut, decoded, assets) {
     const cropW = plan.sourceSize.width / cam.z, cropH = plan.sourceSize.height / cam.z;
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     const crop = sourceCrop(plan, cam, decoded);
-    ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, f.x, f.y, f.w, f.h);
-    const mapped = ({ x, y }) => ({ x: f.x + (x * plan.scale - (cam.cx * plan.scale - cropW / 2)) * f.w / cropW,
-      y: f.y + (y * plan.scale - (cam.cy * plan.scale - cropH / 2)) * f.h / cropH });
+    const content = plan.layout.content ?? f;
+    ctx.fillStyle = '#111827'; ctx.fillRect(f.x, f.y, f.w, f.h);
+    ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, content.x, content.y, content.w, content.h);
+    const mapped = point => mapSourcePoint(plan,cam,point);
     const cursorH = plan.cursor.sizePx * (plan.cursor.scaleWithZoom ? 1 + 0.35 * (cam.z - 1) : 1);
     if (state.ripple) {
       const p = mapped(state.ripple), progress = state.ripple.progress;
@@ -205,6 +216,13 @@ export function drawFrame(canvas, plan, tOut, decoded, assets) {
     if (plan.frame.border.enabled) {
       ctx.save(); rounded(ctx, f, radius); ctx.strokeStyle = plan.frame.border.color;
       ctx.lineWidth = plan.frame.border.widthPx * unit; ctx.stroke(); ctx.restore();
+    }
+    for (const overlay of state.overlays) {
+      const spec = plan.overlays.find(o => o.id === overlay.id);
+      ctx.save(); ctx.globalAlpha = overlay.alpha;
+      TEMPLATES[overlay.template].draw(ctx, { width, height, theme:plan.theme, layout:plan.layout,
+        mapSource: point => mapSourcePoint(plan,cam,point), anchor:spec.anchor, images }, overlay.params, overlay);
+      ctx.restore();
     }
     drawCaption(ctx, plan, state.caption);
   }

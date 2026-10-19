@@ -1,3 +1,4 @@
+import { recordingProfile } from './profiles.mjs';
 import path from 'node:path';
 import { mkdir, readFile, writeFile, statfs, access } from 'node:fs/promises';
 import { chromium } from 'playwright';
@@ -25,7 +26,7 @@ async function authPath(dir) {
 async function selectScale(browser, requested, url, options) {
   let benchmarkScale;
   if (requested === 'auto') {
-    benchmarkScale = freshBenchmark(await optionalJson(path.join(HOME_DIR, 'benchmark.json')));
+    benchmarkScale = freshBenchmark(await optionalJson(path.join(HOME_DIR, options.profile === 'phone' ? 'benchmark-phone.json' : 'benchmark.json')));
     if (!benchmarkScale) {
       const results = await benchmarkPipeline({ browser, url, seconds: 2, ...options });
       if (results.every((result) => result.error)) {
@@ -33,7 +34,7 @@ async function selectScale(browser, requested, url, options) {
       }
       benchmarkScale = recommendScale(results);
       await mkdir(HOME_DIR, { recursive: true });
-      await writeFile(path.join(HOME_DIR, 'benchmark.json'), JSON.stringify({
+      await writeFile(path.join(HOME_DIR, options.profile === 'phone' ? 'benchmark-phone.json' : 'benchmark.json'), JSON.stringify({
         scale: benchmarkScale, at: new Date().toISOString(),
       }) + '\n');
     }
@@ -45,7 +46,7 @@ async function selectScale(browser, requested, url, options) {
 }
 
 export async function recordScenario({ name, headless = true, scale, fps = 60,
-  rehearsal = true, log = console.log }) {
+  profile = 'desktop', rehearsal = true, log = console.log }) {
   const dir = projectDir(name);
   const brief = await readProjectFile(name, 'brief');
   const scenario = await readProjectFile(name, 'scenario');
@@ -53,8 +54,8 @@ export async function recordScenario({ name, headless = true, scale, fps = 60,
   const missing = pendingSecrets(scenario, process.env);
   if (missing.length) throw new Error(missing.map(({ id }) =>
     `step ${id} needs a secret: set SHOWREEL_SECRET_${id.toUpperCase()}`).join('; '));
-  const config = mergeConfig(await optionalJson(path.join(dir, 'config.json'))
-    ?? { baseURL: brief.baseURL ?? scenario.baseURL });
+  const config = recordingProfile(mergeConfig(await optionalJson(path.join(dir, 'config.json'))
+    ?? { baseURL: brief.baseURL ?? scenario.baseURL }), profile);
   const requested = scale ?? config.captureScale;
   chooseScale({ requested });
   if (![30, 60].includes(fps)) throw new Error('fps must be 30 or 60');
@@ -62,7 +63,7 @@ export async function recordScenario({ name, headless = true, scale, fps = 60,
   const headroom = checkDisk(Number(disk.bavail) * Number(disk.bsize),
     (brief.targetSeconds ?? 60) / 60, requested === 'auto' ? 2 : requested);
   if (!headroom.ok) throw new Error(`Not enough disk space: need ${headroom.needBytes} bytes and 2 GB free`);
-  const runId = localRunId();
+  const runId = localRunId() + (profile === 'phone' ? '-phone' : '');
   const startedAt = new Date().toISOString();
   const runDir = path.join(dir, 'runs', runId);
   await mkdir(path.dirname(runDir), { recursive: true });
@@ -74,14 +75,14 @@ export async function recordScenario({ name, headless = true, scale, fps = 60,
   try {
     browser = await chromium.launch({ headless });
     const choice = await selectScale(browser, requested, firstURL,
-      { viewport: config.viewport, guard: config, storageState });
+      { viewport: config.viewport, profile, guard: config, storageState });
     session = new RecordingSession(browser, config, choice.used, fps);
     await session.open(firstURL, storageState);
     if (rehearsal) await session.rehearse(steps, firstURL);
     const stats = await session.run(steps, path.join(runDir, 'raw.mp4'));
     const { events, viewport } = session;
     const record = {
-      version: 1, projectName: name, runId, startedAt,
+      version: 1, profile, projectName: name, runId, startedAt,
       scale: { requested, ...choice },
       fps: { nominal: fps, effective: stats.frames / stats.durationSec,
         dropped: stats.dropped, maxBacklog: stats.maxBacklog },

@@ -1,7 +1,10 @@
+import { presetOutput } from './layout.mjs';
+import { profileWarnings } from './plan.mjs';
+import { listRuns } from '../record/commands.mjs';
 import http from 'node:http';
 import path from 'node:path';
 import { createReadStream } from 'node:fs';
-import { access, mkdir, open, readFile, readdir, realpath, stat, writeFile, rm } from 'node:fs/promises';
+import { access, mkdir, open, readFile, realpath, stat, writeFile, rm } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { projectDir } from '../paths.mjs';
@@ -60,7 +63,7 @@ export async function resolveImageAssets(composition, dir) {
   const c = resolveComposition(composition), assets = new Map(), root = await realpath(dir);
   assets.warnings = [];
   const custom = c.cursor.style === 'custom' ? ['arrow', 'hand', 'text'].map((shape) => c.cursor.custom?.[shape]).filter(Boolean) : [];
-  for (const spec of [c.frame.background, c.cards.title.background, c.cards.outro.background, c.cards.title.logo, c.cards.outro.logo, ...custom]) {
+  for (const spec of [c.frame.background, c.cards.title.background, c.cards.outro.background, c.cards.title.logo, c.cards.outro.logo, ...(c.overlays ?? []).filter(o => o.template === 'logo-sting' && o.params.useLogo).map(o => ({ image:o.params.logo })), ...custom]) {
     if (!spec?.image) continue;
     if (!safeImagePath(spec.image)) throw new Error('Image must be inside the project');
     const isCursor = custom.includes(spec);
@@ -141,7 +144,7 @@ export async function startRenderServer({ rawFile, outFile, assets = new Map(), 
           response.end('<!doctype html><meta charset="utf-8"><script src="render-page.js"></script>');
         } else if (request.method === 'GET' && route === `${prefix}render-page.js`) {
           response.writeHead(200, { 'content-type': 'text/javascript' }); response.end(bundle);
-        } else if (request.method === 'GET' && [`${prefix}fonts/Inter-Regular.woff2`, `${prefix}fonts/Inter-SemiBold.woff2`].includes(route)) {
+        } else if (request.method === 'GET' && [`${prefix}fonts/Inter-Regular.woff2`, `${prefix}fonts/Inter-SemiBold.woff2`, `${prefix}fonts/SpaceGrotesk-SemiBold.woff2`, `${prefix}fonts/SpaceGrotesk-Bold.woff2`].includes(route)) {
           const font = await readFile(new URL(`assets/fonts/${route.split('/').at(-1)}`, root));
           response.writeHead(200, { 'content-type': 'font/woff2' }); response.end(font);
         } else if (request.method === 'POST' && ['chunk', 'progress'].some((name) => route === prefix + name)) {
@@ -185,7 +188,7 @@ export async function startRenderServer({ rawFile, outFile, assets = new Map(), 
 }
 
 // CLI edits and rendering select the same newest completed run without launching a browser.
-export async function loadRunComposition({ name, runId, rebuild = false }) {
+export async function loadRunComposition({ name, runId, rebuild = false, rebind = false }) {
   const dir = projectDir(name);
   const compositionFile = path.join(dir, 'composition.json');
   let composition;
@@ -194,8 +197,8 @@ export async function loadRunComposition({ name, runId, rebuild = false }) {
     catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
   if (!runId) {
-    const runs = await readdir(path.join(dir, 'runs'), { withFileTypes: true });
-    runId = runs.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().at(-1);
+    const runs = await listRuns(name);
+    runId = runs.at(-1)?.id;
   }
   if (typeof runId !== 'string' || !runId || /[\\/]|^\.\.?$/.test(runId)) throw new Error('A valid run ID is required');
   const runDir = path.join(dir, 'runs', runId), rawFile = path.join(runDir, 'raw.mp4');
@@ -205,7 +208,15 @@ export async function loadRunComposition({ name, runId, rebuild = false }) {
     const validation = validateComposition(composition);
     if (!validation.ok) throw new Error(validation.errors.join('\n'));
   }
-  if (composition && composition.run.id !== runId) throw new Error('Composition belongs to another run; use --rebuild to select this run');
+  if (composition && composition.run.id !== runId) {
+    if (!rebind) throw new Error('Composition belongs to another run; use --rebuild to select this run');
+    composition = structuredClone(composition);
+    composition.run.id = runId;
+    composition.edits = { trims: [], speeds: [], holds: [] };
+    composition.zoom.regions = [];
+    delete composition.captions.cues;
+    composition.overlays = [];
+  }
   const [brief, storyboard, events, record] = await Promise.all([
     readProjectFile(name, 'brief'), readProjectFile(name, 'storyboard'), json(path.join(runDir, 'events.json')),
     json(path.join(runDir, 'record.json')),
@@ -218,17 +229,22 @@ export async function loadRunComposition({ name, runId, rebuild = false }) {
   return { dir, compositionFile, composition, runId, runDir, rawFile, brief, storyboard, events, record };
 }
 
-export async function renderRun({ name, runId, size, fps, out, rebuild = false, stills = null, log = console.log, signal, isCancelled = () => false, onProgress = () => {} }) {
+export async function renderRun({ name, runId, format = 'landscape', size, fps, out, rebuild = false, stills = null, log = console.log, signal, isCancelled = () => false, onProgress = () => {} }) {
+  presetOutput(format, size ?? '1080');
   const cancelled = () => signal?.aborted || isCancelled();
   const checkCancelled = () => { if (cancelled()) throw new Error('Render aborted'); };
   checkCancelled();
   if (size !== undefined && !['1080', '4k'].includes(size)) throw new Error('size must be 1080 or 4k');
   if (fps !== undefined && ![30, 60].includes(fps)) throw new Error('fps must be 30 or 60');
-  const { dir, compositionFile, rawFile, brief, storyboard, events, record, composition: loaded } = await loadRunComposition({ name, runId, rebuild });
+  const { dir, compositionFile, rawFile, brief, storyboard, events, record, composition: loaded } = await loadRunComposition({ name, runId, rebuild, rebind: true });
   let composition = loaded;
-  await writeFile(compositionFile, JSON.stringify(composition, null, 2) + '\n');
+  // Keep the editable composition on its original run when exporting another profile.
+  let saved;
+  try { saved = await json(compositionFile); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (!saved || saved.run.id === composition.run.id) await writeFile(compositionFile, JSON.stringify(composition, null, 2) + '\n');
   composition = resolveComposition(composition);
-  composition.output = { ...composition.output, ...(size ? { width: size === '4k' ? 3840 : 1920, height: size === '4k' ? 2160 : 1080 } : {}), ...(fps ? { fps } : {}) };
+  composition = compositionForFormat(composition, format, size, fps);
+  for (const warning of profileWarnings(record.profile ?? events.profile, format)) log(`warning: ${warning}`);
   const assets = await resolveImageAssets(composition, dir);
   const { voiceClips, warnings: voiceWarnings } = await loadVoiceClips(dir);
   assets.warnings.push(...voiceWarnings);
@@ -236,9 +252,9 @@ export async function renderRun({ name, runId, size, fps, out, rebuild = false, 
     assets.warnings.push(`The music file ${composition.audio.music.file} was not found inside the project, so the video has no music.`);
     composition.audio.music.enabled = false;
   }
-  const renderId = localRunId(), renderDir = path.join(dir, 'renders', renderId);
+  const renderId = `${localRunId()}-${format}-${randomUUID().slice(0, 8)}`, renderDir = path.join(dir, 'renders', renderId);
   await mkdir(path.dirname(renderDir), { recursive: true }); await mkdir(renderDir);
-  const finalFile = out ? path.resolve(out) : path.join(renderDir, 'final.mp4');
+  const finalFile = out ? path.resolve(out) : path.join(renderDir, format === 'landscape' ? 'final.mp4' : `final-${format}.mp4`);
   await mkdir(path.dirname(finalFile), { recursive: true });
   let server, browser, page, plan, result;
   let lastLog = 0, cancelTimer, completed = false, ownsOutput = false;
@@ -265,7 +281,7 @@ export async function renderRun({ name, runId, size, fps, out, rebuild = false, 
     await page.goto(server.url); await page.waitForFunction(() => typeof window.renderComposition === 'function');
     const sourceSize = await page.evaluate(() => window.probeRenderSource());
     plan = planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings: assets.warnings, voiceClips });
-    for (const warning of plan.warnings) log(`warning: ${warning}`);
+    for (const warning of plan.warnings) if (!profileWarnings(record.profile ?? events.profile, format).includes(warning)) log(`warning: ${warning}`);
     for (const warning of plan.audio.warnings) log(`warning: ${warning.message}`);
     if (stills) {
       const files = [];
@@ -308,4 +324,40 @@ export async function renderRun({ name, runId, size, fps, out, rebuild = false, 
       finally { if (!completed && ownsOutput) await rm(finalFile,{force:true}); }
     } }
   }
+}
+
+// Export variants share styling and narration; source-time edits are never copied between runs.
+export function compositionForFormat(input, format, size, fps) {
+  const c = structuredClone(input);
+  const previous = c.output.preset ?? 'landscape';
+  c.output = { ...c.output, ...presetOutput(format, size ?? (Math.max(c.output.width, c.output.height) > 1920 ? '4k' : '1080')), ...(fps ? { fps } : {}) };
+  if (format !== previous) {
+    if (format === 'vertical') {
+      if (c.frame.paddingXPct === 8) c.frame.paddingXPct = 4;
+      if (c.frame.paddingYPct === 5) c.frame.paddingYPct = 0;
+      if (c.captions.bandHeightPct === 13) c.captions.bandHeightPct = 16;
+      if (c.zoom.depth === resolveComposition({ theme: c.theme }).zoom.depth) c.zoom.depth = 1.5;
+    } else if (previous === 'vertical') {
+      if (c.frame.paddingXPct === 4) c.frame.paddingXPct = 8;
+      if (c.frame.paddingYPct === 0) c.frame.paddingYPct = 5;
+      if (c.captions.bandHeightPct === 16) c.captions.bandHeightPct = 13;
+      if (c.zoom.depth === 1.5) c.zoom.depth = resolveComposition({ theme: c.theme }).zoom.depth;
+      if (c.layout.safeZones === true) c.layout.safeZones = null;
+    }
+    if (c.zoom.regions.every(r => r.source === 'auto')) c.zoom.regions = [];
+  }
+  return resolveComposition(c);
+}
+export function selectRenderRuns(runs) {
+  const latest = (profile) => runs.filter(r => (r.profile ?? 'desktop') === profile).sort((a,b) => a.id.localeCompare(b.id)).at(-1);
+  const desktop = latest('desktop'), phone = latest('phone');
+  return [...(desktop ? [{ runId: desktop.id, format: 'landscape' }] : []), ...(phone ? [{ runId: phone.id, format: 'vertical' }] : [])];
+}
+export async function renderAll(options) {
+  if (options.runId || options.out || options.format) throw new Error('--all cannot be combined with --run, --out or --format');
+  const selected = selectRenderRuns(await listRuns(options.name));
+  if (!selected.length) throw new Error('No completed recordings found');
+  const results = [];
+  for (const run of selected) results.push(await renderRun({ ...options, ...run }));
+  return results;
 }

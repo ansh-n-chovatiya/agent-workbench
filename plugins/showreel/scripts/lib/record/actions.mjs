@@ -51,18 +51,25 @@ async function moveAndClick(state, page, box, key, stepId, tab) {
   for (const sample of path.samples) {
     state.events.cursor.push({ t: start + sample.t / 1000, x: sample.x, y: sample.y });
   }
+  const phone = state.config?.profile === 'phone';
   let dispatched = -Infinity;
   for (const [index, sample] of path.samples.entries()) {
     if (sample.t - dispatched < 50 && index !== path.samples.length - 1) continue;
     // The final point may wait beyond its planned instant to keep input at <=20 Hz.
     const due = Math.max(sample.t, dispatched + 50);
     await sleep(Math.max(0, (start - state.now()) * 1000 + due));
-    await page.mouse.move(sample.x * state.scale, sample.y * state.scale);
-    state.events.moves.push({ t: state.now(), x: sample.x, y: sample.y });
+    if (!phone) await page.mouse.move(sample.x * state.scale, sample.y * state.scale);
+    if (!phone) state.events.moves.push({ t: state.now(), x: sample.x, y: sample.y });
     dispatched = due;
   }
   state.cursor = point;
   await sleep(dwellMs(key));
+  if (phone) {
+    state.events.clicks.push({ t: state.now(), ...point, stepId, tab, kind: 'tap' });
+    await page.touchscreen.tap(point.x * state.scale, point.y * state.scale);
+    await sleep(settleAfterClickMs(key));
+    return;
+  }
   await page.mouse.down();
   state.events.clicks.push({ t: state.now(), ...point, stepId, tab });
   try { await sleep(pressMs(key)); }
@@ -77,11 +84,23 @@ async function executeAction(state, step, action, index, rehearsal) {
     await navigateRecording(page, action.url, state.scale, state.cookies);
     return;
   }
+  if (action.type === 'scroll') {
+    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(action.deltaY), Math.abs(action.deltaX ?? 0)) / 80));
+    for (let i = 0; i < steps; i++) {
+      await page.mouse.wheel((action.deltaX ?? 0) / steps, action.deltaY / steps);
+      await sleep(35);
+    }
+    await sleep(300);
+    return;
+  }
   if (action.type === 'wait') { await sleep(action.ms); return; }
   const locator = await actionLocator(page, action);
   await locator.waitFor({ state: 'visible', timeout: 5000 });
   if (rehearsal) {
-    if (action.type === 'click') await locator.click({ timeout: 5000 });
+    if (action.type === 'click') {
+      if (state.config?.profile === 'phone') await locator.tap({ timeout: 5000 });
+      else await locator.click({ timeout: 5000 });
+    }
     if (action.type === 'fill') await locator.fill(state.value(step, action), { timeout: 5000 });
     if (action.type === 'press') await locator.press(action.key, { timeout: 5000 });
     return;
@@ -131,7 +150,10 @@ export async function executeScenario(state, steps, { rehearsal = false } = {}) 
         // Playwright errors may include field values: expose only location for secrets.
         const detail = action.sensitive ? 'sensitive action failed' : error.message.split('\n')[0];
         const prefix = rehearsal ? 'rehearsal failed' : 'recording failed';
-        throw new Error(`${prefix} in step ${step.id} (selector ${action.selector ?? action.type}): ${detail}`);
+        const profile = state.config?.profile ?? 'desktop';
+        const mobileHint = rehearsal && profile === 'phone' && action.selector
+          ? '; the site may hide it on mobile' : '';
+        throw new Error(`${prefix} in step ${step.id} (profile ${profile}, selector ${action.selector ?? action.type}): ${detail}${mobileHint}`);
       }
     }
     if (!rehearsal) {

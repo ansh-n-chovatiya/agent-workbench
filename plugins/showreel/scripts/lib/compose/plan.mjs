@@ -4,11 +4,19 @@ import { directCursor } from './cursor-director.mjs';
 import { cursorAt, pressAmount, rippleAt } from './cursor-track.mjs';
 import { cuesFromRun, captionAlpha } from './captions.mjs';
 import { validateComposition, resolveComposition, zoomOptions } from './composition.mjs';
-import { layoutFor } from './layout.mjs';
+import { layoutFor, isVertical } from './layout.mjs';
 import { THEMES } from './themes.mjs';
+import { planOverlays, overlayStates } from './overlays.mjs';
+import { EASING } from './easing.mjs';
 import { placeNarration, extendCues } from '../audio/retime.mjs';
 import { maxSharpZoom, validateRegions, suggestZoomRegions } from './zoom.mjs';
 
+export const DESKTOP_VERTICAL_WARNING = 'This is a desktop recording in a vertical video: record with --profile phone for a better result';
+export function profileWarnings(profile = 'desktop', format = 'landscape') {
+  if (format === 'vertical' && profile !== 'phone') return [DESKTOP_VERTICAL_WARNING];
+  if (format === 'landscape' && profile === 'phone') return ['This is a phone recording in a landscape video: record with --profile desktop for a better result'];
+  return [];
+}
 // Export serves clips as voice/<key>.wav and music as music/<project path>; the editor passes its own /media/ builders.
 export const exportAudioUrls = {
   clip: (key) => `voice/${key}.wav`,
@@ -50,7 +58,7 @@ export function planRender({ composition, brief, storyboard, events, record, sou
   const regions = !composition.zoom.enabled ? [] : auto
     ? suggestZoomRegions({ events, record, options: zoomOptions(composition.zoom) }) : composition.zoom.regions;
   const regionValidation = validateRegions(regions, { duration: record.durationSec,
-    maxSharp: maxSharpZoom({ sourceWidthPx: sourceSize.width, frameWidthPx: layout.frame.w }) });
+    maxSharp: maxSharpZoom({ sourceWidthPx: sourceSize.width, frameWidthPx: (layout.content ?? layout.frame).w }) });
   if (!regionValidation.ok) throw new Error(regionValidation.errors.join('\n'));
   const cssSource = { width: sourceSize.width / record.scale.used, height: sourceSize.height / record.scale.used };
   const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -68,16 +76,17 @@ export function planRender({ composition, brief, storyboard, events, record, sou
     } catch { /* an existing hold or edit blocks an automatic hold: the overrun warnings already tell the person */ }
   }
   if (audio.captionSpans.length) cues = extendCues(cues, audio.captionSpans, timemap);
-  return { output: clone(output), layout, theme: THEMES[composition.theme], frame: clone(composition.frame), timemap,
+  const overlayPlan = planOverlays(composition.overlays, timemap);
+  return { overlays: overlayPlan.overlays, motion: clone(composition.motion), output: clone(output), layout, theme: THEMES[composition.theme], frame: clone(composition.frame), timemap,
     regions: clone(regions),
     camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
     cues, audio,
     captions: clone(composition.captions),
-    cursor: { ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }), sizePx: output.height * (composition.cursor.style === 'custom' ? composition.cursor.custom?.heightPct ?? composition.cursor.sizePct : composition.cursor.sizePct) / 100,
+    cursor: { ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }), sizePx: (isVertical(output) ? output.width : output.height) * (composition.cursor.style === 'custom' ? composition.cursor.custom?.heightPct ?? composition.cursor.sizePct : composition.cursor.sizePct) / 100,
       color: THEMES[composition.theme].cursor.fill, ...composition.cursor },
     clicks: clone(events.clicks), ripples: clone(events.clicks), sourceSize: { ...sourceSize },
     viewport: { ...events.viewport }, scale: record.scale.used,
-    warnings: [...assetWarnings, ...(record.warnings ?? []), ...regionValidation.warnings, ...(composition.captions.mode === 'overlay' ? ['overlay captions can cover the video'] : [])], cards: clone(cards) };
+    warnings: [...profileWarnings(record.profile ?? events.profile, output.preset ?? (isVertical(output) ? 'vertical' : 'landscape')), ...overlayPlan.notices, ...assetWarnings, ...(record.warnings ?? []), ...regionValidation.warnings, ...(composition.captions.mode === 'overlay' ? ['overlay captions can cover the video'] : [])], cards: clone(cards) };
 }
 export function stateAt(plan, tOut) {
   const mapped = sourceAt(plan.timemap, tOut), t = mapped.t;
@@ -96,7 +105,8 @@ export function stateAt(plan, tOut) {
     ? 1 + 0.12 * Math.sin(Math.PI * age / 0.12) : 1;
   const effect = plan.cursor.clickEffect;
   const ripple = effect.style !== 'none' ? rippleAt(events, t, effect.durationSec) : null;
-  return { section: mapped.section, alphaTitle: mapped.alphaTitle, alphaOutro: mapped.alphaOutro,
+  return { overlays: mapped.section === 'main' ? overlayStates(plan.overlays ?? [], tOut, plan.motion?.pace ?? 1) : [],
+    section: mapped.section, alphaTitle: EASING.standard(mapped.alphaTitle), alphaOutro: EASING.standard(mapped.alphaOutro),
     sourceT: t, rate: mapped.rate, camera: cameraAt(plan.camera, t),
     cursor: { ...cursorAt(events, t), press, alpha, shape: shapeKey?.shape ?? 'arrow', pop },
     ripple,

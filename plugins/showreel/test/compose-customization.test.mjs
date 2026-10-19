@@ -15,7 +15,7 @@ const input = () => ({ brief: { ...structuredClone(DEFAULT_BRIEF), theme: 'dark'
 test('theme defaults, explicit settings and legacy v1 shorthands resolve without mutation', () => {
   const run = input(), c = buildComposition(run);
   assert.equal(c.cards.title.titleColor, '#f9fafb');
-  assert.equal(c.captions.background, 'rgba(255,255,255,0.14)');
+  assert.equal(c.captions.background, '#202b40');
   const custom = buildComposition({ ...run, overrides: { cards: { title: { titleColor: '#123456' } }, frame: { paddingPct: 7 } } });
   assert.equal(custom.cards.title.titleColor, '#123456'); assert.equal(custom.frame.paddingXPct, 7); assert.equal(custom.frame.paddingYPct, 7);
   const legacy = { version: 1, run: { id: 'run-1' }, theme: 'dark', output: { width: 1920, height: 1080, fps: 60 },

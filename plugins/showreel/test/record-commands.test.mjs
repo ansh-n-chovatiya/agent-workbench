@@ -48,7 +48,7 @@ test('runs lists completed metadata in order and leaves interrupted runs alone',
   }
   const result = await invoke('runs', '--name', 'listing');
   assert.equal(result.stdout,
-    '20261018-130000\t3.3 s\t4000 bytes\n20261018-140000\t3.3 s\t4000 bytes\n');
+    '20261018-130000\tdesktop\t3.3 s\t4000 bytes\n20261018-140000\tdesktop\t3.3 s\t4000 bytes\n');
   assert.equal((await invoke('runs', '--name', 'absent')).stdout, '');
   assert.equal(JSON.parse(await readFile(path.join(dir, '20261018-140000', 'record.json'))).video.bytes, 4000);
 });

@@ -29,7 +29,7 @@ test('validation collects errors, rejects unknown keys at all depths and handles
   const c = buildComposition(fresh());
   c.unknown = true; c.output.extra = true; c.output.width = 0; c.output.height = NaN;
   c.cursor.visible = 'yes'; c.cursor.sizePct = 100; c.frame.paddingPct = 90;
-  c.theme = 'bold'; c.zoom.depth = 'huge'; c.cards.title.duration = -1;
+  c.theme = 'missing'; c.zoom.depth = 'huge'; c.cards.title.duration = -1;
   c.edits.trims = [{ start: 1, end: 2, extra: true }];
   const errors = validateComposition(c).errors.join('\n');
   for (const field of ['unknown', 'output.extra', 'output.width', 'output.height', 'cursor.visible', 'cursor.sizePct', 'frame.paddingPct', 'theme', 'zoom.depth', 'cards.title.duration', 'edits.trims.0.extra']) assert.ok(errors.includes(field), field);

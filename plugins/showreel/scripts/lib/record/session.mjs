@@ -1,3 +1,4 @@
+import { profileContext } from './profiles.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { hygieneScript } from './hygiene.mjs';
 import { installWriteGuard } from './write-guard.mjs';
@@ -13,7 +14,7 @@ export class RecordingSession {
     this.scale = scale;
     this.fps = fps;
     this.viewport = scaledViewport(config.viewport, scale);
-    this.events = emptyEvents(config.viewport, scale);
+    this.events = emptyEvents(config.viewport, scale, config.profile);
     this.pages = [];
     this.firstTs = null;
     this.previousFrameTs = -Infinity;
@@ -26,7 +27,7 @@ export class RecordingSession {
 
   async open(url, storageState) {
     this.context = await this.browser.newContext({
-      viewport: this.viewport, deviceScaleFactor: 1, storageState,
+      viewport: this.viewport, deviceScaleFactor: 1, storageState, ...profileContext(this.config.profile),
     });
     this.context.setDefaultTimeout(5000);
     await this.context.addInitScript({ content: hygieneScript(this.config.hygiene) });

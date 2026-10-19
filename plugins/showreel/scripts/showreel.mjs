@@ -17,17 +17,19 @@ import { addGuideStep } from './lib/guide/commands.mjs';
 const help = `Usage: showreel <command>
 
 Commands:
-  doctor [--json] [--benchmark]    Check the environment and optional capture performance
+  templates list [--json]                       List canvas templates and parameters
+  overlay <add|list|remove> --name <name>        Manage source-time overlays (remove: --id ID)
+  doctor [--name <name>] [--json] [--benchmark]    Check the environment and optional capture performance
   init --name <name> --url <URL>    Create a project configuration
   brief <init|show|set|questions> --name <name>    Manage intake
   storyboard <draft|validate> --name <name>       Draft or validate captions
   scenario <build|validate> --name <name>         Build or validate actions
   guide [resolve|add] --name <name>             Capture or resolve a guide
   snapshot --url <URL> [--max <N>]               List visible controls
-  record --name <name> [--headed] [--no-rehearsal] [--scale <S>] [--fps <N>]
+  record --name <name> [--profile desktop|phone] [--headed] [--no-rehearsal] [--scale <S>] [--fps <N>]
   login --name <name> [--url <URL>]              Save a browser login session
   runs --name <name>                            List completed recordings
-  render --name <name> [--run <ID>] [--size 1080|4k] [--fps 30|60] [--out <FILE>] [--rebuild] [--stills T1,T2]
+  render --name <name> [--run <ID>] [--format landscape|vertical|square] [--all] [--size 1080|4k] [--fps 30|60] [--out <FILE>] [--rebuild] [--stills T1,T2]
   edit --name <name> [--run <ID>] [--no-open] [--port <P>]    Open the local editor
   composition show --name <name> [--paths]      Inspect settings or list every settable path
   composition validate --name <name>            Validate composition.json
@@ -92,6 +94,7 @@ async function projectCommand(command, flags) {
     }
     if (subcommand === 'questions') {
       const result = questions(brief);
+      if (brief.outputs?.vertical && !options['--json']) console.log(`Vertical output: record a phone run with showreel record --name ${name} --profile phone, then render --all.`);
       console.log(options['--json'] ? JSON.stringify(result, null, 2) : result.length ? result.map((q, i) => `${i + 1}. ${q.question}`).join('\n') : 'intake complete');
     }
     return;
@@ -177,9 +180,9 @@ async function main(args) {
     return recordingCommand(command, flags);
   }
   if (command === 'render') {
-    const { options } = parseOptions(flags, ['--name', '--run', '--size', '--fps', '--out', '--rebuild', '--stills'], ['--rebuild']);
-    const { renderRun } = await import('./lib/compose/render.mjs');
-    return renderRun({ name: options['--name'], runId: options['--run'], size: options['--size'],
+    const { options } = parseOptions(flags, ['--name', '--run', '--size', '--fps', '--out', '--rebuild', '--stills', '--format', '--all'], ['--rebuild', '--all']);
+    const { renderRun, renderAll } = await import('./lib/compose/render.mjs');
+    return (options['--all'] ? renderAll : renderRun)({ format: options['--format'], name: options['--name'], runId: options['--run'], size: options['--size'],
       fps: options['--fps'] === undefined ? undefined : Number(options['--fps']), out: options['--out'], rebuild: Boolean(options['--rebuild']),
       stills: options['--stills'] ? options['--stills'].split(',').map(Number) : null });
   }
@@ -197,6 +200,17 @@ async function main(args) {
       await stop;
     } finally { await server.close(); }
     return;
+  }
+  if (command === 'templates') {
+    if (flags[0] !== 'list' || flags.slice(1).some(x => x !== '--json') || flags.length > 2) throw new Error('Usage: templates list [--json]');
+    const { templateRows } = await import('./lib/compose/overlay-commands.mjs');
+    const rows = templateRows();
+    console.log(flags.includes('--json') ? JSON.stringify(rows) : rows.map(t => `${t.id}: ${t.label} — ${t.help}\n  ${Object.entries(t.params).map(([k,s]) => `${k}:${s.type}=${JSON.stringify(s.default)}`).join(' ')}`).join('\n'));
+    return;
+  }
+  if (command === 'overlay') {
+    const { overlayCommand } = await import('./lib/compose/overlay-commands.mjs');
+    return overlayCommand(flags);
   }
   if (command === 'composition') {
     const [subcommand, ...rest] = flags;
@@ -241,10 +255,16 @@ async function main(args) {
   if (command === '--help' && !flags.length) return console.log(help);
   if (['brief', 'storyboard', 'scenario'].includes(command)) return projectCommand(command, flags);
   if (command === 'doctor') {
-    if (new Set(flags).size !== flags.length || flags.some((flag) => !['--json', '--benchmark'].includes(flag))) {
-      throw new Error('Usage: showreel doctor [--json] [--benchmark]');
+    const doctorFlags = flags.includes('--name') ? parseOptions(flags, ['--name', '--json', '--benchmark'], ['--json', '--benchmark']).options : {};
+    const generalFlags = flags.includes('--name') ? Object.keys(doctorFlags).filter(k => k !== '--name') : flags;
+    if (new Set(generalFlags).size !== generalFlags.length || generalFlags.some((flag) => !['--json', '--benchmark'].includes(flag))) {
+      throw new Error('Usage: showreel doctor [--name <name>] [--json] [--benchmark]');
     }
     const result = await doctor();
+    if (doctorFlags['--name']) {
+      const brief = await readProjectFile(doctorFlags['--name'], 'brief');
+      if (brief.outputs?.vertical) result.items.push({ id: 'vertical', level: 'ok', detail: `Record a phone run: showreel record --name ${doctorFlags['--name']} --profile phone; then render --all` });
+    }
     if (flags.includes('--benchmark')) {
       const { startFixtureServer } = await import('./lib/fixture-server.mjs');
       const { benchmarkPipeline, recommendScale } = await import('./lib/capture-benchmark.mjs');

@@ -1,4 +1,4 @@
-// showreel editor sources sha256: f273b510c299115ac55c54362a08eacf6d05ddf8ed886b5dba7a980481355eea
+// showreel editor sources sha256: c97f22e951d59ab63a6d0202bcc5e850d7d6612a7b4fc2cba4c645c084b1d149
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -489,6 +489,62 @@
     return "function" == typeof t3 ? t3(n2) : t3;
   }
 
+  // scripts/lib/compose/layout.mjs
+  var OUTPUT_PRESETS = Object.freeze({ landscape: [1920, 1080], vertical: [1080, 1920], square: [1080, 1080] });
+  function presetOutput(preset = "landscape", size4 = "1080") {
+    if (!Object.hasOwn(OUTPUT_PRESETS, preset)) throw new Error("format must be landscape, vertical or square");
+    if (!["1080", "4k"].includes(size4)) throw new Error("size must be 1080 or 4k");
+    const [width, height] = OUTPUT_PRESETS[preset], scale = size4 === "4k" ? 2 : 1;
+    return { preset, width: width * scale, height: height * scale };
+  }
+  var isVertical = (output) => output.preset === "vertical" || output.height > output.width;
+  function safeArea(output, enabled = isVertical(output)) {
+    const top = enabled ? Math.ceil(output.height * 0.07) : 0;
+    const bottom = enabled ? Math.ceil(output.height * 0.14) : 0;
+    return { x: 0, y: top, w: output.width, h: output.height - top - bottom };
+  }
+  function containRect(source, bounds) {
+    const scale = Math.min(bounds.w / source.width, bounds.h / source.height);
+    const w4 = Math.min(bounds.w, Math.round(source.width * scale));
+    const h3 = Math.min(bounds.h, Math.round(source.height * scale));
+    return { x: bounds.x + Math.round((bounds.w - w4) / 2), y: bounds.y + Math.round((bounds.h - h3) / 2), w: w4, h: h3 };
+  }
+  function verticalLayout({ output, source, composition }) {
+    const { width, height } = output, captions = composition.captions;
+    const safe = safeArea(output, composition.layout?.safeZones ?? true);
+    const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 4;
+    const pad = Math.round(width * px / 100), gap = Math.round(height * 0.02);
+    const py = Math.round(height * (composition.frame?.paddingYPct ?? 0) / 100);
+    const band = captions?.enabled && captions.mode === "band" ? Math.round(height * (captions.bandHeightPct ?? 16) / 100) : 0;
+    const frame = { x: pad, y: safe.y + py, w: width - pad * 2, h: safe.h - band - gap - py * 2 };
+    const content = containRect(source, frame);
+    const caption = !captions?.enabled ? null : band ? { x: 0, y: safe.y + safe.h - band, w: width, h: band } : { x: pad, y: frame.y + frame.h - Math.round(height * 0.1), w: frame.w, h: Math.round(height * 0.1) };
+    return { canvas: { width, height }, safe, frame, content, caption, scaleFramePx: content.w / source.width };
+  }
+  function layoutFor({ output, source, composition }) {
+    const { width, height } = output;
+    if (![width, height, source.width, source.height].every((v3) => Number.isFinite(v3) && v3 > 0)) throw new Error("Layout dimensions must be finite and positive");
+    if (isVertical(output)) return verticalLayout({ output, source, composition });
+    const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 8;
+    const py = composition.frame?.paddingYPct ?? composition.frame?.paddingPct ?? 5;
+    const captions = composition.captions;
+    const band = captions?.enabled && captions.mode === "band" ? Math.round(height * (captions.bandHeightPct ?? 13) / 100) : 0;
+    const safe = safeArea(output, composition.layout?.safeZones === true);
+    const availableH = safe.h - band;
+    const scale = Math.min(width * (1 - 2 * px / 100) / source.width, (availableH - 2 * height * py / 100) / source.height);
+    const w4 = Math.round(source.width * scale), h3 = Math.round(source.height * scale);
+    const frame = { x: Math.round((width - w4) / 2), y: safe.y + Math.round((availableH - h3) / 2) + (band && captions.position === "top" ? band : 0), w: w4, h: h3 };
+    let caption = null;
+    if (captions?.enabled) {
+      if (band) caption = { x: 0, y: captions.position === "top" ? safe.y : safe.y + safe.h - band, w: width, h: band };
+      else {
+        const w5 = Math.round(frame.w * 0.8), h4 = Math.round(height * 0.075);
+        caption = { x: Math.round(frame.x + (frame.w - w5) / 2), y: Math.round(captions.position === "top" ? frame.y + height * 0.04 : frame.y + frame.h - height * 0.04 - h4), w: w5, h: h4 };
+      }
+    }
+    return { canvas: { width, height }, frame, caption, scaleFramePx: w4 / source.width };
+  }
+
   // scripts/lib/compose/zoom.mjs
   var clamp = (v3, max2) => Math.max(0, Math.min(max2, v3));
   function maxSharpZoom({ sourceWidthPx, frameWidthPx }) {
@@ -508,14 +564,14 @@
     const { width, height } = events.viewport;
     const regions = [];
     for (const target of events.targets) {
-      const { box, stepId } = target;
-      if (!kinds.includes(target.kind) || box.w * box.h > width * height * maxBoxFraction) continue;
+      const { box: box2, stepId } = target;
+      if (!kinds.includes(target.kind) || box2.w * box2.h > width * height * maxBoxFraction) continue;
       const click = events.clicks.find((c3) => c3.stepId === stepId && c3.t >= target.t);
       const keys = target.kind === "fill" ? events.keys.filter((k4) => k4.stepId === stepId && k4.t >= target.t) : [];
       const end = keys.length ? keys.at(-1).t + holdAfterTyping : (click?.t ?? target.t) + holdAfterClick;
       const tStart = clamp(target.t + leadIn, record.durationSec), tEnd = clamp(end, record.durationSec);
       if (tEnd - tStart < 0.4) continue;
-      const keyframe = { t: tStart, x: clamp(box.x + box.w / 2, width), y: clamp(box.y + box.h / 2, height) };
+      const keyframe = { t: tStart, x: clamp(box2.x + box2.w / 2, width), y: clamp(box2.y + box2.h / 2, height) };
       const previous = regions.at(-1);
       if (previous && tStart - previous.tEnd < minGap) {
         previous.tEnd = Math.max(previous.tEnd, tEnd);
@@ -542,7 +598,7 @@
       if (!Number.isFinite(r4.depth) || r4.depth < 1.05 || r4.depth > 4) errors.push(`${prefix}.depth must be from 1.05 to 4`);
       if (r4.depth > maxSharp) warnings.push(`region ${r4.id} depth ${r4.depth} exceeds the sharp limit ${maxSharp}`);
       if (!["auto", "manual"].includes(r4.source)) errors.push(`${prefix}.source must be auto|manual`);
-      if (!Array.isArray(r4.stepIds) || r4.stepIds.some((id) => typeof id !== "string")) errors.push(`${prefix}.stepIds must be strings`);
+      if (!Array.isArray(r4.stepIds) || r4.stepIds.some((id13) => typeof id13 !== "string")) errors.push(`${prefix}.stepIds must be strings`);
       if (!Array.isArray(r4.keyframes) || !r4.keyframes.length) errors.push(`${prefix}.keyframes must not be empty`);
       else r4.keyframes.forEach((k4, j4) => {
         if (!k4 || !Number.isFinite(k4.t) || k4.t < r4.tStart || k4.t > r4.tEnd || j4 && k4.t < r4.keyframes[j4 - 1]?.t || !Number.isFinite(k4.x) || !Number.isFinite(k4.y)) errors.push(`${prefix}.keyframes[${j4}] is invalid`);
@@ -649,31 +705,359 @@
     }
     return value;
   }
+  function theme(name, colors, ink, muted, accent, font, weight, radius, size4, speed, depth) {
+    return {
+      name,
+      background: { type: "gradient", angle: 135, colors },
+      frame: {
+        radiusPx: radius,
+        shadow: { enabled: true, blurPx: radius * 2.8, offsetYPx: radius, opacity: 0.25, color: "rgba(0,0,0,0.25)" },
+        border: { enabled: name !== "clean", color: accent, widthPx: name === "bold" ? 4 : 1 }
+      },
+      cursor: { fill: name === "clean" ? "#ffffff" : accent, stroke: name === "bold" ? "#24124b" : "#111827", sizePct: size4 },
+      ripple: { color: accent },
+      caption: { background: name === "clean" ? "rgba(17,24,39,0.86)" : name === "dark" ? "#202b40" : "#24124b", color: "#ffffff", fontWeight: weight },
+      card: { background: { type: "gradient", angle: 135, colors }, titleColor: ink, subtitleColor: muted, accent },
+      overlay: { accent, surface: name === "clean" ? "#ffffff" : name === "dark" ? "#172033" : "#24124b", onSurface: name === "clean" ? "#111827" : "#ffffff", muted },
+      typography: { family: font, weights: { body: 400, display: weight }, captionSizeMultiplier: name === "bold" ? 1.2 : 1 },
+      zoom: { depth, speed },
+      transition: name === "bold" ? "cut" : "crossfade",
+      font
+    };
+  }
   var THEMES = freeze({
-    clean: {
-      name: "clean",
-      background: { type: "gradient", angle: 135, colors: ["#eef2f7", "#dbe4f0"] },
-      frame: { radiusPx: 14, shadow: { blurPx: 40, offsetYPx: 16, color: "rgba(17,24,39,0.22)" } },
-      cursor: { fill: "#ffffff", stroke: "#111827" },
-      ripple: { color: "#0f766e" },
-      caption: { background: "rgba(17,24,39,0.86)", color: "#ffffff", fontWeight: 600 },
-      card: { background: { type: "gradient", colors: ["#eef2f7", "#dbe4f0"] }, titleColor: "#111827", subtitleColor: "#4b5563", accent: "#0f766e" },
-      font: "Inter"
-    },
-    dark: {
-      name: "dark",
-      background: { type: "gradient", angle: 135, colors: ["#0b1220", "#172033"] },
-      frame: { radiusPx: 14, shadow: { blurPx: 40, offsetYPx: 16, color: "rgba(0,0,0,0.45)" } },
-      cursor: { fill: "#ffffff", stroke: "#111827" },
-      ripple: { color: "#2dd4bf" },
-      caption: { background: "rgba(255,255,255,0.14)", color: "#ffffff", fontWeight: 600 },
-      card: { background: { type: "gradient", colors: ["#0b1220", "#172033"] }, titleColor: "#f9fafb", subtitleColor: "#cbd5e1", accent: "#2dd4bf" },
-      font: "Inter"
-    }
+    clean: theme("clean", ["#eef2f7", "#dbe4f0"], "#111827", "#4b5563", "#0f766e", "Inter", 600, 14, 3.4, "normal", "medium"),
+    dark: theme("dark", ["#0b1220", "#172033"], "#f9fafb", "#cbd5e1", "#2dd4bf", "Inter", 400, 8, 3.1, "slow", "subtle"),
+    bold: theme("bold", ["#6d28d9", "#ea3788"], "#ffffff", "#f5d0fe", "#facc15", "Space Grotesk", 700, 24, 4.2, "fast", "strong")
   });
 
-  // scripts/lib/compose/composition.mjs
+  // scripts/lib/compose/easing.mjs
+  var clamp01 = (t3) => Math.max(0, Math.min(1, t3));
+  var EASING = Object.freeze({
+    standard: (t3) => {
+      t3 = clamp01(t3);
+      return t3 * t3 * (3 - 2 * t3);
+    },
+    enterOut: (t3) => 1 - (1 - clamp01(t3)) ** 3,
+    moveInOut: (t3) => {
+      t3 = clamp01(t3);
+      return t3 < 0.5 ? 4 * t3 ** 3 : 1 - (-2 * t3 + 2) ** 3 / 2;
+    },
+    exitIn: (t3) => clamp01(t3) ** 3,
+    springSoft: (t3) => {
+      t3 = clamp01(t3);
+      return (1 - (1 + 8 * t3) * Math.exp(-8 * t3)) / (1 - 9 * Math.exp(-8));
+    },
+    none: clamp01
+  });
+  var DURATIONS = Object.freeze({ enter: 0.5, exit: 0.3, move: 0.6 });
+  function enterExit(t3, start, end, { enter = DURATIONS.enter, exit = DURATIONS.exit, ease = "enterOut" } = {}) {
+    if (t3 < start || t3 >= end || end <= start) return { progress: 0, phase: "off", alpha: 0 };
+    const factor = Math.min(1, (end - start) / Math.max(enter + exit, Number.EPSILON));
+    enter *= factor;
+    exit *= factor;
+    const progress = clamp01((t3 - start) / (end - start));
+    const curve = typeof ease === "function" ? ease : EASING[ease] ?? EASING.enterOut;
+    if (enter > 0 && t3 < start + enter) return { progress, phase: "enter", alpha: curve((t3 - start) / enter) };
+    if (exit > 0 && t3 > end - exit) return { progress, phase: "exit", alpha: 1 - EASING.exitIn((t3 - end + exit) / exit) };
+    return { progress, phase: "hold", alpha: 1 };
+  }
+
+  // scripts/lib/compose/templates/shared.mjs
+  var POSITIONS = ["top-left", "top-center", "top-right", "center-left", "center", "center-right", "bottom-left", "bottom-center", "bottom-right"];
+  var string = (value, maxLength = 140) => ({ type: "string", maxLength, default: value });
+  var number = (value, min2 = 0, max2 = 100) => ({ type: "number", min: min2, max: max2, default: value });
+  var enumeration = (value, values) => ({ type: "enum", values, default: value });
+  var color = (value = "accent") => ({ type: "color", default: value });
+  var boolean = (value) => ({ type: "boolean", default: value });
+  function define(id13, label13, help13, params13, draw13, defaultDuration13 = 3) {
+    params13 = { position: { type: "position", values: POSITIONS, default: "center" }, offsetX: number(0, -100, 100), offsetY: number(0, -100, 100), color: color(), ...params13 };
+    return Object.freeze({ id: id13, label: label13, help: help13, params: params13, defaults: Object.fromEntries(Object.entries(params13).map(([k4, s3]) => [k4, s3.default])), defaultDuration: defaultDuration13, draw: draw13 });
+  }
+  function validateParams(template13, params13 = {}, path = "params") {
+    const errors = [];
+    if (!params13 || typeof params13 !== "object" || Array.isArray(params13)) return [`${path} must be an object`];
+    for (const [key, value] of Object.entries(params13)) {
+      const s3 = Object.hasOwn(template13.params, key) ? template13.params[key] : null, p3 = `${path}.${key}`;
+      if (!s3) {
+        errors.push(`${p3} is unknown`);
+        continue;
+      }
+      const valid = s3.type === "string" ? typeof value === "string" && value.trim().length > 0 && value.length <= s3.maxLength : s3.type === "number" ? Number.isFinite(value) && value >= s3.min && value <= s3.max : s3.type === "boolean" ? typeof value === "boolean" : s3.type === "color" ? typeof value === "string" && (/^#(?:[a-f0-9]{3,4}|[a-f0-9]{6}|[a-f0-9]{8})$/i.test(value) || ["accent", "surface", "onSurface", "muted"].includes(value)) : s3.values.includes(value);
+      if (!valid) errors.push(`${p3} must be ${s3.type}${s3.type === "string" ? ` of 1 to ${s3.maxLength} characters` : s3.type === "number" ? ` from ${s3.min} to ${s3.max}` : s3.values ? ` (${s3.values.join(", ")})` : ""}`);
+    }
+    return errors;
+  }
+  var resolveParams = (template13, params13) => ({ ...template13.defaults, ...params13 });
+  var paint = (f4, c3) => f4.theme.overlay[c3] ?? c3;
+  function anchor(f4, p3) {
+    const pos = f4.anchor ?? p3.position, x4 = pos.endsWith("left") ? 0.12 : pos.endsWith("right") ? 0.88 : 0.5;
+    const y3 = pos.startsWith("top") ? 0.14 : pos.startsWith("bottom") ? 0.82 : 0.5;
+    return { x: f4.width * (x4 + p3.offsetX / 100), y: f4.height * (y3 + p3.offsetY / 100) };
+  }
+  function text(ctx, f4, value, x4, y3, size4, c3 = "onSurface", align = "center") {
+    ctx.font = `${f4.theme.typography.weights.display} ${size4}px "${f4.theme.typography.family}"`;
+    ctx.fillStyle = paint(f4, c3);
+    ctx.textAlign = align;
+    ctx.textBaseline = "middle";
+    ctx.fillText(value, x4, y3, f4.width * 0.84);
+  }
+  function panel(ctx, f4, x4, y3, w4, h3, c3 = "surface") {
+    ctx.fillStyle = paint(f4, c3);
+    ctx.beginPath();
+    ctx.roundRect(x4, y3, w4, h3, f4.height * 0.012);
+    ctx.fill();
+  }
+  function box(f4, p3) {
+    const a3 = f4.mapSource({ x: p3.x, y: p3.y }), b3 = f4.mapSource({ x: p3.x + p3.width, y: p3.y + p3.height });
+    return { x: a3.x, y: a3.y, w: b3.x - a3.x, h: b3.y - a3.y };
+  }
+  var sourceRect = { x: number(320, 0, 1e5), y: number(180, 0, 1e5), width: number(320, 1, 1e5), height: number(180, 1, 1e5) };
+  var motion = (s3) => EASING.enterOut(Math.min(1, s3.progress * 6));
+
+  // scripts/lib/compose/templates/title-card.mjs
+  var template = define("title-card", "Title card", "Full canvas opening title and subtitle.", { title: string("Your title", 80), subtitle: string("A closer look", 140) }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const a3 = anchor(f4, p3);
+    panel(ctx, f4, 0, 0, f4.width, f4.height);
+    text(ctx, f4, p3.title, a3.x, a3.y - h3 * 0.05, h3 * 0.075, p3.color);
+    text(ctx, f4, p3.subtitle, a3.x, a3.y + h3 * 0.07, h3 * 0.032, "muted");
+  });
+  var { id, label, help, params, defaults, defaultDuration, draw } = template;
+  var title_card_default = template;
+
+  // scripts/lib/compose/templates/outro-card.mjs
+  var template2 = define("outro-card", "Outro card", "Full canvas closing message.", { title: string("Thank you", 80), subtitle: string("Discover more", 140) }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const a3 = anchor(f4, p3);
+    panel(ctx, f4, 0, 0, f4.width, f4.height);
+    ctx.fillStyle = paint(f4, p3.color);
+    ctx.fillRect(f4.width * 0.42, h3 * 0.3, f4.width * 0.16, h3 * 9e-3);
+    text(ctx, f4, p3.title, a3.x, a3.y, h3 * 0.075);
+    text(ctx, f4, p3.subtitle, a3.x, a3.y + h3 * 0.11, h3 * 0.032, "muted");
+  });
+  var { id: id2, label: label2, help: help2, params: params2, defaults: defaults2, defaultDuration: defaultDuration2, draw: draw2 } = template2;
+  var outro_card_default = template2;
+
+  // scripts/lib/compose/templates/lower-third.mjs
+  var template3 = define("lower-third", "Lower third", "Name and subtitle on a compact plate.", { position: { type: "position", values: POSITIONS, default: "bottom-left" }, name: string("Alex Morgan", 70), subtitle: string("Product designer", 100) }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const a3 = anchor(f4, p3), w4 = f4.width * 0.36;
+    panel(ctx, f4, a3.x - w4 * 0.2, a3.y - h3 * 0.05, w4, h3 * 0.13);
+    ctx.fillStyle = paint(f4, p3.color);
+    ctx.fillRect(a3.x - w4 * 0.2, a3.y - h3 * 0.05, h3 * 6e-3, h3 * 0.13);
+    text(ctx, f4, p3.name, a3.x - w4 * 0.15, a3.y, h3 * 0.032, "onSurface", "left");
+    text(ctx, f4, p3.subtitle, a3.x - w4 * 0.15, a3.y + h3 * 0.045, h3 * 0.022, "muted", "left");
+  });
+  var { id: id3, label: label3, help: help3, params: params3, defaults: defaults3, defaultDuration: defaultDuration3, draw: draw3 } = template3;
+  var lower_third_default = template3;
+
+  // scripts/lib/compose/templates/step-badge.mjs
+  var template4 = define("step-badge", "Step badge", "Number and label in a chip.", { number: number(1, 0, 999), label: string("Open the report", 80) }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const a3 = anchor(f4, p3);
+    panel(ctx, f4, a3.x - f4.width * 0.18, a3.y - h3 * 0.04, f4.width * 0.36, h3 * 0.08);
+    text(ctx, f4, `${p3.number}  ${p3.label}`, a3.x, a3.y, h3 * 0.032, p3.color);
+  });
+  var { id: id4, label: label4, help: help4, params: params4, defaults: defaults4, defaultDuration: defaultDuration4, draw: draw4 } = template4;
+  var step_badge_default = template4;
+
+  // scripts/lib/compose/templates/callout-arrow.mjs
+  var template5 = define("callout-arrow", "Callout arrow", "Label with an arrow to a source point.", { position: { type: "position", values: POSITIONS, default: "top-center" }, x: number(640, 0, 1e5), y: number(360, 0, 1e5), text: string("Look here", 100) }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const a3 = anchor(f4, p3), b3 = f4.mapSource(p3), angle = Math.atan2(b3.y - a3.y, b3.x - a3.x);
+    ctx.strokeStyle = paint(f4, p3.color);
+    ctx.lineWidth = h3 * 4e-3;
+    ctx.beginPath();
+    ctx.moveTo(a3.x, a3.y);
+    ctx.lineTo(b3.x, b3.y);
+    ctx.moveTo(b3.x - Math.cos(angle - 0.5) * h3 * 0.025, b3.y - Math.sin(angle - 0.5) * h3 * 0.025);
+    ctx.lineTo(b3.x, b3.y);
+    ctx.lineTo(b3.x - Math.cos(angle + 0.5) * h3 * 0.025, b3.y - Math.sin(angle + 0.5) * h3 * 0.025);
+    ctx.stroke();
+    panel(ctx, f4, a3.x - f4.width * 0.13, a3.y - h3 * 0.06, f4.width * 0.26, h3 * 0.055);
+    text(ctx, f4, p3.text, a3.x, a3.y - h3 * 0.032, h3 * 0.027, p3.color);
+  });
+  var { id: id5, label: label5, help: help5, params: params5, defaults: defaults5, defaultDuration: defaultDuration5, draw: draw5 } = template5;
+  var callout_arrow_default = template5;
+
+  // scripts/lib/compose/templates/spotlight.mjs
+  var template6 = define("spotlight", "Spotlight", "Dim the canvas around a source rectangle or circle.", { ...sourceRect, shape: enumeration("rect", ["rect", "circle"]), dim: number(0.65, 0, 1), softness: number(12, 0, 80) }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const r4 = box(f4, p3);
+    ctx.fillStyle = "#000000";
+    ctx.globalAlpha *= p3.dim;
+    ctx.beginPath();
+    ctx.rect(0, 0, f4.width, h3);
+    if (p3.shape === "circle") ctx.arc(r4.x + r4.w / 2, r4.y + r4.h / 2, Math.min(r4.w, r4.h) / 2, 0, Math.PI * 2);
+    else ctx.roundRect(r4.x, r4.y, r4.w, r4.h, h3 * 0.012);
+    ctx.fill("evenodd");
+    if (p3.softness) {
+      ctx.shadowColor = "#000000";
+      ctx.shadowBlur = p3.softness * h3 / 1080;
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      if (p3.shape === "circle") ctx.arc(r4.x + r4.w / 2, r4.y + r4.h / 2, Math.min(r4.w, r4.h) / 2, 0, Math.PI * 2);
+      else ctx.roundRect(r4.x, r4.y, r4.w, r4.h, h3 * 0.012);
+      ctx.stroke();
+    }
+  });
+  var { id: id6, label: label6, help: help6, params: params6, defaults: defaults6, defaultDuration: defaultDuration6, draw: draw6 } = template6;
+  var spotlight_default = template6;
+
+  // scripts/lib/compose/templates/highlight-box.mjs
+  var template7 = define("highlight-box", "Highlight box", "Outline a source rectangle with an optional label.", { ...sourceRect, label: string("Selected", 80), showLabel: boolean(true) }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const r4 = box(f4, p3);
+    ctx.strokeStyle = paint(f4, p3.color);
+    ctx.lineWidth = h3 * 5e-3;
+    ctx.beginPath();
+    ctx.roundRect(r4.x, r4.y, r4.w, r4.h, h3 * 8e-3);
+    ctx.stroke();
+    if (p3.showLabel) {
+      panel(ctx, f4, r4.x, r4.y - h3 * 0.045, Math.min(f4.width * 0.3, r4.w), h3 * 0.04);
+      text(ctx, f4, p3.label, r4.x + h3 * 0.01, r4.y - h3 * 0.024, h3 * 0.025, p3.color, "left");
+    }
+  });
+  var { id: id7, label: label7, help: help7, params: params7, defaults: defaults7, defaultDuration: defaultDuration7, draw: draw7 } = template7;
+  var highlight_box_default = template7;
+
+  // scripts/lib/compose/templates/number-counter.mjs
+  var template8 = define("number-counter", "Number counter", "Count between two values with a suffix.", { from: number(0, -1e9, 1e9), to: number(100, -1e9, 1e9), format: enumeration("integer", ["integer", "decimal", "percent"]), suffix: string("users", 30) }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const a3 = anchor(f4, p3), v3 = p3.from + (p3.to - p3.from) * EASING.moveInOut(s3.progress);
+    const value = p3.format === "decimal" ? v3.toFixed(1) : Math.round(v3).toString();
+    text(ctx, f4, `${value}${p3.format === "percent" ? "%" : ""} ${p3.suffix}`, a3.x, a3.y, h3 * 0.085, p3.color);
+  });
+  var { id: id8, label: label8, help: help8, params: params8, defaults: defaults8, defaultDuration: defaultDuration8, draw: draw8 } = template8;
+  var number_counter_default = template8;
+
+  // scripts/lib/compose/templates/progress-bar.mjs
+  var template9 = define("progress-bar", "Progress bar", "Progress from zero to one hundred with a label.", { label: string("Loading", 80), widthPct: number(48, 5, 90) }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const a3 = anchor(f4, p3), w4 = f4.width * p3.widthPct / 100;
+    panel(ctx, f4, a3.x - w4 / 2, a3.y, w4, h3 * 0.025);
+    if (s3.progress > 0) panel(ctx, f4, a3.x - w4 / 2, a3.y, w4 * s3.progress, h3 * 0.025, p3.color);
+    text(ctx, f4, `${p3.label} ${Math.round(s3.progress * 100)}%`, a3.x, a3.y - h3 * 0.04, h3 * 0.029, p3.color);
+  });
+  var { id: id9, label: label9, help: help9, params: params9, defaults: defaults9, defaultDuration: defaultDuration9, draw: draw9 } = template9;
+  var progress_bar_default = template9;
+
+  // scripts/lib/compose/templates/animated-gradient.mjs
+  var template10 = define("animated-gradient", "Animated gradient", "Moving colour band behind a canvas area.", { widthPct: number(70, 1, 100), heightPct: number(20, 1, 100), color2: color("surface") }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const a3 = anchor(f4, p3), w4 = f4.width * p3.widthPct / 100, bh = h3 * p3.heightPct / 100;
+    const shift4 = (EASING.moveInOut(s3.progress) - 0.5) * w4 * 0.4;
+    const g4 = ctx.createLinearGradient(a3.x - w4 / 2 + shift4, a3.y, a3.x + w4 / 2 + shift4, a3.y + bh);
+    g4.addColorStop(0, paint(f4, p3.color));
+    g4.addColorStop(1, paint(f4, p3.color2));
+    ctx.fillStyle = g4;
+    ctx.fillRect(a3.x - w4 / 2, a3.y - bh / 2, w4, bh);
+  });
+  var { id: id10, label: label10, help: help10, params: params10, defaults: defaults10, defaultDuration: defaultDuration10, draw: draw10 } = template10;
+  var animated_gradient_default = template10;
+
+  // scripts/lib/compose/templates/text-callout.mjs
+  var template11 = define("text-callout", "Text callout", "Large phrase with staggered word entrances.", { text: string("Make every moment count", 100) }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const a3 = anchor(f4, p3), words = p3.text.split(/\s+/), size4 = Math.min(h3 * 0.065, f4.width * 0.8 / Math.max(1, p3.text.length) * 1.7);
+    ctx.font = `${f4.theme.typography.weights.display} ${size4}px "${f4.theme.typography.family}"`;
+    const gap = size4 * 0.28, total = words.reduce((v3, w4) => v3 + ctx.measureText(w4).width + gap, -gap);
+    let x4 = a3.x - total / 2;
+    words.forEach((word, i3) => {
+      const v3 = EASING.enterOut(Math.max(0, Math.min(1, s3.progress * 8 - i3 * 0.25)));
+      ctx.save();
+      ctx.globalAlpha *= v3;
+      text(ctx, f4, word, x4, a3.y + (1 - v3) * size4 * 0.3, size4, p3.color, "left");
+      ctx.restore();
+      x4 += ctx.measureText(word).width + gap;
+    });
+  });
+  var { id: id11, label: label11, help: help11, params: params11, defaults: defaults11, defaultDuration: defaultDuration11, draw: draw11 } = template11;
+  var text_callout_default = template11;
+
+  // scripts/lib/compose/templates/logo-sting.mjs
+  var template12 = define("logo-sting", "Logo sting", "Text mark or preloaded brand logo with a gentle reveal.", { text: string("SHOWREEL", 60), logo: string("brand", 120), useLogo: boolean(false) }, (ctx, f4, p3, s3) => {
+    const h3 = f4.height;
+    const a3 = anchor(f4, p3), scale = 0.92 + 0.08 * motion(s3);
+    ctx.translate(a3.x, a3.y);
+    ctx.scale(scale, scale);
+    const img = p3.useLogo ? f4.images?.get(p3.logo) : null;
+    if (img) {
+      const bh = h3 * 0.16;
+      ctx.drawImage(img, -bh * img.width / img.height / 2, -bh / 2, bh * img.width / img.height, bh);
+    } else text(ctx, f4, p3.text, 0, 0, h3 * 0.085, p3.color);
+  });
+  var { id: id12, label: label12, help: help12, params: params12, defaults: defaults12, defaultDuration: defaultDuration12, draw: draw12 } = template12;
+  var logo_sting_default = template12;
+
+  // scripts/lib/compose/templates/index.mjs
+  var TEMPLATES = Object.freeze(Object.fromEntries([title_card_default, outro_card_default, lower_third_default, step_badge_default, callout_arrow_default, spotlight_default, highlight_box_default, number_counter_default, progress_bar_default, animated_gradient_default, text_callout_default, logo_sting_default].map((t3) => [t3.id, t3])));
+
+  // scripts/lib/compose/overlays.mjs
   var object = (v3) => v3 !== null && typeof v3 === "object" && !Array.isArray(v3);
+  function validateOverlays(overlays, { duration = Number.MAX_VALUE, storyboard = false, path = "overlays" } = {}) {
+    const errors = [], ids = /* @__PURE__ */ new Set();
+    if (!Array.isArray(overlays) || overlays.length > 100) return [`${path} must be an array of at most 100 overlays`];
+    overlays.forEach((o3, i3) => {
+      const p3 = `${path}.${i3}`, fail = (field, message) => errors.push(`${p3}${field ? "." + field : ""} ${message}`);
+      if (!object(o3)) {
+        fail("", "must be an object");
+        return;
+      }
+      const allowed = storyboard ? ["template", "params", "at", "duration"] : ["id", "template", "start", "end", "params", "anchor", "label"];
+      for (const k4 of Object.keys(o3)) if (!allowed.includes(k4)) fail(k4, "is unknown");
+      if (!storyboard) {
+        if (typeof o3.id !== "string" || !o3.id.trim() || o3.id.length > 100) fail("id", "must contain 1 to 100 characters");
+        if (ids.has(o3.id)) fail("id", "must be unique");
+        ids.add(o3.id);
+        for (const k4 of ["start", "end"]) if (!Number.isFinite(o3[k4]) || o3[k4] < 0 || o3[k4] > duration) fail(k4, "must be a source time within the recording");
+        if (Number.isFinite(o3.start) && Number.isFinite(o3.end) && o3.end <= o3.start) fail("end", "must be after start");
+        if (o3.anchor !== void 0 && !POSITIONS.includes(o3.anchor)) fail("anchor", "must be a named position");
+        if (o3.label !== void 0 && (typeof o3.label !== "string" || o3.label.length > 140)) fail("label", "must be text up to 140 characters");
+      } else {
+        if (o3.at !== void 0 && !["start", "end"].includes(o3.at) && (!Number.isFinite(o3.at) || o3.at < 0)) fail("at", "must be start, end or a nonnegative number of seconds");
+        if (o3.duration !== void 0 && (!Number.isFinite(o3.duration) || o3.duration <= 0 || o3.duration > 300)) fail("duration", "must be greater than 0 and at most 300 seconds");
+      }
+      const template13 = Object.hasOwn(TEMPLATES, o3.template) ? TEMPLATES[o3.template] : null;
+      if (!template13) fail("template", "must name an available template");
+      else errors.push(...validateParams(template13, o3.params, `${p3}.params`));
+    });
+    return errors;
+  }
+  function planOverlays(overlays, timemap) {
+    const result = [], notices = [];
+    for (const o3 of overlays) {
+      const spans = timemap.segments.flatMap((s3) => {
+        if (s3.rate === 0) return o3.start < s3.start && o3.end > s3.start ? [[s3.outputStart, s3.outputEnd]] : [];
+        const start = Math.max(o3.start, s3.start), end = Math.min(o3.end, s3.end);
+        return end > start ? [[s3.outputStart + (start - s3.start) / s3.rate, s3.outputStart + (end - s3.start) / s3.rate]] : [];
+      });
+      if (!spans.length) {
+        notices.push(`Overlay "${o3.id}" is entirely inside a cut and was dropped.`);
+        continue;
+      }
+      result.push({
+        id: o3.id,
+        template: o3.template,
+        outStart: Math.min(...spans.map((s3) => s3[0])),
+        outEnd: Math.max(...spans.map((s3) => s3[1])),
+        params: resolveParams(TEMPLATES[o3.template], o3.params),
+        ...o3.anchor ? { anchor: o3.anchor } : {}
+      });
+    }
+    return { overlays: result, notices };
+  }
+  function overlayStates(overlays, t3, pace = 1) {
+    return overlays.flatMap((o3) => {
+      const state = enterExit(t3, o3.outStart, o3.outEnd, { enter: DURATIONS.enter * pace, exit: DURATIONS.exit * pace });
+      return state.phase === "off" ? [] : [{ id: o3.id, template: o3.template, ...state, params: o3.params }];
+    });
+  }
+
+  // scripts/lib/compose/composition.mjs
+  var object2 = (v3) => v3 !== null && typeof v3 === "object" && !Array.isArray(v3);
   function freeze2(value) {
     if (value && typeof value === "object") {
       Object.values(value).forEach(freeze2);
@@ -697,8 +1081,9 @@
   var DEFAULT_COMPOSITION = freeze2({
     version: 1,
     run: { id: null },
-    output: { width: 1920, height: 1080, fps: 60, quality: "standard" },
+    output: { preset: null, width: 1920, height: 1080, fps: 60, quality: "standard" },
     theme: "clean",
+    layout: { safeZones: null },
     frame: {
       paddingXPct: 8,
       paddingYPct: 5,
@@ -752,6 +1137,8 @@
       fade: 0.4,
       transition: "crossfade"
     },
+    motion: { pace: 1 },
+    overlays: [],
     edits: { trims: [], speeds: [], holds: [] },
     audio: {
       voice: { enabled: null, voiceId: "af_heart", speed: 1, gainDb: 0 },
@@ -769,6 +1156,7 @@
     }
   });
   var COMPOSITION_RANGES = [
+    ["motion.pace", 1, 1.6],
     ["output.width", 2, 7680, true],
     ["output.height", 2, 4320, true],
     ["frame.paddingXPct", 0, 25],
@@ -832,14 +1220,14 @@
   };
   var zoomDepth = (depth) => ({ subtle: 1.35, medium: 1.7, strong: 2.1 })[depth] ?? depth;
   function merge(base, patch) {
-    if (!object(base) || !object(patch)) return copy(patch);
+    if (!object2(base) || !object2(patch)) return copy(patch);
     const result = copy(base);
-    for (const [key, value] of Object.entries(patch)) Object.defineProperty(result, key, { value: object(value) && object(base[key]) ? merge(base[key], value) : copy(value), enumerable: true, writable: true, configurable: true });
+    for (const [key, value] of Object.entries(patch)) Object.defineProperty(result, key, { value: object2(value) && object2(base[key]) ? merge(base[key], value) : copy(value), enumerable: true, writable: true, configurable: true });
     return result;
   }
   function copy(value) {
     if (Array.isArray(value)) return value.map(copy);
-    if (object(value)) return Object.fromEntries(Object.entries(value).map(([k4, v3]) => [k4, copy(v3)]));
+    if (object2(value)) return Object.fromEntries(Object.entries(value).map(([k4, v3]) => [k4, copy(v3)]));
     return value;
   }
   var safeImagePath = (v3) => typeof v3 === "string" && !!v3.trim() && !/^(?:[\\/]|[a-z][a-z0-9+.-]*:)/i.test(v3) && !v3.split(/[\\/]/).some((part) => part === ".." || part === "") && !/[?#%\x00-\x1f]/.test(v3);
@@ -847,19 +1235,32 @@
   var safeMusicPath = (v3) => safeImagePath(v3) && new RegExp(`\\.(${MUSIC_EXTENSIONS.join("|")})$`, "i").test(v3);
   var narrationStepModel = { text: "", muted: false };
   function resolveComposition(input) {
-    const theme = typeof input.theme === "string" && Object.hasOwn(THEMES, input.theme) ? THEMES[input.theme] : THEMES.clean;
-    const themed = merge(DEFAULT_COMPOSITION, {
-      frame: { background: { colors: theme.background.colors, angle: theme.background.angle }, radiusPx: theme.frame.radiusPx, shadow: { blurPx: theme.frame.shadow.blurPx, offsetYPx: theme.frame.shadow.offsetYPx } },
-      cursor: theme.cursor,
-      captions: theme.caption,
+    const theme2 = typeof input.theme === "string" && Object.hasOwn(THEMES, input.theme) ? THEMES[input.theme] : THEMES.clean;
+    let themed = merge(DEFAULT_COMPOSITION, {
+      frame: { ...theme2.frame, shadow: { ...theme2.frame.shadow }, background: { colors: theme2.background.colors, angle: theme2.background.angle } },
+      cursor: theme2.cursor,
+      zoom: theme2.zoom,
+      captions: { ...theme2.caption, fontSizePct: DEFAULT_COMPOSITION.captions.fontSizePct * theme2.typography.captionSizeMultiplier },
       cards: Object.fromEntries(["title", "outro"].map((key) => [key, {
-        titleColor: theme.card.titleColor,
-        subtitleColor: theme.card.subtitleColor,
-        background: { colors: theme.card.background.colors, angle: theme.card.background.angle ?? 135 },
-        accent: { color: theme.card.accent }
+        titleColor: theme2.card.titleColor,
+        subtitleColor: theme2.card.subtitleColor,
+        background: { colors: theme2.card.background.colors, angle: theme2.card.background.angle ?? 135 },
+        accent: { color: theme2.card.accent }
       }]))
     });
+    if (input.output?.preset === "vertical") themed = merge(themed, {
+      frame: { paddingXPct: 4, paddingYPct: 0 },
+      captions: { bandHeightPct: 16 },
+      zoom: { depth: 1.5 },
+      layout: { safeZones: true }
+    });
+    delete themed.frame.shadow.color;
+    themed.cards.transition = theme2.transition;
     const patch = copy(input);
+    if (["landscape", "vertical", "square"].includes(patch.output?.preset)) {
+      const size4 = Math.max(patch.output.width ?? 0, patch.output.height ?? 0) > 1920 ? "4k" : "1080";
+      Object.assign(patch.output, presetOutput(patch.output.preset, size4));
+    }
     if (patch.frame?.paddingPct !== void 0) {
       patch.frame.paddingXPct ??= patch.frame.paddingPct;
       patch.frame.paddingYPct ??= patch.frame.paddingPct;
@@ -869,9 +1270,9 @@
       patch.cards[key].durationSec ??= patch.cards[key].duration;
       delete patch.cards[key].duration;
     }
-    for (const key of ["title", "outro"]) if (object(patch.cards?.[key]?.logo)) patch.cards[key].logo = merge({ image: null, heightPct: 10 }, patch.cards[key].logo);
-    if (object(patch.cursor?.custom)) for (const shape of ["arrow", "hand", "text"]) {
-      if (object(patch.cursor.custom[shape])) patch.cursor.custom[shape] = merge(cursorImageModel, patch.cursor.custom[shape]);
+    for (const key of ["title", "outro"]) if (object2(patch.cards?.[key]?.logo)) patch.cards[key].logo = merge({ image: null, heightPct: 10 }, patch.cards[key].logo);
+    if (object2(patch.cursor?.custom)) for (const shape of ["arrow", "hand", "text"]) {
+      if (object2(patch.cursor.custom[shape])) patch.cursor.custom[shape] = merge(cursorImageModel, patch.cursor.custom[shape]);
     }
     if (typeof patch.cursor?.clickEffect === "boolean") patch.cursor.clickEffect = { ...DEFAULT_COMPOSITION.cursor.clickEffect, style: patch.cursor.clickEffect ? "ripple" : "none" };
     return merge(themed, patch);
@@ -883,12 +1284,12 @@
       if (!Number.isFinite(v3) || v3 < min2 || v3 > max2 || integer && !Number.isInteger(v3)) fail(p3, `must be ${integer ? "an integer" : "a number"} from ${min2} to ${max2}`);
     };
     const namedColors = new Set("aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato transparent turquoise violet wheat white whitesmoke yellow yellowgreen".split(" "));
-    const color = (p3, v3, nullable = false) => {
+    const color2 = (p3, v3, nullable = false) => {
       if (nullable && v3 === null) return;
       if (typeof v3 !== "string" || !namedColors.has(v3.toLowerCase()) && !/^(#[\da-f]{3,4}|#[\da-f]{6}|#[\da-f]{8}|(?:rgb|hsl)a?\([\d.,% +/\-]+\))$/i.test(v3)) fail(p3, "must be a CSS color");
     };
     function walk(v3, model, p3 = "") {
-      if (!object(v3)) {
+      if (!object2(v3)) {
         fail(p3 || "composition", "must be an object");
         return;
       }
@@ -908,7 +1309,7 @@
           if (x4 !== null) walk(x4, customCursorModel, key);
         } else if (k4 === "logo") {
           if (x4 !== null) walk(x4, { image: null, heightPct: 10 }, key);
-        } else if (object(model[k4])) walk(x4, model[k4], key);
+        } else if (object2(model[k4])) walk(x4, model[k4], key);
         else if (Array.isArray(model[k4])) {
           if (!Array.isArray(x4)) fail(key, "must be an array");
         } else if (typeof model[k4] === "boolean" && typeof x4 !== "boolean") fail(key, "must be boolean");
@@ -917,10 +1318,12 @@
       }
     }
     walk(c3, DEFAULT_COMPOSITION);
-    if (!object(c3)) return { ok: false, errors, warnings };
+    if (!object2(c3)) return { ok: false, errors, warnings };
     for (const p3 of ["version", "run.id", "output.width", "output.height", "output.fps", "theme", "frame", "cursor.visible", "cursor.sizePct", "cursor.clickEffect", "zoom.enabled", "zoom.depth", "zoom.autoSuggest", "zoom.regions", "captions.enabled", "captions.mode", "cards.title.enabled", "cards.outro.enabled", "cards.fade", "edits.trims", "edits.speeds"]) {
-      if (p3.split(".").reduce((v3, k4) => v3?.[k4], c3) === void 0) fail(p3, "is required");
+      if (p3.split(".").reduce((v3, k4) => v3?.[k4], c3) === void 0 && !(["output.width", "output.height"].includes(p3) && c3.output?.preset)) fail(p3, "is required");
     }
+    if (c3.output?.preset !== void 0 && c3.output.preset !== null && !["landscape", "vertical", "square"].includes(c3.output.preset)) fail("output.preset", "must be landscape|vertical|square");
+    if (c3.layout?.safeZones !== void 0 && c3.layout.safeZones !== null && typeof c3.layout.safeZones !== "boolean") fail("layout.safeZones", "must be boolean");
     const d3 = resolveComposition(c3);
     const get = (p3) => p3.split(".").reduce((v3, k4) => v3?.[k4], d3);
     const enumAt = (p3, values) => {
@@ -936,7 +1339,7 @@
     for (const [p3, values] of Object.entries(COMPOSITION_ENUMS)) enumAt(p3, values);
     const custom = d3.cursor?.custom;
     if (d3.cursor?.style === "custom" && !safeImagePath(custom?.arrow?.image)) fail("cursor.custom.arrow.image", "is required for custom style");
-    if (object(custom)) {
+    if (object2(custom)) {
       if (!safeImagePath(custom.arrow?.image)) fail("cursor.custom.arrow.image", "must be a local PNG, SVG or WebP path");
       if (custom.heightPct !== void 0) range2("cursor.custom.heightPct", custom.heightPct, 1, 8);
       for (const shape of ["arrow", "hand", "text"]) {
@@ -948,29 +1351,29 @@
       }
     }
     if (!Array.isArray(d3.zoom?.onlyKinds) || d3.zoom.onlyKinds.some((k4) => !["click", "fill"].includes(k4))) fail("zoom.onlyKinds", "must contain click|fill");
-    for (const p3 of ["frame.border.color", "cursor.fill", "cursor.stroke", "captions.color", "captions.background"]) color(p3, get(p3));
-    color("cursor.clickEffect.color", get("cursor.clickEffect.color"), true);
+    for (const p3 of ["frame.border.color", "cursor.fill", "cursor.stroke", "captions.color", "captions.background"]) color2(p3, get(p3));
+    color2("cursor.clickEffect.color", get("cursor.clickEffect.color"), true);
     for (const key of ["title", "outro"]) {
       const p3 = `cards.${key}`;
       enumAt(`${p3}.align`, ["center", "left"]);
       enumAt(`${p3}.accent.shape`, ["bar", "underline", "none"]);
       for (const [k4, min2, max2] of [["durationSec", 0, 30], ["titleSizePct", 1, 20], ["subtitleSizePct", 1, 12], ["accent.widthPct", 0, 100]]) range2(`${p3}.${k4}`, get(`${p3}.${k4}`), min2, max2);
-      for (const k4 of ["titleColor", "subtitleColor", "accent.color"]) color(`${p3}.${k4}`, get(`${p3}.${k4}`));
+      for (const k4 of ["titleColor", "subtitleColor", "accent.color"]) color2(`${p3}.${k4}`, get(`${p3}.${k4}`));
       for (const k4 of [key === "title" ? "title" : "text", "subtitle"]) {
         const v3 = get(`${p3}.${k4}`);
         if (v3 !== null && (typeof v3 !== "string" || !v3.trim())) fail(`${p3}.${k4}`, "must be nonempty text or null");
       }
       if (get(`${p3}.enabled`) && !get(`${p3}.${key === "title" ? "title" : "text"}`)) fail(p3, "requires text when enabled");
       const logo = get(`${p3}.logo`);
-      if (object(logo)) range2(`${p3}.logo.heightPct`, logo.heightPct, 1, 40);
-      if (object(logo) && !safeImagePath(logo.image)) fail(`${p3}.logo.image`, "must be a local path inside the project");
+      if (object2(logo)) range2(`${p3}.logo.heightPct`, logo.heightPct, 1, 40);
+      if (object2(logo) && !safeImagePath(logo.image)) fail(`${p3}.logo.image`, "must be a local path inside the project");
     }
     for (const p3 of ["frame.background", "cards.title.background", "cards.outro.background"]) {
       enumAt(`${p3}.type`, ["theme", "gradient", "solid", "image"]);
       range2(`${p3}.angle`, get(`${p3}.angle`), 0, 360);
       const colors = get(`${p3}.colors`);
       if (!Array.isArray(colors) || colors.length < 1 || colors.length > 16 || get(`${p3}.type`) === "gradient" && colors.length < 2) fail(`${p3}.colors`, "must contain 1 to 16 colors (at least 2 for a gradient)");
-      else colors.forEach((v3, i3) => color(`${p3}.colors.${i3}`, v3));
+      else colors.forEach((v3, i3) => color2(`${p3}.colors.${i3}`, v3));
       if (get(`${p3}.type`) === "image" && !safeImagePath(get(`${p3}.image`))) fail(`${p3}.image`, "must be a local path inside the project");
     }
     if (c3.captions?.cues !== void 0) {
@@ -992,10 +1395,10 @@
     else if (d3.audio?.music?.enabled === true && musicFile === null) warnings.push("audio.music is enabled but no music file is chosen, so no music will play");
     if (c3.audio?.narration?.steps !== void 0) {
       const steps = c3.audio.narration.steps;
-      if (!object(steps) || Object.keys(steps).length > 200) fail("audio.narration.steps", "must be an object with at most 200 steps");
-      else for (const [id, entry] of Object.entries(steps)) {
-        const p3 = `audio.narration.steps.${id}`;
-        if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || ["__proto__", "constructor", "prototype"].includes(id)) {
+      if (!object2(steps) || Object.keys(steps).length > 200) fail("audio.narration.steps", "must be an object with at most 200 steps");
+      else for (const [id13, entry] of Object.entries(steps)) {
+        const p3 = `audio.narration.steps.${id13}`;
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(id13) || ["__proto__", "constructor", "prototype"].includes(id13)) {
           fail(p3, "is not a valid step ID");
           continue;
         }
@@ -1003,6 +1406,10 @@
         if (entry?.text !== void 0 && (typeof entry.text !== "string" || !entry.text.trim() || entry.text.length > 280)) fail(`${p3}.text`, "must contain 1 to 280 characters");
         if (entry?.muted !== void 0 && typeof entry.muted !== "boolean") fail(`${p3}.muted`, "must be boolean");
       }
+    }
+    errors.push(...validateOverlays(c3.overlays ?? [], { duration }).map((e3) => `composition.json: ${e3}`));
+    for (const [i3, o3] of (Array.isArray(c3.overlays) ? c3.overlays : []).entries()) {
+      if (o3?.template === "logo-sting" && o3.params?.useLogo && !safeImagePath(o3.params.logo)) fail(`overlays.${i3}.params.logo`, "must be a local path inside the project");
     }
     const regions = validateRegions(c3.zoom?.regions);
     errors.push(...regions.errors);
@@ -1027,7 +1434,7 @@
     function visit(v3, p3 = "") {
       for (const [k4, x4] of Object.entries(v3)) {
         const key = p3 ? `${p3}.${k4}` : k4;
-        if (object(x4) && key !== "audio.narration.steps") visit(x4, key);
+        if (object2(x4) && key !== "audio.narration.steps") visit(x4, key);
         else result[key] = x4;
       }
     }
@@ -1052,7 +1459,7 @@
   }
   function changeComposition(c3, path, value, { reset = false } = {}) {
     const paths = compositionPaths(c3);
-    if (!Object.hasOwn(paths, path) && !object(path.split(".").reduce((v3, k4) => v3?.[k4], DEFAULT_COMPOSITION))) throw new Error(`Unknown composition path: ${path}`);
+    if (!Object.hasOwn(paths, path) && !object2(path.split(".").reduce((v3, k4) => v3?.[k4], DEFAULT_COMPOSITION))) throw new Error(`Unknown composition path: ${path}`);
     const keys = path.split(".");
     if (keys.some((k4) => ["__proto__", "constructor", "prototype"].includes(k4))) throw new Error("Invalid composition path");
     const next = copy(c3), last2 = keys.pop();
@@ -1072,13 +1479,13 @@
     }
     let node = next;
     for (const k4 of keys) {
-      if (!object(node[k4])) node[k4] = k4 === "logo" ? { image: null, heightPct: 10 } : {};
+      if (!object2(node[k4])) node[k4] = k4 === "logo" ? { image: null, heightPct: 10 } : {};
       node = node[k4];
     }
     if (reset) {
       delete node[last2];
-      const defaults = resolveComposition({ theme: c3.theme });
-      const def = path.endsWith(".logo.heightPct") ? 10 : [...keys, last2].reduce((v3, k4) => v3?.[k4], defaults);
+      const defaults13 = resolveComposition({ theme: c3.theme });
+      const def = path.endsWith(".logo.heightPct") ? 10 : [...keys, last2].reduce((v3, k4) => v3?.[k4], defaults13);
       if (def !== void 0) node[last2] = copy(def);
     } else node[last2] = copy(value);
     if (/^zoom\.(depth|holdAfterClickSec|leadInSec|onlyKinds)$/.test(path) && next.zoom.regions?.every((r4) => r4.source === "auto")) next.zoom.regions = [];
@@ -1223,9 +1630,9 @@
       if (next - c3.t < follow.startAfterClickSec + 0.2) return [];
       const end = Math.min(start + follow.durationSec, next - 0.15);
       if (end <= start) return [];
-      const motion = moves.filter((m3) => m3.end <= c3.t).at(-1);
-      const a3 = motion ? at2(Math.max(motion.start, motion.end - 0.1)) : c3;
-      const b3 = motion ? at2(motion.end) : { x: c3.x + 1, y: c3.y + 1 };
+      const motion2 = moves.filter((m3) => m3.end <= c3.t).at(-1);
+      const a3 = motion2 ? at2(Math.max(motion2.start, motion2.end - 0.1)) : c3;
+      const b3 = motion2 ? at2(motion2.end) : { x: c3.x + 1, y: c3.y + 1 };
       const length = distance(a3, b3);
       const dx = length > 1e-7 ? (b3.x - a3.x) / length : Math.SQRT1_2;
       const dy = length > 1e-7 ? (b3.y - a3.y) / length : Math.SQRT1_2;
@@ -1255,8 +1662,8 @@
         const c3 = clicks.find((c4) => t3 >= c4.t - 0.22 && t3 <= c4.t);
         if (c3) {
           const a3 = at2(c3.t - 0.22);
-          const motion = moves.filter((m3) => m3.end <= c3.t).at(-1);
-          const before = motion ? at2(Math.max(motion.start, motion.end - 0.1)) : { x: c3.x - 1, y: c3.y - 1 };
+          const motion2 = moves.filter((m3) => m3.end <= c3.t).at(-1);
+          const before = motion2 ? at2(Math.max(motion2.start, motion2.end - 0.1)) : { x: c3.x - 1, y: c3.y - 1 };
           const n2 = distance(before, c3);
           const short = {
             x: c3.x - 5 * (n2 > 1e-7 ? (c3.x - before.x) / n2 : Math.SQRT1_2),
@@ -1325,10 +1732,10 @@
     if (t3 <= cue.start || t3 >= cue.end) return 0;
     return smooth3(Math.min(1, (t3 - cue.start) / 0.2, (cue.end - t3) / 0.2));
   }
-  function wrap(text, width, measure) {
+  function wrap(text2, width, measure) {
     const lines = [];
     let line = "";
-    for (const word of text.trim().split(/\s+/).filter(Boolean)) {
+    for (const word of text2.trim().split(/\s+/).filter(Boolean)) {
       const candidate = line ? `${line} ${word}` : word;
       if (measure(candidate) <= width) {
         line = candidate;
@@ -1353,11 +1760,11 @@
     if (line) lines.push(line);
     return lines;
   }
-  function wrapLines(text, maxWidth, measure, { maxLines = 2 } = {}) {
+  function wrapLines(text2, maxWidth, measure, { maxLines = 2 } = {}) {
     if (!Number.isFinite(maxWidth) || maxWidth <= 0 || !Number.isInteger(maxLines) || maxLines < 1) throw new Error("Invalid caption wrapping bounds");
     let lines;
     for (const scale of [1, 0.9, 0.8]) {
-      lines = wrap(text, maxWidth / scale, measure);
+      lines = wrap(text2, maxWidth / scale, measure);
       if (lines.length <= maxLines) return { lines, scale };
     }
     lines = lines.slice(0, maxLines);
@@ -1367,29 +1774,6 @@
     while (last2 && measure(last2 + "\u2026") > width) last2 = Array.from(last2).slice(0, -1).join("");
     lines[lines.length - 1] = measure("\u2026") <= width ? last2 + "\u2026" : "";
     return { lines, scale: 0.8 };
-  }
-
-  // scripts/lib/compose/layout.mjs
-  function layoutFor({ output, source, composition }) {
-    const { width, height } = output;
-    if (![width, height, source.width, source.height].every((v3) => Number.isFinite(v3) && v3 > 0)) throw new Error("Layout dimensions must be finite and positive");
-    const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 8;
-    const py = composition.frame?.paddingYPct ?? composition.frame?.paddingPct ?? 5;
-    const captions = composition.captions;
-    const band = captions?.enabled && captions.mode === "band" ? Math.round(height * (captions.bandHeightPct ?? 13) / 100) : 0;
-    const availableH = height - band;
-    const scale = Math.min(width * (1 - 2 * px / 100) / source.width, (availableH - 2 * height * py / 100) / source.height);
-    const w4 = Math.round(source.width * scale), h3 = Math.round(source.height * scale);
-    const frame = { x: Math.round((width - w4) / 2), y: Math.round((availableH - h3) / 2) + (band && captions.position === "top" ? band : 0), w: w4, h: h3 };
-    let caption = null;
-    if (captions?.enabled) {
-      if (band) caption = { x: 0, y: captions.position === "top" ? 0 : height - band, w: width, h: band };
-      else {
-        const w5 = Math.round(frame.w * 0.8), h4 = Math.round(height * 0.075);
-        caption = { x: Math.round(frame.x + (frame.w - w5) / 2), y: Math.round(captions.position === "top" ? frame.y + height * 0.04 : frame.y + frame.h - height * 0.04 - h4), w: w5, h: h4 };
-      }
-    }
-    return { canvas: { width, height }, frame, caption, scaleFramePx: w4 / source.width };
   }
 
   // scripts/lib/audio/retime.mjs
@@ -1465,6 +1849,12 @@
   }
 
   // scripts/lib/compose/plan.mjs
+  var DESKTOP_VERTICAL_WARNING = "This is a desktop recording in a vertical video: record with --profile phone for a better result";
+  function profileWarnings(profile = "desktop", format = "landscape") {
+    if (format === "vertical" && profile !== "phone") return [DESKTOP_VERTICAL_WARNING];
+    if (format === "landscape" && profile === "phone") return ["This is a phone recording in a landscape video: record with --profile desktop for a better result"];
+    return [];
+  }
   var exportAudioUrls = {
     clip: (key) => `voice/${key}.wav`,
     music: (file) => `music/${file.split("/").map(encodeURIComponent).join("/")}`
@@ -1477,7 +1867,7 @@
       const key = voiceClips?.steps?.[step.id], clip = key ? voiceClips.clips?.[key] : null;
       if (clip && Number.isFinite(clip.durationSec) && clip.durationSec > 0) clips[step.id] = { durationSec: clip.durationSec, source: clip.source ?? "tts", key };
     }
-    const muted = Object.fromEntries(Object.entries(composition.audio.narration.steps).filter(([, v3]) => v3?.muted === true).map(([id]) => [id, true]));
+    const muted = Object.fromEntries(Object.entries(composition.audio.narration.steps).filter(([, v3]) => v3?.muted === true).map(([id13]) => [id13, true]));
     const placed = placeNarration({ steps: events.steps ?? [], clips, timemap, cues, muted, fps: composition.output.fps });
     const narration = placed.placements.map((p3) => ({
       stepId: p3.stepId,
@@ -1530,7 +1920,7 @@
     const regions = !composition.zoom.enabled ? [] : auto ? suggestZoomRegions({ events, record, options: zoomOptions(composition.zoom) }) : composition.zoom.regions;
     const regionValidation = validateRegions(regions, {
       duration: record.durationSec,
-      maxSharp: maxSharpZoom({ sourceWidthPx: sourceSize2.width, frameWidthPx: layout.frame.w })
+      maxSharp: maxSharpZoom({ sourceWidthPx: sourceSize2.width, frameWidthPx: (layout.content ?? layout.frame).w })
     });
     if (!regionValidation.ok) throw new Error(regionValidation.errors.join("\n"));
     const cssSource = { width: sourceSize2.width / record.scale.used, height: sourceSize2.height / record.scale.used };
@@ -1550,7 +1940,10 @@
       }
     }
     if (audio.captionSpans.length) cues = extendCues(cues, audio.captionSpans, timemap);
+    const overlayPlan = planOverlays(composition.overlays, timemap);
     return {
+      overlays: overlayPlan.overlays,
+      motion: clone3(composition.motion),
       output: clone3(output),
       layout,
       theme: THEMES[composition.theme],
@@ -1563,7 +1956,7 @@
       captions: clone3(composition.captions),
       cursor: {
         ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }),
-        sizePx: output.height * (composition.cursor.style === "custom" ? composition.cursor.custom?.heightPct ?? composition.cursor.sizePct : composition.cursor.sizePct) / 100,
+        sizePx: (isVertical(output) ? output.width : output.height) * (composition.cursor.style === "custom" ? composition.cursor.custom?.heightPct ?? composition.cursor.sizePct : composition.cursor.sizePct) / 100,
         color: THEMES[composition.theme].cursor.fill,
         ...composition.cursor
       },
@@ -1572,7 +1965,7 @@
       sourceSize: { ...sourceSize2 },
       viewport: { ...events.viewport },
       scale: record.scale.used,
-      warnings: [...assetWarnings, ...record.warnings ?? [], ...regionValidation.warnings, ...composition.captions.mode === "overlay" ? ["overlay captions can cover the video"] : []],
+      warnings: [...profileWarnings(record.profile ?? events.profile, output.preset ?? (isVertical(output) ? "vertical" : "landscape")), ...overlayPlan.notices, ...assetWarnings, ...record.warnings ?? [], ...regionValidation.warnings, ...composition.captions.mode === "overlay" ? ["overlay captions can cover the video"] : []],
       cards: clone3(cards)
     };
   }
@@ -1597,9 +1990,10 @@
     const effect = plan.cursor.clickEffect;
     const ripple = effect.style !== "none" ? rippleAt(events, t3, effect.durationSec) : null;
     return {
+      overlays: mapped.section === "main" ? overlayStates(plan.overlays ?? [], tOut, plan.motion?.pace ?? 1) : [],
       section: mapped.section,
-      alphaTitle: mapped.alphaTitle,
-      alphaOutro: mapped.alphaOutro,
+      alphaTitle: EASING.standard(mapped.alphaTitle),
+      alphaOutro: EASING.standard(mapped.alphaOutro),
       sourceT: t3,
       rate: mapped.rate,
       camera: cameraAt(plan.camera, t3),
@@ -1925,8 +2319,8 @@
       }
       publish({ playing: null });
     }
-    async function play(kind, id, url) {
-      if (state.playing?.kind === kind && state.playing.id === id) {
+    async function play(kind, id13, url) {
+      if (state.playing?.kind === kind && state.playing.id === id13) {
         stopPlayback();
         return;
       }
@@ -1937,7 +2331,7 @@
       element.onerror = () => {
         publish({ playing: null, error: "This audio could not be played." });
       };
-      publish({ playing: { kind, id } });
+      publish({ playing: { kind, id: id13 } });
       try {
         await element.play();
       } catch (error) {
@@ -2162,8 +2556,8 @@
     }
   };
   var TextDecoder2 = typeof globalThis.TextDecoder !== "undefined" ? globalThis.TextDecoder : class TextDecoder3 {
-    constructor(label = "utf-8") {
-      const normalized = label.trim().toLowerCase();
+    constructor(label13 = "utf-8") {
+      const normalized = label13.trim().toLowerCase();
       if (normalized === "utf-8" || normalized === "utf8" || normalized === "unicode-1-1-utf-8") {
         this.encoding = "utf-8";
       } else if (normalized === "utf-16le" || normalized === "utf-16") {
@@ -2171,7 +2565,7 @@
       } else if (normalized === "utf-16be") {
         this.encoding = "utf-16be";
       } else {
-        throw new RangeError(`The encoding label provided ('${label}') is invalid.`);
+        throw new RangeError(`The encoding label provided ('${label13}') is invalid.`);
       }
     }
     decode(input) {
@@ -2258,8 +2652,8 @@
     }
   };
   var textDecoder = /* @__PURE__ */ new TextDecoder2();
-  var invertObject = (object2) => {
-    return Object.fromEntries(Object.entries(object2).map(([key, value]) => [value, key]));
+  var invertObject = (object3) => {
+    return Object.fromEntries(Object.entries(object3).map(([key, value]) => [value, key]));
   };
   var COLOR_PRIMARIES_MAP = {
     bt709: 1,
@@ -5407,12 +5801,12 @@
       const transferCharacteristics = vp9CodecInfo.transferCharacteristics.toString().padStart(2, "0");
       const matrixCoefficients = vp9CodecInfo.matrixCoefficients.toString().padStart(2, "0");
       const videoFullRangeFlag = vp9CodecInfo.videoFullRangeFlag.toString().padStart(2, "0");
-      let string = `vp09.${profile}.${level}.${bitDepth}.${chromaSubsampling}`;
-      string += `.${colourPrimaries}.${transferCharacteristics}.${matrixCoefficients}.${videoFullRangeFlag}`;
-      if (string.endsWith(VP9_DEFAULT_SUFFIX)) {
-        string = string.slice(0, -VP9_DEFAULT_SUFFIX.length);
+      let string2 = `vp09.${profile}.${level}.${bitDepth}.${chromaSubsampling}`;
+      string2 += `.${colourPrimaries}.${transferCharacteristics}.${matrixCoefficients}.${videoFullRangeFlag}`;
+      if (string2.endsWith(VP9_DEFAULT_SUFFIX)) {
+        string2 = string2.slice(0, -VP9_DEFAULT_SUFFIX.length);
       }
-      return string;
+      return string2;
     } else if (codec === "av1") {
       if (!av1CodecInfo) {
         const pictureSize = trackInfo.width * trackInfo.height;
@@ -5446,16 +5840,16 @@
         matrixCoefficients = colorSpace?.matrix ? MATRIX_COEFFICIENTS_MAP[colorSpace.matrix] : 1;
         videoFullRangeFlag = colorSpace?.fullRange ? 1 : 0;
       }
-      let string = `av01.${profile}.${level}${tier}.${bitDepth}`;
-      string += `.${monochrome}.${chromaSubsampling.toString().padStart(3, "0")}`;
-      string += `.${colorPrimaries.toString().padStart(2, "0")}`;
-      string += `.${transferCharacteristics.toString().padStart(2, "0")}`;
-      string += `.${matrixCoefficients.toString().padStart(2, "0")}`;
-      string += `.${videoFullRangeFlag}`;
-      if (string.endsWith(AV1_DEFAULT_SUFFIX)) {
-        string = string.slice(0, -AV1_DEFAULT_SUFFIX.length);
+      let string2 = `av01.${profile}.${level}${tier}.${bitDepth}`;
+      string2 += `.${monochrome}.${chromaSubsampling.toString().padStart(3, "0")}`;
+      string2 += `.${colorPrimaries.toString().padStart(2, "0")}`;
+      string2 += `.${transferCharacteristics.toString().padStart(2, "0")}`;
+      string2 += `.${matrixCoefficients.toString().padStart(2, "0")}`;
+      string2 += `.${videoFullRangeFlag}`;
+      if (string2.endsWith(AV1_DEFAULT_SUFFIX)) {
+        string2 = string2.slice(0, -AV1_DEFAULT_SUFFIX.length);
       }
-      return string;
+      return string2;
     } else if (codec === "prores") {
       return proresFormat ?? "apch";
     } else if (codec !== null) {
@@ -5793,12 +6187,12 @@
   // node_modules/mediabunny/dist/modules/src/isobmff/isobmff-misc.js
   var buildIsobmffMimeType = (info) => {
     const base = info.hasVideo ? "video/" : info.hasAudio ? "audio/" : "application/";
-    let string = base + (info.isQuickTime ? "quicktime" : "mp4");
+    let string2 = base + (info.isQuickTime ? "quicktime" : "mp4");
     if (info.codecStrings.length > 0) {
       const uniqueCodecMimeTypes = [...new Set(info.codecStrings)];
-      string += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
+      string2 += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
     }
-    return string;
+    return string2;
   };
   var parsePsshBoxContents = (contents) => {
     const view = toDataView(contents);
@@ -7655,14 +8049,14 @@
             if (!track) {
               break;
             }
-            const defaults = this.fragmentTrackDefaults.find((x4) => x4.trackId === trackId);
+            const defaults13 = this.fragmentTrackDefaults.find((x4) => x4.trackId === trackId);
             this.currentTrack = track;
             track.currentFragmentState = {
               baseDataOffset: this.currentFragment.implicitBaseDataOffset,
-              sampleDescriptionIndex: defaults?.defaultSampleDescriptionIndex ?? null,
-              defaultSampleDuration: defaults?.defaultSampleDuration ?? null,
-              defaultSampleSize: defaults?.defaultSampleSize ?? null,
-              defaultSampleFlags: defaults?.defaultSampleFlags ?? null,
+              sampleDescriptionIndex: defaults13?.defaultSampleDescriptionIndex ?? null,
+              defaultSampleDuration: defaults13?.defaultSampleDuration ?? null,
+              defaultSampleSize: defaults13?.defaultSampleSize ?? null,
+              defaultSampleFlags: defaults13?.defaultSampleFlags ?? null,
               startTimestamp: null,
               encryptionAuxInfo: null
             };
@@ -8251,16 +8645,16 @@
     getNumber() {
       const demuxer = this.internalTrack.demuxer;
       const trackType = this.internalTrack.trackBacking.getType();
-      let number = 0;
+      let number2 = 0;
       for (const track of demuxer.tracks) {
         if (track.trackBacking.getType() === trackType) {
-          number++;
+          number2++;
         }
         if (track === this.internalTrack) {
           break;
         }
       }
-      return number;
+      return number2;
     }
     getCodec() {
       throw new Error("Not implemented on base class.");
@@ -11852,7 +12246,7 @@
     return ComputeLayoutAndAllocationSize(parsedRect, format, optLayout);
   };
   var ParseVisibleRect = (defaultRect, overrideRect, codedWidth, codedHeight, format) => {
-    const sourceRect = { ...defaultRect };
+    const sourceRect2 = { ...defaultRect };
     if (overrideRect !== void 0) {
       if (overrideRect.width === 0 || overrideRect.height === 0) {
         throw new TypeError("visibleRect dimensions cannot be zero.");
@@ -11863,16 +12257,16 @@
       if ((overrideRect.y || 0) + (overrideRect.height || 0) > codedHeight) {
         throw new TypeError("visibleRect exceeds codedHeight.");
       }
-      sourceRect.x = overrideRect.x || 0;
-      sourceRect.y = overrideRect.y || 0;
-      sourceRect.width = overrideRect.width || 0;
-      sourceRect.height = overrideRect.height || 0;
+      sourceRect2.x = overrideRect.x || 0;
+      sourceRect2.y = overrideRect.y || 0;
+      sourceRect2.width = overrideRect.width || 0;
+      sourceRect2.height = overrideRect.height || 0;
     }
-    const validAlignment = VerifyRectOffsetAlignment(format, sourceRect);
+    const validAlignment = VerifyRectOffsetAlignment(format, sourceRect2);
     if (!validAlignment) {
       throw new TypeError("visibleRect alignment is invalid for the format.");
     }
-    return sourceRect;
+    return sourceRect2;
   };
   var VerifyRectOffsetAlignment = (format, rect) => {
     if (format === null)
@@ -12832,17 +13226,17 @@
       sample.setFlip(this.flip);
       this.onSample(sample);
     }
-    async mergeAlpha(color, alpha) {
+    async mergeAlpha(color2, alpha) {
       const resolver = promiseWithResolvers();
       this.mergeAlphaPromises.push(resolver.promise);
       const result = { sample: null };
       this.finalSamples.push(result);
       try {
         if (!alpha) {
-          result.sample = new VideoSample(color);
+          result.sample = new VideoSample(color2);
         } else {
           assert(this.merger);
-          const finalFrame = await this.merger.merge(color, alpha);
+          const finalFrame = await this.merger.merge(color2, alpha);
           result.sample = new VideoSample(finalFrame);
         }
         while (this.finalSamples.length > 0 && this.finalSamples[0].sample !== null) {
@@ -12918,7 +13312,7 @@
       this.pendingRequests = /* @__PURE__ */ new Map();
       this.nextRequestId = 0;
     }
-    merge(color, alpha) {
+    merge(color2, alpha) {
       if (this.workers.length === 0) {
         if (!mergerWorkerUrl) {
           const blob = new Blob([`(${colorAlphaMergerWorkerCode.toString()})()`], { type: "application/javascript" });
@@ -12950,12 +13344,12 @@
           this.workers.push(worker2);
         }
       }
-      const id = this.nextRequestId++;
+      const id13 = this.nextRequestId++;
       const pending = promiseWithResolvers();
-      this.pendingRequests.set(id, pending);
+      this.pendingRequests.set(id13, pending);
       const worker = this.workers[this.nextWorkerIndex];
       this.nextWorkerIndex = (this.nextWorkerIndex + 1) % this.workers.length;
-      worker.postMessage({ id, color, alpha }, { transfer: [color, alpha] });
+      worker.postMessage({ id: id13, color: color2, alpha }, { transfer: [color2, alpha] });
       return pending.promise;
     }
     close() {
@@ -12975,21 +13369,21 @@
     let cpuColorBuffer = null;
     let chain = Promise.resolve();
     self.addEventListener("message", (event) => {
-      const { id, color, alpha } = event.data;
+      const { id: id13, color: color2, alpha } = event.data;
       chain = chain.then(async () => {
         try {
-          const frame = await merge3(color, alpha);
-          self.postMessage({ id, frame }, { transfer: [frame] });
+          const frame = await merge3(color2, alpha);
+          self.postMessage({ id: id13, frame }, { transfer: [frame] });
         } catch (error) {
-          self.postMessage({ id, error: error.message });
+          self.postMessage({ id: id13, error: error.message });
         } finally {
-          color.close();
+          color2.close();
           alpha.close();
         }
       });
     });
-    const merge3 = async (color, alpha) => {
-      const format = color.format;
+    const merge3 = async (color2, alpha) => {
+      const format = color2.format;
       const alphaFormat = alpha.format;
       if (!format || !alphaFormat) {
         throw new Error("CPU color/alpha merging requires a known VideoFrame format.");
@@ -13002,20 +13396,20 @@
         throw new Error(`CPU color/alpha merging requires the alpha frame to have the same bit depth as the color frame (color: '${format}', alpha: '${alphaFormat}').`);
       }
       if (format === "RGBX" || format === "RGBA" || format === "BGRX" || format === "BGRA") {
-        return await mergeInterleavedRgba(color, alpha, format);
+        return await mergeInterleavedRgba(color2, alpha, format);
       } else if (format === "I420" || format === "I420P10" || format === "I420P12" || format === "I422" || format === "I422P10" || format === "I422P12" || format === "I444" || format === "I444P10" || format === "I444P12") {
-        return await mergePlanarYuv(color, alpha, format);
+        return await mergePlanarYuv(color2, alpha, format);
       } else if (format === "NV12") {
-        return await mergeNv12(color, alpha);
+        return await mergeNv12(color2, alpha);
       }
       throw new Error(`CPU color/alpha merging does not support format '${format}'.`);
     };
-    const mergeInterleavedRgba = async (color, alpha, format) => {
-      const width = color.visibleRect?.width ?? color.codedWidth;
-      const height = color.visibleRect?.height ?? color.codedHeight;
+    const mergeInterleavedRgba = async (color2, alpha, format) => {
+      const width = color2.visibleRect?.width ?? color2.codedWidth;
+      const height = color2.visibleRect?.height ?? color2.codedHeight;
       const pixelCount = width * height;
       const output = new Uint8Array(pixelCount * 4);
-      await color.copyTo(output);
+      await color2.copyTo(output);
       const alphaY = await readAlpha(alpha, width, height, 1);
       for (let i3 = 0, j4 = 3; i3 < pixelCount; i3++, j4 += 4) {
         output[j4] = alphaY[i3];
@@ -13025,15 +13419,15 @@
         format: outputFormat,
         codedWidth: width,
         codedHeight: height,
-        timestamp: color.timestamp,
-        duration: color.duration ?? void 0,
+        timestamp: color2.timestamp,
+        duration: color2.duration ?? void 0,
         transfer: [output.buffer]
       };
       return new VideoFrame(output, init);
     };
-    const mergePlanarYuv = async (color, alpha, format) => {
-      const width = color.visibleRect?.width ?? color.codedWidth;
-      const height = color.visibleRect?.height ?? color.codedHeight;
+    const mergePlanarYuv = async (color2, alpha, format) => {
+      const width = color2.visibleRect?.width ?? color2.codedWidth;
+      const height = color2.visibleRect?.height ?? color2.codedHeight;
       const is10 = format.includes("P10");
       const is12 = format.includes("P12");
       const bytesPerSample = is10 || is12 ? 2 : 1;
@@ -13056,7 +13450,7 @@
       const aBytes = ySamples * bytesPerSample;
       const outputBytes = yBytes + 2 * uvBytes + aBytes;
       const output = new Uint8Array(outputBytes);
-      await color.copyTo(output);
+      await color2.copyTo(output);
       const alphaY = await readAlpha(alpha, width, height, bytesPerSample);
       const aOffset = yBytes + 2 * uvBytes;
       output.set(alphaY, aOffset);
@@ -13065,24 +13459,24 @@
         format: outputFormat,
         codedWidth: width,
         codedHeight: height,
-        timestamp: color.timestamp,
-        duration: color.duration ?? void 0,
+        timestamp: color2.timestamp,
+        duration: color2.duration ?? void 0,
         transfer: [output.buffer]
       };
       return new VideoFrame(output, init);
     };
-    const mergeNv12 = async (color, alpha) => {
-      const width = color.visibleRect?.width ?? color.codedWidth;
-      const height = color.visibleRect?.height ?? color.codedHeight;
+    const mergeNv12 = async (color2, alpha) => {
+      const width = color2.visibleRect?.width ?? color2.codedWidth;
+      const height = color2.visibleRect?.height ?? color2.codedHeight;
       const ySize = width * height;
       const chromaW = Math.ceil(width / 2);
       const chromaH = Math.ceil(height / 2);
       const uvSize = chromaW * chromaH;
-      const sourceSize2 = color.allocationSize();
+      const sourceSize2 = color2.allocationSize();
       if (!cpuColorBuffer || cpuColorBuffer.byteLength !== sourceSize2) {
         cpuColorBuffer = new Uint8Array(sourceSize2);
       }
-      await color.copyTo(cpuColorBuffer);
+      await color2.copyTo(cpuColorBuffer);
       const output = new Uint8Array(ySize + 2 * uvSize + ySize);
       output.set(cpuColorBuffer.subarray(0, ySize), 0);
       const uOffset = ySize;
@@ -13098,8 +13492,8 @@
         format: "I420A",
         codedWidth: width,
         codedHeight: height,
-        timestamp: color.timestamp,
-        duration: color.duration ?? void 0,
+        timestamp: color2.timestamp,
+        duration: color2.duration ?? void 0,
         transfer: [output.buffer]
       };
       return new VideoFrame(output, init);
@@ -15119,10 +15513,13 @@
   async function loadFonts(fonts) {
     const key = JSON.stringify(fonts);
     if (!fontLoads.has(key)) fontLoads.set(key, Promise.all([
-      ["regular", "400"],
-      ["semibold", "600"]
-    ].map(async ([name, weight]) => {
-      const face = new FontFace("Inter", `url(${JSON.stringify(fonts[name])})`, { weight });
+      ["regular", "400", "Inter"],
+      ["semibold", "600", "Inter"],
+      ["displaySemibold", "600", "Space Grotesk"],
+      ["displayBold", "700", "Space Grotesk"]
+    ].map(async ([name, weight, family]) => {
+      const url = fonts[name] ?? new URL(name === "displayBold" ? "SpaceGrotesk-Bold.woff2" : "SpaceGrotesk-SemiBold.woff2", new URL(fonts.semibold, location.href)).href;
+      const face = new FontFace(family, `url(${JSON.stringify(url)})`, { weight });
       document.fonts.add(await face.load());
     })));
     await fontLoads.get(key);
@@ -15141,7 +15538,8 @@
       plan.cards.title.background,
       plan.cards.outro.background,
       plan.cards.title.logo,
-      plan.cards.outro.logo
+      plan.cards.outro.logo,
+      ...(plan.overlays ?? []).filter((o3) => o3.template === "logo-sting" && o3.params.useLogo).map((o3) => ({ image: o3.params.logo }))
     ];
     await Promise.all(specs.filter((s3) => s3?.image).map(async ({ image }) => {
       const url = new URL(`${assetBase}${image.split("/").map(encodeURIComponent).join("/")}`, location.href).href;
@@ -15187,7 +15585,7 @@
       width / 2 + dx * length / 2,
       height / 2 + dy * length / 2
     );
-    spec.colors.forEach((color, i3) => gradient.addColorStop(i3 / Math.max(1, spec.colors.length - 1), color));
+    spec.colors.forEach((color2, i3) => gradient.addColorStop(i3 / Math.max(1, spec.colors.length - 1), color2));
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
   }
@@ -15198,16 +15596,16 @@
   function drawCaption(ctx, plan, caption) {
     const r4 = plan.layout.caption, spec = plan.captions;
     if (!r4 || !caption || caption.alpha <= 0) return;
-    const size4 = plan.output.height * spec.fontSizePct / 100, padding = size4 * 0.6;
+    const size4 = (isVertical(plan.output) ? plan.output.width * 1.25 : plan.output.height) * spec.fontSizePct / 100, padding = size4 * 0.6;
     ctx.save();
     ctx.beginPath();
     ctx.rect(r4.x, r4.y, r4.w, r4.h);
     ctx.clip();
     ctx.globalAlpha = caption.alpha;
-    ctx.font = `${spec.fontWeight} ${size4}px Inter`;
-    const wrapped = wrapLines(caption.text, r4.w - padding * 2, (text) => ctx.measureText(text).width, { maxLines: spec.maxLines });
+    ctx.font = `${spec.fontWeight} ${size4}px "${plan.theme.typography.family}"`;
+    const wrapped = wrapLines(caption.text, r4.w - padding * 2, (text2) => ctx.measureText(text2).width, { maxLines: spec.maxLines });
     const scale = Math.min(wrapped.scale, (r4.h - padding) / (size4 * 1.25 * wrapped.lines.length));
-    ctx.font = `${spec.fontWeight} ${size4 * scale}px Inter`;
+    ctx.font = `${spec.fontWeight} ${size4 * scale}px "${plan.theme.typography.family}"`;
     const lineH = size4 * scale * 1.25;
     if (spec.mode === "overlay") {
       const w4 = Math.min(r4.w, Math.max(...wrapped.lines.map((s3) => ctx.measureText(s3).width)) + padding * 2);
@@ -15248,20 +15646,20 @@
     }
     ctx.textAlign = spec.align;
     ctx.textBaseline = "middle";
-    for (const [text, fraction, weight, color, y3] of [
-      [title, spec.titleSizePct / 100, 600, spec.titleColor, 0.48],
+    for (const [text2, fraction, weight, color2, y3] of [
+      [title, spec.titleSizePct / 100, plan.theme.typography.weights.display, spec.titleColor, 0.48],
       [spec.subtitle, spec.subtitleSizePct / 100, 400, spec.subtitleColor, 0.64]
     ]) {
-      if (!text) continue;
-      const size4 = height * fraction;
-      ctx.font = `${weight} ${size4}px Inter`;
-      const wrapped = wrapLines(text, width * 0.84, (s3) => ctx.measureText(s3).width);
-      ctx.font = `${weight} ${size4 * wrapped.scale}px Inter`;
-      ctx.fillStyle = color;
+      if (!text2) continue;
+      const size4 = (isVertical(plan.output) ? width * 1.25 : height) * fraction;
+      ctx.font = `${weight} ${size4}px "${plan.theme.typography.family}"`;
+      const wrapped = wrapLines(text2, width * 0.84, (s3) => ctx.measureText(s3).width);
+      ctx.font = `${weight} ${size4 * wrapped.scale}px "${plan.theme.typography.family}"`;
+      ctx.fillStyle = color2;
       wrapped.lines.forEach((line, i3) => ctx.fillText(
         line,
         x4,
-        height * y3 + (i3 - (wrapped.lines.length - 1) / 2) * size4 * wrapped.scale * 1.2
+        (isVertical(plan.output) ? plan.layout.safe.y + plan.layout.safe.h * y3 : height * y3) + (i3 - (wrapped.lines.length - 1) / 2) * size4 * wrapped.scale * 1.2
       ));
     }
     ctx.restore();
@@ -15335,6 +15733,13 @@
       height: h3 * sy
     };
   }
+  function mapSourcePoint(plan, cam, point) {
+    const f4 = plan.layout.content ?? plan.layout.frame, w4 = plan.sourceSize.width / cam.z, h3 = plan.sourceSize.height / cam.z;
+    return {
+      x: f4.x + (point.x * plan.scale - (cam.cx * plan.scale - w4 / 2)) * f4.w / w4,
+      y: f4.y + (point.y * plan.scale - (cam.cy * plan.scale - h3 / 2)) * f4.h / h3
+    };
+  }
   function drawFrame(canvas, plan, tOut, decoded, assets) {
     if (assets) {
       images = assets.images;
@@ -15365,11 +15770,11 @@
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       const crop = sourceCrop(plan, cam, decoded);
-      ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, f4.x, f4.y, f4.w, f4.h);
-      const mapped = ({ x: x4, y: y3 }) => ({
-        x: f4.x + (x4 * plan.scale - (cam.cx * plan.scale - cropW / 2)) * f4.w / cropW,
-        y: f4.y + (y3 * plan.scale - (cam.cy * plan.scale - cropH / 2)) * f4.h / cropH
-      });
+      const content = plan.layout.content ?? f4;
+      ctx.fillStyle = "#111827";
+      ctx.fillRect(f4.x, f4.y, f4.w, f4.h);
+      ctx.drawImage(decoded, crop.x, crop.y, crop.width, crop.height, content.x, content.y, content.w, content.h);
+      const mapped = (point) => mapSourcePoint(plan, cam, point);
       const cursorH = plan.cursor.sizePx * (plan.cursor.scaleWithZoom ? 1 + 0.35 * (cam.z - 1) : 1);
       if (state.ripple) {
         const p3 = mapped(state.ripple), progress = state.ripple.progress;
@@ -15422,6 +15827,21 @@
         ctx.strokeStyle = plan.frame.border.color;
         ctx.lineWidth = plan.frame.border.widthPx * unit;
         ctx.stroke();
+        ctx.restore();
+      }
+      for (const overlay of state.overlays) {
+        const spec = plan.overlays.find((o3) => o3.id === overlay.id);
+        ctx.save();
+        ctx.globalAlpha = overlay.alpha;
+        TEMPLATES[overlay.template].draw(ctx, {
+          width,
+          height,
+          theme: plan.theme,
+          layout: plan.layout,
+          mapSource: (point) => mapSourcePoint(plan, cam, point),
+          anchor: spec.anchor,
+          images
+        }, overlay.params, overlay);
         ctx.restore();
       }
       drawCaption(ctx, plan, state.caption);
@@ -15972,8 +16392,8 @@
     const ids = /* @__PURE__ */ new Set();
     for (const value of values) {
       if (typeof value !== "string") continue;
-      for (const id of String(value).trim().split(/\s+/)) {
-        if (id) ids.add(id);
+      for (const id13 of String(value).trim().split(/\s+/)) {
+        if (id13) ids.add(id13);
       }
     }
     return ids.size > 0 ? Array.from(ids).join(" ") : void 0;
@@ -16133,44 +16553,44 @@
   })();
   var createClassMap = (config) => {
     const {
-      theme,
+      theme: theme2,
       classGroups
     } = config;
-    return processClassGroups(classGroups, theme);
+    return processClassGroups(classGroups, theme2);
   };
-  var processClassGroups = (classGroups, theme) => {
+  var processClassGroups = (classGroups, theme2) => {
     const classMap = createClassPartObject();
     for (const classGroupId in classGroups) {
       const group = classGroups[classGroupId];
-      processClassesRecursively(group, classMap, classGroupId, theme);
+      processClassesRecursively(group, classMap, classGroupId, theme2);
     }
     return classMap;
   };
-  var processClassesRecursively = (classGroup, classPartObject, classGroupId, theme) => {
+  var processClassesRecursively = (classGroup, classPartObject, classGroupId, theme2) => {
     const len = classGroup.length;
     for (let i3 = 0; i3 < len; i3++) {
       const classDefinition = classGroup[i3];
-      processClassDefinition(classDefinition, classPartObject, classGroupId, theme);
+      processClassDefinition(classDefinition, classPartObject, classGroupId, theme2);
     }
   };
-  var processClassDefinition = (classDefinition, classPartObject, classGroupId, theme) => {
+  var processClassDefinition = (classDefinition, classPartObject, classGroupId, theme2) => {
     if (typeof classDefinition === "string") {
       processStringDefinition(classDefinition, classPartObject, classGroupId);
       return;
     }
     if (typeof classDefinition === "function") {
-      processFunctionDefinition(classDefinition, classPartObject, classGroupId, theme);
+      processFunctionDefinition(classDefinition, classPartObject, classGroupId, theme2);
       return;
     }
-    processObjectDefinition(classDefinition, classPartObject, classGroupId, theme);
+    processObjectDefinition(classDefinition, classPartObject, classGroupId, theme2);
   };
   var processStringDefinition = (classDefinition, classPartObject, classGroupId) => {
     const classPartObjectToEdit = classDefinition === "" ? classPartObject : getPart(classPartObject, classDefinition);
     classPartObjectToEdit.classGroupId = classGroupId;
   };
-  var processFunctionDefinition = (classDefinition, classPartObject, classGroupId, theme) => {
+  var processFunctionDefinition = (classDefinition, classPartObject, classGroupId, theme2) => {
     if (isThemeGetter(classDefinition)) {
-      processClassesRecursively(classDefinition(theme), classPartObject, classGroupId, theme);
+      processClassesRecursively(classDefinition(theme2), classPartObject, classGroupId, theme2);
       return;
     }
     if (classPartObject.validators === null) {
@@ -16178,12 +16598,12 @@
     }
     classPartObject.validators.push(createClassValidatorObject(classGroupId, classDefinition));
   };
-  var processObjectDefinition = (classDefinition, classPartObject, classGroupId, theme) => {
+  var processObjectDefinition = (classDefinition, classPartObject, classGroupId, theme2) => {
     const entries = Object.entries(classDefinition);
     const len = entries.length;
     for (let i3 = 0; i3 < len; i3++) {
       const [key, value] = entries[i3];
-      processClassesRecursively(value, getPart(classPartObject, key), classGroupId, theme);
+      processClassesRecursively(value, getPart(classPartObject, key), classGroupId, theme2);
     }
   };
   var getPart = (classPartObject, path) => {
@@ -16432,32 +16852,32 @@
     let index2 = 0;
     let argument;
     let resolvedValue;
-    let string = "";
+    let string2 = "";
     while (index2 < classLists.length) {
       if (argument = classLists[index2++]) {
         if (resolvedValue = toValue(argument)) {
-          string && (string += " ");
-          string += resolvedValue;
+          string2 && (string2 += " ");
+          string2 += resolvedValue;
         }
       }
     }
-    return string;
+    return string2;
   };
   var toValue = (mix2) => {
     if (typeof mix2 === "string") {
       return mix2;
     }
     let resolvedValue;
-    let string = "";
+    let string2 = "";
     for (let k4 = 0; k4 < mix2.length; k4++) {
       if (mix2[k4]) {
         if (resolvedValue = toValue(mix2[k4])) {
-          string && (string += " ");
-          string += resolvedValue;
+          string2 && (string2 += " ");
+          string2 += resolvedValue;
         }
       }
     }
-    return string;
+    return string2;
   };
   var createTailwindMerge = (createConfigFirst, ...createConfigRest) => {
     let configUtils;
@@ -16486,7 +16906,7 @@
   };
   var fallbackThemeArr = [];
   var fromTheme = (key) => {
-    const themeGetter = (theme) => theme[key] || fallbackThemeArr;
+    const themeGetter = (theme2) => theme2[key] || fallbackThemeArr;
     themeGetter.isThemeGetter = true;
     themeGetter.themeKey = key;
     return themeGetter;
@@ -16553,14 +16973,14 @@
     }
     return false;
   };
-  var isLabelPosition = (label) => label === "position" || label === "percentage";
-  var isLabelImage = (label) => label === "image" || label === "url";
-  var isLabelSize = (label) => label === "length" || label === "size" || label === "bg-size";
-  var isLabelLength = (label) => label === "length";
-  var isLabelNumber = (label) => label === "number";
-  var isLabelFamilyName = (label) => label === "family-name";
-  var isLabelWeight = (label) => label === "number" || label === "weight";
-  var isLabelShadow = (label) => label === "shadow";
+  var isLabelPosition = (label13) => label13 === "position" || label13 === "percentage";
+  var isLabelImage = (label13) => label13 === "image" || label13 === "url";
+  var isLabelSize = (label13) => label13 === "length" || label13 === "size" || label13 === "bg-size";
+  var isLabelLength = (label13) => label13 === "length";
+  var isLabelNumber = (label13) => label13 === "number";
+  var isLabelFamilyName = (label13) => label13 === "family-name";
+  var isLabelWeight = (label13) => label13 === "number" || label13 === "weight";
+  var isLabelShadow = (label13) => label13 === "shadow";
   var getDefaultConfig = () => {
     const themeColor = fromTheme("color");
     const themeFont = fromTheme("font");
@@ -19450,9 +19870,9 @@
       return getActiveElement(activeElement.contentDocument.body, activeDescendant);
     }
     if (activeDescendant) {
-      const id = activeElement.getAttribute("aria-activedescendant");
-      if (id) {
-        const element = getOwnerDocument(activeElement).getElementById(id);
+      const id13 = activeElement.getAttribute("aria-activedescendant");
+      if (id13) {
+        const element = getOwnerDocument(activeElement).getElementById(id13);
         if (element) {
           return element;
         }
@@ -20197,7 +20617,7 @@
   }).join(" ").trim();
 
   // node_modules/lucide-preact/dist/esm/shared/src/utils/toKebabCase.mjs
-  var toKebabCase = (string) => string?.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  var toKebabCase = (string2) => string2?.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 
   // node_modules/lucide-preact/dist/esm/shared/src/utils/toLucideIconData.mjs
   function toLucideIconData(iconName, iconNode, aliases = []) {
@@ -20213,10 +20633,10 @@
   }
 
   // node_modules/lucide-preact/dist/esm/shared/src/utils/toCamelCase.mjs
-  var toCamelCase = (string) => {
+  var toCamelCase = (string2) => {
     let out = "";
     let upperNext = false;
-    for (const ch of string) {
+    for (const ch of string2) {
       if (ch === "-" || ch === "_" || ch <= " ") {
         upperNext = out.length > 0;
         continue;
@@ -20232,8 +20652,8 @@
   };
 
   // node_modules/lucide-preact/dist/esm/shared/src/utils/toPascalCase.mjs
-  var toPascalCase = (string) => {
-    const camelCase = toCamelCase(string);
+  var toPascalCase = (string2) => {
+    const camelCase = toCamelCase(string2);
     return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
   };
 
@@ -20254,50 +20674,50 @@
   function isDefined(value) {
     return value !== null && value !== void 0;
   }
-  function buildLucideIconNode(icon, params = {}) {
-    const attributeNames = params.attributeNames ?? {};
+  function buildLucideIconNode(icon, params13 = {}) {
+    const attributeNames = params13.attributeNames ?? {};
     const getAttributeName = (attributeName) => attributeNames[attributeName] ?? attributeName;
     const viewBoxWidth = icon.size ?? icon.width ?? defaultAttributes["width"];
     const viewBoxHeight = icon.size ?? icon.height ?? defaultAttributes["height"];
     const aliasClassNames = icon.aliases?.filter((alias) => typeof alias === "string" && alias.trim() !== "").map((alias) => `lucide-${alias}`) ?? [];
     const iconClassNames = [...icon.name ? [`lucide-${icon.name}`] : [], ...aliasClassNames];
-    const classNamesFromClassName = params.className?.split(" ").filter(Boolean) ?? [];
-    const className = params.includeDefaultClasses === false ? mergeClasses(...classNamesFromClassName) : mergeClasses("lucide", ...iconClassNames, ...classNamesFromClassName);
-    const calculatedStrokeWidth = params.absoluteStrokeWidth ? Number(params.strokeWidth ?? defaultAttributes["stroke-width"]) * Number(icon.size ?? icon.width ?? defaultAttributes["width"]) / Number(params.size ?? params.width ?? defaultAttributes["width"]) : params.strokeWidth ?? defaultAttributes["stroke-width"];
+    const classNamesFromClassName = params13.className?.split(" ").filter(Boolean) ?? [];
+    const className = params13.includeDefaultClasses === false ? mergeClasses(...classNamesFromClassName) : mergeClasses("lucide", ...iconClassNames, ...classNamesFromClassName);
+    const calculatedStrokeWidth = params13.absoluteStrokeWidth ? Number(params13.strokeWidth ?? defaultAttributes["stroke-width"]) * Number(icon.size ?? icon.width ?? defaultAttributes["width"]) / Number(params13.size ?? params13.width ?? defaultAttributes["width"]) : params13.strokeWidth ?? defaultAttributes["stroke-width"];
     const attributes = {
       ...Object.entries(defaultAttributes).reduce((attrs, [attrName, value]) => {
         attrs[getAttributeName(attrName)] = value;
         return attrs;
       }, {}),
-      ..."color" in params && params.color && {
-        [getAttributeName("stroke")]: params.color
+      ..."color" in params13 && params13.color && {
+        [getAttributeName("stroke")]: params13.color
       },
-      ..."size" in params && isDefined(params.size) && {
-        [getAttributeName("width")]: params.size,
-        [getAttributeName("height")]: params.size
+      ..."size" in params13 && isDefined(params13.size) && {
+        [getAttributeName("width")]: params13.size,
+        [getAttributeName("height")]: params13.size
       },
-      ..."width" in params && isDefined(params.width) && {
-        [getAttributeName("width")]: params.width
+      ..."width" in params13 && isDefined(params13.width) && {
+        [getAttributeName("width")]: params13.width
       },
-      ..."height" in params && isDefined(params.height) && {
-        [getAttributeName("height")]: params.height
+      ..."height" in params13 && isDefined(params13.height) && {
+        [getAttributeName("height")]: params13.height
       },
       [getAttributeName("stroke-width")]: calculatedStrokeWidth,
       ...className && {
         [getAttributeName("class")]: className
       },
       [getAttributeName("viewBox")]: `0 0 ${viewBoxWidth} ${viewBoxHeight}`,
-      ...params.hasA11yProp === false ? {
+      ...params13.hasA11yProp === false ? {
         [getAttributeName("aria-hidden")]: "true"
       } : {},
-      ..."attributes" in params && params.attributes
+      ..."attributes" in params13 && params13.attributes
     };
     return [
       "svg",
       attributes,
       icon.node.map((child) => {
         const [name, attrs, children] = child;
-        const nextAttrs = params.nonScalingStroke ? { [getAttributeName("vector-effect")]: "non-scaling-stroke", ...attrs } : attrs;
+        const nextAttrs = params13.nonScalingStroke ? { [getAttributeName("vector-effect")]: "non-scaling-stroke", ...attrs } : attrs;
         return children ? [name, nextAttrs, children] : [name, nextAttrs];
       })
     ];
@@ -20326,7 +20746,7 @@
 
   // node_modules/lucide-preact/dist/esm/Icon.mjs
   var Icon = ({
-    color,
+    color: color2,
     size: size4,
     width,
     height,
@@ -20352,7 +20772,7 @@
       class: contextClass = ""
     } = useLucideContext() ?? {};
     const [name, svgAttributes, builtIconNode = []] = buildLucideIconNode(icon, {
-      color: color ?? contextColor,
+      color: color2 ?? contextColor,
       width: width ?? size4 ?? contextSize,
       height: height ?? size4 ?? contextSize,
       strokeWidth: strokeWidth ?? contextStrokeWidth,
@@ -21217,8 +21637,8 @@
     return actualIndex < 0 || actualIndex >= length ? -1 : actualIndex;
   }
   __name13(toSafeIndex, "toSafeIndex");
-  function toSafeInteger(number) {
-    return number !== number || number === 0 ? 0 : Math.trunc(number);
+  function toSafeInteger(number2) {
+    return number2 !== number2 || number2 === 0 ? 0 : Math.trunc(number2);
   }
   __name13(toSafeInteger, "toSafeInteger");
   // @__NO_SIDE_EFFECTS__
@@ -21958,7 +22378,7 @@
         __scopeSlider
       );
       const composedRefs = useComposedRefs(forwardedRef, onThumbChange);
-      const label = getLabel(index2, context.values.length);
+      const label13 = getLabel(index2, context.values.length);
       const orientationSize = size4?.[orientation.size];
       const thumbInBoundsOffset = orientationSize ? getThumbInBoundsOffset(orientationSize, percent, orientation.direction) : 0;
       return /* @__PURE__ */ u3(
@@ -21973,7 +22393,7 @@
             Primitive.span,
             {
               role: "slider",
-              "aria-label": props["aria-label"] || label,
+              "aria-label": props["aria-label"] || label13,
               "aria-valuemin": context.min,
               "aria-valuenow": value,
               "aria-valuemax": context.max,
@@ -22180,8 +22600,8 @@
   __name14(isFunction3, "isFunction");
 
   // editor/ui/slider.jsx
-  function Slider3({ "aria-label": label, id, ...props }) {
-    return /* @__PURE__ */ k(Slider, { className: "ui-slider", ...props }, /* @__PURE__ */ k(SliderTrack, { className: "ui-slider-track" }, /* @__PURE__ */ k(SliderRange, { className: "ui-slider-range" })), /* @__PURE__ */ k(SliderThumb, { id, "aria-label": label, className: "ui-slider-thumb" }));
+  function Slider3({ "aria-label": label13, id: id13, ...props }) {
+    return /* @__PURE__ */ k(Slider, { className: "ui-slider", ...props }, /* @__PURE__ */ k(SliderTrack, { className: "ui-slider-track" }, /* @__PURE__ */ k(SliderRange, { className: "ui-slider-range" })), /* @__PURE__ */ k(SliderThumb, { id: id13, "aria-label": label13, className: "ui-slider-thumb" }));
   }
 
   // node_modules/@radix-ui/react-use-callback-ref/dist/index.mjs
@@ -22858,11 +23278,11 @@
   var useReactId = compat_module_exports[" useId ".trim().toString()] || (() => void 0);
   var count2 = 0;
   function useId(deterministicId) {
-    const [id, setId] = d2(useReactId());
+    const [id13, setId] = d2(useReactId());
     useLayoutEffect2(() => {
       if (!deterministicId) setId((reactId) => reactId ?? String(count2++));
     }, [deterministicId]);
-    return deterministicId || (id ? `radix-${id}` : "");
+    return deterministicId || (id13 ? `radix-${id13}` : "");
   }
   __name19(useId, "useId");
 
@@ -23005,7 +23425,7 @@
     const alignmentAxis = getAlignmentAxis(placement);
     const alignLength = getAxisLength(alignmentAxis);
     const side = getSide(placement);
-    const isVertical = sideAxis === "y";
+    const isVertical2 = sideAxis === "y";
     const commonX = reference.x + reference.width / 2 - floating.width / 2;
     const commonY = reference.y + reference.height / 2 - floating.height / 2;
     const commonAlign = reference[alignLength] / 2 - floating[alignLength] / 2;
@@ -23043,7 +23463,7 @@
     }
     const alignment = getAlignment(placement);
     if (alignment) {
-      coords[alignmentAxis] += commonAlign * (alignment === "end" ? 1 : -1) * (rtl && isVertical ? -1 : 1);
+      coords[alignmentAxis] += commonAlign * (alignment === "end" ? 1 : -1) * (rtl && isVertical2 ? -1 : 1);
     }
     return coords;
   }
@@ -23429,9 +23849,9 @@
     const rtl = await (platform2.isRTL == null ? void 0 : platform2.isRTL(elements.floating));
     const side = getSide(placement);
     const alignment = getAlignment(placement);
-    const isVertical = getSideAxis(placement) === "y";
+    const isVertical2 = getSideAxis(placement) === "y";
     const mainAxisMulti = originSides.has(side) ? -1 : 1;
-    const crossAxisMulti = rtl && isVertical ? -1 : 1;
+    const crossAxisMulti = rtl && isVertical2 ? -1 : 1;
     const rawValue = evaluate(options, state);
     let {
       mainAxis,
@@ -23449,7 +23869,7 @@
     if (alignment && typeof alignmentAxis === "number") {
       crossAxis = alignment === "end" ? alignmentAxis * -1 : alignmentAxis;
     }
-    return isVertical ? {
+    return isVertical2 ? {
       x: crossAxis * crossAxisMulti,
       y: mainAxis * mainAxisMulti
     } : {
@@ -24803,13 +25223,13 @@
   var [PopperProvider, usePopperContext] = createPopperContext(POPPER_NAME);
   var Popper = /* @__PURE__ */ __name21((props) => {
     const { __scopePopper, children } = props;
-    const [anchor, setAnchor] = d2(null);
+    const [anchor2, setAnchor] = d2(null);
     const [placementState, setPlacementState] = d2(void 0);
     return /* @__PURE__ */ u3(
       PopperProvider,
       {
         scope: __scopePopper,
-        anchor,
+        anchor: anchor2,
         onAnchorChange: setAnchor,
         placementState,
         setPlacementState,
@@ -25398,7 +25818,7 @@
   function ItoI(a3) {
     return a3;
   }
-  function innerCreateMedium(defaults, middleware) {
+  function innerCreateMedium(defaults13, middleware) {
     if (middleware === void 0) {
       middleware = ItoI;
     }
@@ -25412,7 +25832,7 @@
         if (buffer.length) {
           return buffer[buffer.length - 1];
         }
-        return defaults;
+        return defaults13;
       },
       useMedium: function(data) {
         var item = middleware(data, assigned);
@@ -25822,8 +26242,8 @@
   var deltaCompare = function(x4, y3) {
     return x4[0] === y3[0] && x4[1] === y3[1];
   };
-  var generateStyle = function(id) {
-    return "\n  .block-interactivity-".concat(id, " {pointer-events: none;}\n  .allow-interactivity-").concat(id, " {pointer-events: all;}\n");
+  var generateStyle = function(id13) {
+    return "\n  .block-interactivity-".concat(id13, " {pointer-events: none;}\n  .allow-interactivity-").concat(id13, " {pointer-events: all;}\n");
   };
   var idCounter = 0;
   var lockStack = [];
@@ -25831,7 +26251,7 @@
     var shouldPreventQueue = A2([]);
     var touchStartRef = A2([0, 0]);
     var activeAxis = A2();
-    var id = d2(idCounter++)[0];
+    var id13 = d2(idCounter++)[0];
     var Style2 = d2(styleSingleton)[0];
     var lastProps = A2(props);
     h2(function() {
@@ -25839,15 +26259,15 @@
     }, [props]);
     h2(function() {
       if (props.inert) {
-        document.body.classList.add("block-interactivity-".concat(id));
+        document.body.classList.add("block-interactivity-".concat(id13));
         var allow_1 = __spreadArray([props.lockRef.current], (props.shards || []).map(extractRef), true).filter(Boolean);
         allow_1.forEach(function(el) {
-          return el.classList.add("allow-interactivity-".concat(id));
+          return el.classList.add("allow-interactivity-".concat(id13));
         });
         return function() {
-          document.body.classList.remove("block-interactivity-".concat(id));
+          document.body.classList.remove("block-interactivity-".concat(id13));
           allow_1.forEach(function(el) {
-            return el.classList.remove("allow-interactivity-".concat(id));
+            return el.classList.remove("allow-interactivity-".concat(id13));
           });
         };
       }
@@ -25964,7 +26384,7 @@
     return k(
       S,
       null,
-      inert ? k(Style2, { styles: generateStyle(id) }) : null,
+      inert ? k(Style2, { styles: generateStyle(id13) }) : null,
       removeScrollBar ? k(RemoveScrollBar, { noRelative: props.noRelative, gapMode: props.gapMode }) : null
     );
   }
@@ -27700,8 +28120,8 @@
     const ids = /* @__PURE__ */ new Set();
     for (const value of values) {
       if (typeof value !== "string") continue;
-      for (const id of String(value).trim().split(/\s+/)) {
-        if (id) ids.add(id);
+      for (const id13 of String(value).trim().split(/\s+/)) {
+        if (id13) ids.add(id13);
       }
     }
     return ids.size > 0 ? Array.from(ids).join(" ") : void 0;
@@ -27710,8 +28130,8 @@
 
   // editor/ui/tooltip.jsx
   var TooltipProvider2 = TooltipProvider;
-  function Tooltip2({ text, children }) {
-    return /* @__PURE__ */ k(Tooltip, null, /* @__PURE__ */ k(TooltipTrigger, { asChild: true }, /* @__PURE__ */ k("span", { className: "tooltip-trigger" }, children)), /* @__PURE__ */ k(TooltipPortal, null, /* @__PURE__ */ k(TooltipContent, { sideOffset: 5, className: "ui-tooltip" }, text, /* @__PURE__ */ k(TooltipArrow, null))));
+  function Tooltip2({ text: text2, children }) {
+    return /* @__PURE__ */ k(Tooltip, null, /* @__PURE__ */ k(TooltipTrigger, { asChild: true }, /* @__PURE__ */ k("span", { className: "tooltip-trigger" }, children)), /* @__PURE__ */ k(TooltipPortal, null, /* @__PURE__ */ k(TooltipContent, { sideOffset: 5, className: "ui-tooltip" }, text2, /* @__PURE__ */ k(TooltipArrow, null))));
   }
 
   // node_modules/@radix-ui/react-label/dist/index.mjs
@@ -28344,7 +28764,7 @@
         frameCallback = media.requestVideoFrameCallback(presented);
       };
       if (playing && native && media.requestVideoFrameCallback) frameCallback = media.requestVideoFrameCallback(presented);
-      function paint(t3, state, frame) {
+      function paint2(t3, state, frame) {
         const start = performance.now(), target = canvas.current, scale = Math.min(960 / plan.output.width, 1);
         const width = Math.round(plan.output.width * scale), height = Math.round(plan.output.height * scale);
         if (target.width !== width || target.height !== height) {
@@ -28383,7 +28803,7 @@
             }
             if (!main) {
               media.pause();
-              paint(t3, state, null);
+              paint2(t3, state, null);
               return;
             }
             if (!nativeStart) nativeStart = now;
@@ -28400,7 +28820,7 @@
                 resetFrames();
                 media.currentTime = state.sourceT;
               }
-              if (!seeking && !media.seeking && media.readyState >= 2) paint(t3, state, media);
+              if (!seeking && !media.seeking && media.readyState >= 2) paint2(t3, state, media);
               return;
             }
             const sync = playbackSync(state.sourceT, media.currentTime, state.rate, rate);
@@ -28421,7 +28841,7 @@
             }
             let count3 = 0;
             if (!seeking && !media.seeking && media.readyState >= 2) {
-              paint(t3, state, media);
+              paint2(t3, state, media);
               if (serial !== drawnSerial) {
                 count3 = 1;
                 perf.presentedFrames++;
@@ -28439,7 +28859,7 @@
             busy = true;
             try {
               const frame = state.section === "main" ? await provider.getFrame(state.sourceT) : null;
-              if (active && current.current === t3) paint(t3, state, frame);
+              if (active && current.current === t3) paint2(t3, state, frame);
             } finally {
               busy = false;
             }
@@ -28514,6 +28934,9 @@
 
   // scripts/lib/compose/settings-schema.mjs
   var EXCLUDED = [
+    { path: "output.preset", reason: "Output format is selected by render --format; editor controls are added in Phase 7 E." },
+    { path: "layout.safeZones", reason: "Platform safe areas are selected in composition.json; editor controls are added in Phase 7 E." },
+    { path: "overlays", reason: "Source-time overlays edited on the timeline." },
     { path: "version", reason: "Composition format version; managed by Showreel." },
     { path: "run.id", reason: "Recording identity; selected when opening the project." },
     { path: "edits.trims", reason: "Edited on the timeline." },
@@ -28535,7 +28958,8 @@
     "output.height": ["Height", "How tall the finished video is, in pixels."],
     "output.fps": ["Frame rate", "More frames per second make movement smoother in the finished video."],
     "output.quality": ["Quality", "Higher quality keeps more detail in the video and makes a larger file."],
-    "theme": ["Theme", "Set the overall colours and style of the video, including its frame and cards."],
+    "theme": ["Theme", "Choose clean, dark or bold colours, typography, cursor and motion defaults."],
+    "motion.pace": ["Motion pace", "Lengthen entrances and exits from normal (1) to cinematic (1.6)."],
     "frame.paddingXPct": ["Horizontal padding", "Space to the left and right of the recording, as a percentage of the video width."],
     "frame.paddingYPct": ["Vertical padding", "Space above and below the recording, as a percentage of the video height."],
     "frame.radiusPx": ["Corner radius", "Round the corners of the recording; set to zero for square corners."],
@@ -28671,8 +29095,8 @@
   };
   var unitFor = (path) => /Pct$/.test(path) ? "%" : /Px$|output\.(width|height)$/.test(path) ? "px" : /Sec$|cards.fade$/.test(path) ? "s" : /Db$/.test(path) ? "dB" : /Ms$/.test(path) ? "ms" : /Lufs$/.test(path) ? "LUFS" : /Mult$|pressScale$|zoom.depth$/.test(path) ? "x" : void 0;
   var SETTINGS = Object.entries(compositionPaths({})).filter(([path]) => !excluded.has(path)).map(([path, value]) => {
-    const [label, help] = copy2[path];
-    const group = /^(frame\.|theme$)/.test(path) ? "look" : path.split(".")[0];
+    const [label13, help13] = copy2[path];
+    const group = /^(frame\.|theme$|motion\.)/.test(path) ? "look" : path.split(".")[0];
     const options = SETTING_ENUMS[path];
     const range2 = SETTING_RANGES[path];
     const control = path === "audio.voice.enabled" ? "toggle" : options ? "select" : range2 ? "number" : typeof value === "boolean" ? "toggle" : path.endsWith(".colors") ? "gradient" : path.endsWith(".image") ? "image" : /(?:color|Color|fill|stroke|captions.background)$/.test(path) ? "color" : "text";
@@ -28680,8 +29104,8 @@
       path,
       group,
       section: path.startsWith("audio.") ? path.includes(".duck.") ? "Music ducking" : audioSections[path.split(".")[1]] : path.startsWith("cards.") ? `${path.split(".")[1]} card \xB7 ${sections[path.split(".")[2]] ?? "Text and timing"}` : sections[path.split(".")[1]] ?? "General",
-      label,
-      help,
+      label: label13,
+      help: help13,
       unit: unitFor(path),
       control,
       ...range2 ?? {},
@@ -28855,9 +29279,9 @@
         ...itemProps
       } = props;
       const autoId = useId();
-      const id = tabStopId || autoId;
+      const id13 = tabStopId || autoId;
       const context = useRovingFocusContext(ITEM_NAME2, __scopeRovingFocusGroup);
-      const isCurrentTabStop = context.currentTabStopId === id;
+      const isCurrentTabStop = context.currentTabStopId === id13;
       const getItems = useCollection3(__scopeRovingFocusGroup);
       const { onFocusableItemAdd, onFocusableItemRemove, currentTabStopId } = context;
       const isHydrated = useIsHydrated2();
@@ -28879,7 +29303,7 @@
         Collection3.ItemSlot,
         {
           scope: __scopeRovingFocusGroup,
-          id,
+          id: id13,
           focusable,
           active,
           children: /* @__PURE__ */ u3(
@@ -28891,9 +29315,9 @@
               ref: forwardedRef,
               onMouseDown: composeEventHandlers(props.onMouseDown, (event) => {
                 if (!focusable) event.preventDefault();
-                else context.onItemFocus(id);
+                else context.onItemFocus(id13);
               }),
-              onFocus: composeEventHandlers(props.onFocus, () => context.onItemFocus(id)),
+              onFocus: composeEventHandlers(props.onFocus, () => context.onItemFocus(id13)),
               onKeyDown: composeEventHandlers(props.onKeyDown, (event) => {
                 if (event.key === "Tab" && event.shiftKey) {
                   context.onItemShiftTab();
@@ -29711,8 +30135,8 @@
     const ids = /* @__PURE__ */ new Set();
     for (const value of values) {
       if (typeof value !== "string") continue;
-      for (const id of String(value).trim().split(/\s+/)) {
-        if (id) ids.add(id);
+      for (const id13 of String(value).trim().split(/\s+/)) {
+        if (id13) ids.add(id13);
       }
     }
     return ids.size > 0 ? Array.from(ids).join(" ") : void 0;
@@ -29720,13 +30144,13 @@
   __name31(concatAriaDescribedby3, "concatAriaDescribedby");
 
   // editor/ui/popover.jsx
-  function Popover2({ trigger, children, open, onOpenChange, label }) {
-    return /* @__PURE__ */ k(Popover, { open, onOpenChange }, /* @__PURE__ */ k(PopoverTrigger, { asChild: true }, trigger), /* @__PURE__ */ k(PopoverPortal, null, /* @__PURE__ */ k(PopoverContent, { "aria-label": label, sideOffset: 6, collisionPadding: 12, className: "ui-popover", onKeyDown: (e3) => e3.stopPropagation() }, children, /* @__PURE__ */ k(PopoverArrow, { className: "popover-arrow" }))));
+  function Popover2({ trigger, children, open, onOpenChange, label: label13 }) {
+    return /* @__PURE__ */ k(Popover, { open, onOpenChange }, /* @__PURE__ */ k(PopoverTrigger, { asChild: true }, trigger), /* @__PURE__ */ k(PopoverPortal, null, /* @__PURE__ */ k(PopoverContent, { "aria-label": label13, sideOffset: 6, collisionPadding: 12, className: "ui-popover", onKeyDown: (e3) => e3.stopPropagation() }, children, /* @__PURE__ */ k(PopoverArrow, { className: "popover-arrow" }))));
   }
 
   // editor/ui/toggle-group.jsx
-  function ToggleGroup({ value, onValueChange, options, "aria-label": label, id }) {
-    return /* @__PURE__ */ k("div", { id, role: "group", "aria-label": label, className: "ui-toggle-group", onKeyDown: (e3) => {
+  function ToggleGroup({ value, onValueChange, options, "aria-label": label13, id: id13 }) {
+    return /* @__PURE__ */ k("div", { id: id13, role: "group", "aria-label": label13, className: "ui-toggle-group", onKeyDown: (e3) => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e3.key)) return;
       e3.preventDefault();
       e3.stopPropagation();
@@ -29737,12 +30161,12 @@
   }
 
   // editor/SettingField.jsx
-  function Color({ value, onChange, label, id, invalid }) {
-    return /* @__PURE__ */ k(Popover2, { label: `${label} colour`, trigger: /* @__PURE__ */ k(Button, { class: "colour-swatch", id, "aria-label": label }, /* @__PURE__ */ k("span", { style: { background: value ?? "transparent" } }), value ?? "None") }, /* @__PURE__ */ k("div", { class: "colour-editor" }, /* @__PURE__ */ k(Input2, { type: "color", "aria-label": `${label} picker`, value: /^#[\da-f]{6}$/i.test(value) ? value : "#000000", onInput: (e3) => onChange(e3.currentTarget.value) }), /* @__PURE__ */ k(Input2, { "aria-label": `${label} hex`, "aria-invalid": invalid || void 0, type: "text", value: value ?? "", onInput: (e3) => onChange(e3.currentTarget.value || null) })));
+  function Color({ value, onChange, label: label13, id: id13, invalid }) {
+    return /* @__PURE__ */ k(Popover2, { label: `${label13} colour`, trigger: /* @__PURE__ */ k(Button, { class: "colour-swatch", id: id13, "aria-label": label13 }, /* @__PURE__ */ k("span", { style: { background: value ?? "transparent" } }), value ?? "None") }, /* @__PURE__ */ k("div", { class: "colour-editor" }, /* @__PURE__ */ k(Input2, { type: "color", "aria-label": `${label13} picker`, value: /^#[\da-f]{6}$/i.test(value) ? value : "#000000", onInput: (e3) => onChange(e3.currentTarget.value) }), /* @__PURE__ */ k(Input2, { "aria-label": `${label13} hex`, "aria-invalid": invalid || void 0, type: "text", value: value ?? "", onInput: (e3) => onChange(e3.currentTarget.value || null) })));
   }
   function Control({ setting: s3, value, onChange, values, change, invalid }) {
-    const id = `setting-${s3.path}`, label = s3.label;
-    const common = { id, "aria-label": label, "aria-invalid": invalid || void 0, "aria-describedby": invalid ? `${id}-error` : void 0 };
+    const id13 = `setting-${s3.path}`, label13 = s3.label;
+    const common = { id: id13, "aria-label": label13, "aria-invalid": invalid || void 0, "aria-describedby": invalid ? `${id13}-error` : void 0 };
     if (s3.control === "toggle") return /* @__PURE__ */ k(Switch3, { ...common, checked: !!value, onCheckedChange: onChange });
     if (s3.control === "select") {
       const props = { ...common, value, onValueChange: (next) => onChange(s3.options.find((v3) => String(v3) === String(next))), options: s3.options.map((v3) => ({ value: v3, label: String(v3).replace(/-/g, " ").replace(/^./, (c3) => c3.toUpperCase()) })) };
@@ -29750,12 +30174,12 @@
     }
     if (s3.control === "number") {
       const numeric = s3.path === "zoom.depth" ? zoomDepth(value) : value;
-      return /* @__PURE__ */ k("div", { class: "control-row" }, /* @__PURE__ */ k(Slider3, { ...common, min: s3.min, max: s3.max, step: s3.step, value: [numeric ?? s3.min], onValueChange: ([next]) => onChange(next) }), /* @__PURE__ */ k(Input2, { "aria-label": `${label} value`, "aria-invalid": invalid || void 0, "aria-describedby": invalid ? `${id}-error` : void 0, type: "number", min: s3.min, max: s3.max, step: s3.step, value: numeric ?? "", onInput: (e3) => onChange(e3.currentTarget.value === "" ? null : +e3.currentTarget.value) }), s3.unit && /* @__PURE__ */ k("span", { class: "control-unit" }, s3.unit));
+      return /* @__PURE__ */ k("div", { class: "control-row" }, /* @__PURE__ */ k(Slider3, { ...common, min: s3.min, max: s3.max, step: s3.step, value: [numeric ?? s3.min], onValueChange: ([next]) => onChange(next) }), /* @__PURE__ */ k(Input2, { "aria-label": `${label13} value`, "aria-invalid": invalid || void 0, "aria-describedby": invalid ? `${id13}-error` : void 0, type: "number", min: s3.min, max: s3.max, step: s3.step, value: numeric ?? "", onInput: (e3) => onChange(e3.currentTarget.value === "" ? null : +e3.currentTarget.value) }), s3.unit && /* @__PURE__ */ k("span", { class: "control-unit" }, s3.unit));
     }
-    if (s3.control === "color") return /* @__PURE__ */ k(Color, { id, label, value, onChange, invalid });
+    if (s3.control === "color") return /* @__PURE__ */ k(Color, { id: id13, label: label13, value, onChange, invalid });
     if (s3.control === "gradient") {
       const stops = Array.isArray(value) ? value : [], anglePath = s3.path.replace(/colors$/, "angle");
-      return /* @__PURE__ */ k("div", { id, class: "gradient", role: "group", "aria-label": label }, stops.map((color, index2) => /* @__PURE__ */ k("div", { class: "control-row" }, /* @__PURE__ */ k(Color, { label: `${label} stop ${index2 + 1}`, value: color, onChange: (next) => onChange(stops.map((c3, i3) => i3 === index2 ? next : c3)) }), /* @__PURE__ */ k(Button, { "aria-label": `Remove stop ${index2 + 1}`, disabled: stops.length <= 2, onClick: () => onChange(stops.filter((_3, i3) => i3 !== index2)) }, "\u2212"))), /* @__PURE__ */ k(Button, { disabled: stops.length >= 4, onClick: () => onChange([...stops, stops.at(-1) ?? "#ffffff"]) }, "Add colour stop"), /* @__PURE__ */ k(Label3, null, "Angle ", /* @__PURE__ */ k(Input2, { "aria-label": `${label} angle`, type: "number", min: "0", max: "360", value: values[anglePath], onInput: (e3) => change(anglePath, +e3.currentTarget.value) })));
+      return /* @__PURE__ */ k("div", { id: id13, class: "gradient", role: "group", "aria-label": label13 }, stops.map((color2, index2) => /* @__PURE__ */ k("div", { class: "control-row" }, /* @__PURE__ */ k(Color, { label: `${label13} stop ${index2 + 1}`, value: color2, onChange: (next) => onChange(stops.map((c3, i3) => i3 === index2 ? next : c3)) }), /* @__PURE__ */ k(Button, { "aria-label": `Remove stop ${index2 + 1}`, disabled: stops.length <= 2, onClick: () => onChange(stops.filter((_3, i3) => i3 !== index2)) }, "\u2212"))), /* @__PURE__ */ k(Button, { disabled: stops.length >= 4, onClick: () => onChange([...stops, stops.at(-1) ?? "#ffffff"]) }, "Add colour stop"), /* @__PURE__ */ k(Label3, null, "Angle ", /* @__PURE__ */ k(Input2, { "aria-label": `${label13} angle`, type: "number", min: "0", max: "360", value: values[anglePath], onInput: (e3) => change(anglePath, +e3.currentTarget.value) })));
     }
     const array = Array.isArray(value);
     return /* @__PURE__ */ k(
@@ -29766,21 +30190,21 @@
         value: array ? JSON.stringify(value) : value ?? "",
         placeholder: s3.control === "image" ? "Choose project file: relative/path.png" : "",
         onInput: (e3) => {
-          const text = e3.currentTarget.value;
+          const text2 = e3.currentTarget.value;
           if (s3.path === "zoom.onlyKinds") {
             try {
-              onChange(JSON.parse(text));
+              onChange(JSON.parse(text2));
             } catch {
-              onChange(text);
+              onChange(text2);
             }
-          } else onChange(text || null);
+          } else onChange(text2 || null);
         }
       }
     );
   }
-  function SettingField({ setting: s3, values, defaults, state, store, render, extra, help = s3.help }) {
-    const errors = errorsForPath(state.errors, s3.path), id = `setting-${s3.path}`, change = (path, value) => store.change(path, value);
-    return /* @__PURE__ */ k("div", { class: "setting", key: s3.path }, /* @__PURE__ */ k("div", { class: "setting-label" }, /* @__PURE__ */ k(Label3, { for: id, title: s3.help }, s3.label), JSON.stringify(values[s3.path]) !== JSON.stringify(defaults[s3.path]) && /* @__PURE__ */ k(Tooltip2, { text: "Reset to default" }, /* @__PURE__ */ k(Button, { size: "icon", class: "reset", "aria-label": `Reset ${s3.label}`, onClick: () => store.change(s3.path, void 0, { reset: true }) }, /* @__PURE__ */ k(RotateCcw, { size: 14, "aria-hidden": "true" })))), render ? render({ id, value: values[s3.path], onChange: (value) => change(s3.path, value), invalid: !!errors.length }) : /* @__PURE__ */ k(Control, { setting: s3, value: values[s3.path], onChange: (value) => change(s3.path, value), values, change, invalid: !!errors.length }), /* @__PURE__ */ k("p", { class: "setting-help" }, help), extra, !!errors.length && /* @__PURE__ */ k("p", { class: "error", id: `${id}-error` }, errors.join("\n")));
+  function SettingField({ setting: s3, values, defaults: defaults13, state, store, render, extra, help: help13 = s3.help }) {
+    const errors = errorsForPath(state.errors, s3.path), id13 = `setting-${s3.path}`, change = (path, value) => store.change(path, value);
+    return /* @__PURE__ */ k("div", { class: "setting", key: s3.path }, /* @__PURE__ */ k("div", { class: "setting-label" }, /* @__PURE__ */ k(Label3, { for: id13, title: s3.help }, s3.label), JSON.stringify(values[s3.path]) !== JSON.stringify(defaults13[s3.path]) && /* @__PURE__ */ k(Tooltip2, { text: "Reset to default" }, /* @__PURE__ */ k(Button, { size: "icon", class: "reset", "aria-label": `Reset ${s3.label}`, onClick: () => store.change(s3.path, void 0, { reset: true }) }, /* @__PURE__ */ k(RotateCcw, { size: 14, "aria-hidden": "true" })))), render ? render({ id: id13, value: values[s3.path], onChange: (value) => change(s3.path, value), invalid: !!errors.length }) : /* @__PURE__ */ k(Control, { setting: s3, value: values[s3.path], onChange: (value) => change(s3.path, value), values, change, invalid: !!errors.length }), /* @__PURE__ */ k("p", { class: "setting-help" }, help13), extra, !!errors.length && /* @__PURE__ */ k("p", { class: "error", id: `${id13}-error` }, errors.join("\n")));
   }
 
   // editor/ui/badge.jsx
@@ -29797,8 +30221,8 @@
     if (!frames) throw new Error("There is no audio to save.");
     if (dataBytes + 44 > 4294967295) throw new Error("The audio is too long for a WAV file.");
     const bytes = new Uint8Array(44 + dataBytes), view = new DataView(bytes.buffer);
-    const tag = (offset5, text) => {
-      for (let i3 = 0; i3 < 4; i3++) view.setUint8(offset5 + i3, text.charCodeAt(i3));
+    const tag = (offset5, text2) => {
+      for (let i3 = 0; i3 < 4; i3++) view.setUint8(offset5 + i3, text2.charCodeAt(i3));
     };
     tag(0, "RIFF");
     view.setUint32(4, 36 + dataBytes, true);
@@ -29852,21 +30276,21 @@
   var stepName = (step) => step?.name ?? step?.title ?? step?.caption ?? step?.id ?? "Step";
   function effectiveNarration(step, composition) {
     const own = composition?.audio?.narration?.steps?.[step?.id]?.text;
-    const text = typeof own === "string" && own.trim() ? own : step?.narration;
-    return typeof text === "string" && text.trim() ? text : null;
+    const text2 = typeof own === "string" && own.trim() ? own : step?.narration;
+    return typeof text2 === "string" && text2.trim() ? text2 : null;
   }
 
   // editor/voice-status.mjs
-  var firstWords = (text, count3 = 4) => {
-    const words = String(text ?? "").trim().split(/\s+/).filter(Boolean);
+  var firstWords = (text2, count3 = 4) => {
+    const words = String(text2 ?? "").trim().split(/\s+/).filter(Boolean);
     return words.length > count3 ? `${words.slice(0, count3).join(" ")}\u2026` : words.join(" ");
   };
-  function voiceStatus({ text, entry, muted = false, voice, speed }) {
+  function voiceStatus({ text: text2, entry, muted = false, voice, speed }) {
     if (muted) return "muted";
     if (entry && (entry.source === "own" || entry.source === "file")) return entry.source;
-    if (!text) return "none";
+    if (!text2) return "none";
     if (!entry) return "missing";
-    return entry.text === text && entry.voice === voice && Number(entry.speed) === clampVoiceSpeed(speed) ? "fresh" : "stale";
+    return entry.text === text2 && entry.voice === voice && Number(entry.speed) === clampVoiceSpeed(speed) ? "fresh" : "stale";
   }
   var STATUS_LABELS = { fresh: "Ready", stale: "Needs update", missing: "Not generated", own: "Your recording", file: "Imported file", muted: "Muted", none: "No narration" };
   var STATUS_HELP = {
@@ -29880,13 +30304,13 @@
   };
   function scriptRows({ storyboard, composition, clips, voice, speed }) {
     return (storyboard?.steps ?? []).map((step) => {
-      const text = effectiveNarration(step, composition), key = clips?.steps?.[step.id], entry = key ? clips?.clips?.[key] ?? null : null;
+      const text2 = effectiveNarration(step, composition), key = clips?.steps?.[step.id], entry = key ? clips?.clips?.[key] ?? null : null;
       const muted = composition?.audio?.narration?.steps?.[step.id]?.muted === true;
-      const status = voiceStatus({ text, entry, muted, voice, speed });
+      const status = voiceStatus({ text: text2, entry, muted, voice, speed });
       return {
         id: step.id,
         name: stepName(step),
-        text,
+        text: text2,
         written: step.narration ?? null,
         edited: typeof composition?.audio?.narration?.steps?.[step.id]?.text === "string",
         status,
@@ -29910,9 +30334,9 @@
   function groupVoices(voices) {
     const groups = [];
     for (const voice of voices ?? []) {
-      const label = languageLabel(voice.language);
-      let group = groups.find((g4) => g4.label === label);
-      if (!group) groups.push(group = { label, voices: [] });
+      const label13 = languageLabel(voice.language);
+      let group = groups.find((g4) => g4.label === label13);
+      if (!group) groups.push(group = { label: label13, voices: [] });
       group.voices.push({ id: voice.id, label: voiceLabel(voice) });
     }
     return groups;
@@ -30169,8 +30593,8 @@
     next.zoom.regions.sort((a3, b3) => a3.tStart - b3.tStart);
     return finish(next, context);
   }
-  function updateZoomRegion(c3, id, patch, context = {}) {
-    const next = clone2(c3), z4 = next.zoom.regions.find((z5) => z5.id === id);
+  function updateZoomRegion(c3, id13, patch, context = {}) {
+    const next = clone2(c3), z4 = next.zoom.regions.find((z5) => z5.id === id13);
     if (!z4) throw new Error("Zoom region no longer exists.");
     for (const k4 of Object.keys(patch)) if (!["tStart", "tEnd", "depth", "keyframes"].includes(k4)) throw new Error(`Cannot edit zoom ${k4}.`);
     const oldStart = z4.tStart;
@@ -30184,27 +30608,27 @@
     next.zoom.regions.sort((a3, b3) => a3.tStart - b3.tStart);
     return finish(next, context);
   }
-  function deleteZoomRegion(c3, id, context) {
+  function deleteZoomRegion(c3, id13, context) {
     const next = clone2(c3);
-    next.zoom.regions = next.zoom.regions.filter((z4) => z4.id !== id);
+    next.zoom.regions = next.zoom.regions.filter((z4) => z4.id !== id13);
     next.zoom.autoSuggest = false;
     return finish(next, context);
   }
-  function setZoomFocus(c3, id, t3, x4, y3, context = {}) {
-    const z4 = c3.zoom.regions.find((z5) => z5.id === id);
+  function setZoomFocus(c3, id13, t3, x4, y3, context = {}) {
+    const z4 = c3.zoom.regions.find((z5) => z5.id === id13);
     if (!z4) throw new Error("Zoom region no longer exists.");
     t3 = Math.max(z4.tStart, Math.min(z4.tEnd, snapFrame(t3)));
     const keyframes = z4.keyframes.filter((k4) => Math.abs(k4.t - t3) > 1e-9);
     keyframes.push({ t: t3, x: x4, y: y3 });
-    return updateZoomRegion(c3, id, { keyframes }, context);
+    return updateZoomRegion(c3, id13, { keyframes }, context);
   }
   function withCues(c3, context = {}) {
     const next = clone2(c3);
     next.captions.cues ??= clone2(context.plan?.cues ?? context.cues ?? []);
     return next;
   }
-  function setCaption(c3, id, patch, context = {}) {
-    const next = withCues(c3, context), cue = next.captions.cues.find((cue2) => cue2.id === id);
+  function setCaption(c3, id13, patch, context = {}) {
+    const next = withCues(c3, context), cue = next.captions.cues.find((cue2) => cue2.id === id13);
     if (!cue) throw new Error("Caption no longer exists.");
     for (const key of Object.keys(patch)) if (!["text", "start", "end"].includes(key)) throw new Error(`Cannot edit caption ${key}.`);
     Object.assign(cue, patch);
@@ -30212,15 +30636,15 @@
     next.captions.cues.sort((a3, b3) => a3.start - b3.start);
     return finish(next, context);
   }
-  function addCaption(c3, { text, start, end }, context = {}) {
+  function addCaption(c3, { text: text2, start, end }, context = {}) {
     const next = withCues(c3, context), r4 = range(start, end, context);
-    next.captions.cues.push({ id: uniqueId(next.captions.cues, "caption-"), text, ...r4 });
+    next.captions.cues.push({ id: uniqueId(next.captions.cues, "caption-"), text: text2, ...r4 });
     next.captions.cues.sort((a3, b3) => a3.start - b3.start);
     return finish(next, context);
   }
-  function deleteCaption(c3, id, context = {}) {
+  function deleteCaption(c3, id13, context = {}) {
     const next = withCues(c3, context);
-    next.captions.cues = next.captions.cues.filter((cue) => cue.id !== id);
+    next.captions.cues = next.captions.cues.filter((cue) => cue.id !== id13);
     return finish(next, context);
   }
   function autoZoomRegenerate(c3, events, record) {
@@ -30266,13 +30690,13 @@
   }
 
   // editor/VoicePanel.jsx
-  async function copyText(text) {
+  async function copyText(text2) {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(text2);
       return true;
     } catch {
       const area = document.createElement("textarea");
-      area.value = text;
+      area.value = text2;
       area.setAttribute("readonly", "");
       area.style.position = "fixed";
       area.style.opacity = "0";
@@ -30295,13 +30719,13 @@
       }
     } }, copied ? /* @__PURE__ */ k(Check, { size: 14, "aria-hidden": "true" }) : /* @__PURE__ */ k(Copy, { size: 14, "aria-hidden": "true" }), copied ? "Copied" : "Copy")), /* @__PURE__ */ k("p", { class: "setting-help" }, "You can still record your own voice or import audio files below without it."), info.error && /* @__PURE__ */ k("p", { class: "error" }, info.error));
   }
-  function VoicePicker({ id, value, onChange, info, ctl, controller }) {
+  function VoicePicker({ id: id13, value, onChange, info, ctl, controller }) {
     const groups = groupVoices(info.voices ?? []);
     const known = (info.voices ?? []).some((v3) => v3.id === value);
     const optionGroups = groups.map((g4) => ({ label: g4.label, options: g4.voices.map((v3) => ({ value: v3.id, label: v3.label })) }));
     if (!known && value) optionGroups.push({ label: "Other", options: [{ value, label: value }] });
     const sampling = ctl.sampleBusy === value, playing = ctl.playing?.kind === "sample" && ctl.playing.id === value;
-    return /* @__PURE__ */ k("div", { class: "voice-pick" }, /* @__PURE__ */ k(Select2, { id, "aria-label": "Voice", value, onValueChange: onChange, groups: optionGroups, disabled: !info.installed }), /* @__PURE__ */ k(Tooltip2, { text: info.installed ? sampling ? "Making a sample of this voice\u2026" : "Hear a short sample of this voice" : "Install the voice engine to hear samples" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": playing ? "Stop sample" : sampling ? "Preparing sample" : "Play sample", disabled: !info.installed || !value || !!ctl.sampleBusy && !sampling, onClick: () => controller.playSample(value) }, sampling ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 16, "aria-hidden": "true" }) : playing ? /* @__PURE__ */ k(Square, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 16, "aria-hidden": "true" }))));
+    return /* @__PURE__ */ k("div", { class: "voice-pick" }, /* @__PURE__ */ k(Select2, { id: id13, "aria-label": "Voice", value, onValueChange: onChange, groups: optionGroups, disabled: !info.installed }), /* @__PURE__ */ k(Tooltip2, { text: info.installed ? sampling ? "Making a sample of this voice\u2026" : "Hear a short sample of this voice" : "Install the voice engine to hear samples" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": playing ? "Stop sample" : sampling ? "Preparing sample" : "Play sample", disabled: !info.installed || !value || !!ctl.sampleBusy && !sampling, onClick: () => controller.playSample(value) }, sampling ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 16, "aria-hidden": "true" }) : playing ? /* @__PURE__ */ k(Square, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 16, "aria-hidden": "true" }))));
   }
   function VoiceBrowser({ info, ctl, controller, value, onPick }) {
     const groups = groupVoices(info.voices ?? []);
@@ -30314,7 +30738,7 @@
   function ScriptRow({ row, info, ctl, controller, job, warnings, notice, busy, openRecorder, setOpenRecorder, setSteps, fix, pickFile }) {
     const [draft, setDraft] = d2(null);
     const generating = job.running && job.current === row.id;
-    const text = draft ?? row.text ?? "";
+    const text2 = draft ?? row.text ?? "";
     const playingClip = ctl.playing?.kind === "clip" && ctl.playing.id === row.id;
     const generateLabel = row.status === "own" || row.status === "file" ? "Use generated voice" : row.status === "fresh" || row.status === "stale" ? "Update voice" : "Generate voice";
     const cannotGenerate = !info.installed ? "Install the voice engine to generate voice-overs" : !row.text ? "Write some narration first" : row.muted ? "This step is muted" : job.running ? "Wait for the current job to finish" : "";
@@ -30326,7 +30750,7 @@
         rows: "2",
         maxLength: MAX_NARRATION_CHARS,
         "aria-label": `Narration for ${row.name}`,
-        value: text,
+        value: text2,
         placeholder: "Write what the narrator says for this step",
         onInput: (e3) => {
           setDraft(e3.currentTarget.value);
@@ -30334,9 +30758,9 @@
         },
         onBlur: () => setDraft(null)
       }
-    ), /* @__PURE__ */ k("div", { class: "script-meta" }, /* @__PURE__ */ k("span", { class: "setting-help" }, row.edited ? "Edited here. Clear the box to use the written narration again." : row.written ? "From the storyboard." : ""), /* @__PURE__ */ k("span", { class: "counter", "aria-label": `${text.length} of ${MAX_NARRATION_CHARS} characters` }, text.length, "/", MAX_NARRATION_CHARS), row.durationSec != null && /* @__PURE__ */ k("span", { class: "duration" }, formatDuration(row.durationSec))), /* @__PURE__ */ k("div", { class: "row-actions", role: "group", "aria-label": `Voice-over actions for ${row.name}` }, /* @__PURE__ */ k(Tooltip2, { text: row.clipKey ? playingClip ? "Stop" : "Play this voice-over" : "There is no voice-over to play yet" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `${playingClip ? "Stop" : "Play"} clip, ${row.name}`, disabled: !row.clipKey, onClick: () => controller.playClip(row.id, row.clipKey) }, playingClip ? /* @__PURE__ */ k(Square, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: cannotGenerate || (row.status === "own" || row.status === "file" ? "Replace your audio with the generated voice" : generateLabel) }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `${generateLabel}, ${row.name}`, disabled: !!cannotGenerate, onClick: () => controller.generate({ stepIds: [row.id], force: row.status === "own" || row.status === "file" }) }, generating ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 16, "aria-hidden": "true" }) : row.status === "stale" || row.status === "fresh" ? /* @__PURE__ */ k(RefreshCw, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Sparkles, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Record your own voice for this step" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Record my voice, ${row.name}`, "aria-pressed": openRecorder === row.id, onClick: () => setOpenRecorder(openRecorder === row.id ? null : row.id) }, /* @__PURE__ */ k(Mic, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Use an audio file you already have" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Import file, ${row.name}`, disabled: busy === row.id, onClick: () => pickFile(row.id) }, busy === row.id ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Upload, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: row.muted ? "Turn this step\u2019s voice-over back on" : "Silence this step" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Mute ${row.name}`, "aria-pressed": row.muted, onClick: () => setSteps(row.id, { muted: !row.muted }) }, row.muted ? /* @__PURE__ */ k(VolumeX, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Volume2, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: row.clipKey ? "Remove the voice-over from this step" : "There is no voice-over to remove" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Remove clip, ${row.name}`, disabled: !row.clipKey, onClick: () => controller.removeClip(row.id) }, /* @__PURE__ */ k(Trash, { size: 16, "aria-hidden": "true" })))), openRecorder === row.id && /* @__PURE__ */ k(Recorder, { stepName: row.name, onClose: () => setOpenRecorder(null), onSave: (wav) => controller.saveClip(row.id, wav, "own") }), warnings.map((w4) => /* @__PURE__ */ k("div", { class: "row-warning", role: "status", key: w4.code }, /* @__PURE__ */ k("p", null, /* @__PURE__ */ k(TriangleAlert, { size: 14, "aria-hidden": "true" }), w4.message), w4.fixes?.length > 0 && /* @__PURE__ */ k("div", { class: "row-actions" }, w4.fixes.includes("freeze") && /* @__PURE__ */ k(Button, { size: "sm", variant: "outline", onClick: () => fix("freeze", row, w4) }, "Freeze last frame"), w4.fixes.includes("slow") && /* @__PURE__ */ k(Button, { size: "sm", variant: "outline", onClick: () => fix("slow", row, w4) }, "Slow video to fit")))), !!rowError && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, rowError));
+    ), /* @__PURE__ */ k("div", { class: "script-meta" }, /* @__PURE__ */ k("span", { class: "setting-help" }, row.edited ? "Edited here. Clear the box to use the written narration again." : row.written ? "From the storyboard." : ""), /* @__PURE__ */ k("span", { class: "counter", "aria-label": `${text2.length} of ${MAX_NARRATION_CHARS} characters` }, text2.length, "/", MAX_NARRATION_CHARS), row.durationSec != null && /* @__PURE__ */ k("span", { class: "duration" }, formatDuration(row.durationSec))), /* @__PURE__ */ k("div", { class: "row-actions", role: "group", "aria-label": `Voice-over actions for ${row.name}` }, /* @__PURE__ */ k(Tooltip2, { text: row.clipKey ? playingClip ? "Stop" : "Play this voice-over" : "There is no voice-over to play yet" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `${playingClip ? "Stop" : "Play"} clip, ${row.name}`, disabled: !row.clipKey, onClick: () => controller.playClip(row.id, row.clipKey) }, playingClip ? /* @__PURE__ */ k(Square, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: cannotGenerate || (row.status === "own" || row.status === "file" ? "Replace your audio with the generated voice" : generateLabel) }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `${generateLabel}, ${row.name}`, disabled: !!cannotGenerate, onClick: () => controller.generate({ stepIds: [row.id], force: row.status === "own" || row.status === "file" }) }, generating ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 16, "aria-hidden": "true" }) : row.status === "stale" || row.status === "fresh" ? /* @__PURE__ */ k(RefreshCw, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Sparkles, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Record your own voice for this step" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Record my voice, ${row.name}`, "aria-pressed": openRecorder === row.id, onClick: () => setOpenRecorder(openRecorder === row.id ? null : row.id) }, /* @__PURE__ */ k(Mic, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Use an audio file you already have" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Import file, ${row.name}`, disabled: busy === row.id, onClick: () => pickFile(row.id) }, busy === row.id ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Upload, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: row.muted ? "Turn this step\u2019s voice-over back on" : "Silence this step" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Mute ${row.name}`, "aria-pressed": row.muted, onClick: () => setSteps(row.id, { muted: !row.muted }) }, row.muted ? /* @__PURE__ */ k(VolumeX, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Volume2, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: row.clipKey ? "Remove the voice-over from this step" : "There is no voice-over to remove" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Remove clip, ${row.name}`, disabled: !row.clipKey, onClick: () => controller.removeClip(row.id) }, /* @__PURE__ */ k(Trash, { size: 16, "aria-hidden": "true" })))), openRecorder === row.id && /* @__PURE__ */ k(Recorder, { stepName: row.name, onClose: () => setOpenRecorder(null), onSave: (wav) => controller.saveClip(row.id, wav, "own") }), warnings.map((w4) => /* @__PURE__ */ k("div", { class: "row-warning", role: "status", key: w4.code }, /* @__PURE__ */ k("p", null, /* @__PURE__ */ k(TriangleAlert, { size: 14, "aria-hidden": "true" }), w4.message), w4.fixes?.length > 0 && /* @__PURE__ */ k("div", { class: "row-actions" }, w4.fixes.includes("freeze") && /* @__PURE__ */ k(Button, { size: "sm", variant: "outline", onClick: () => fix("freeze", row, w4) }, "Freeze last frame"), w4.fixes.includes("slow") && /* @__PURE__ */ k(Button, { size: "sm", variant: "outline", onClick: () => fix("slow", row, w4) }, "Slow video to fit")))), !!rowError && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, rowError));
   }
-  function VoicePanel({ state, store, controller, values, defaults }) {
+  function VoicePanel({ state, store, controller, values, defaults: defaults13 }) {
     const ctl = useController(controller), { project, composition, plan } = state;
     const info = project.voice ?? { installed: false, voices: [] };
     const [openRecorder, setOpenRecorder] = d2(null), [notice, setNotice] = d2(null), [busy, setBusy] = d2(null);
@@ -30344,10 +30768,10 @@
     const voiceId = values["audio.voice.voiceId"], speed = values["audio.voice.speed"];
     const rows = scriptRows({ storyboard: project.storyboard, composition, clips: project.clips, voice: voiceId, speed });
     const summary = voiceSummary(rows), todo = needsGenerating(rows), job = ctl.job;
-    const common = { values, defaults, state, store };
-    const warningsFor = (id) => (plan?.audio.warnings ?? []).filter((w4) => w4.stepId === id);
-    function setSteps(id, patch, path = "audio.narration.steps") {
-      store.change(path, narrationSteps(composition, id, patch));
+    const common = { values, defaults: defaults13, state, store };
+    const warningsFor = (id13) => (plan?.audio.warnings ?? []).filter((w4) => w4.stepId === id13);
+    function setSteps(id13, patch, path = "audio.narration.steps") {
+      store.change(path, narrationSteps(composition, id13, patch));
     }
     function fix(kind, row, warning) {
       const narration = plan.audio.narration.find((n2) => n2.stepId === row.id);
@@ -30364,29 +30788,29 @@
         setNotice({ id: row.id, message: error.message });
       }
     }
-    async function importFile(id, picked) {
+    async function importFile(id13, picked) {
       if (!picked) return;
-      setBusy(id);
+      setBusy(id13);
       setNotice(null);
       try {
         if (picked.size > MAX_UPLOAD_BYTES) throw new Error("That file is larger than 200 MB.");
         const { wav } = await convertToWav(await picked.arrayBuffer());
         if (wav.length > MAX_UPLOAD_BYTES) throw new Error("That audio is too long to import (over 200 MB as WAV).");
-        await controller.saveClip(id, wav, "file");
+        await controller.saveClip(id13, wav, "file");
       } catch (error) {
-        setNotice({ id, message: error.message });
+        setNotice({ id: id13, message: error.message });
       } finally {
         setBusy(null);
       }
     }
     const enabledSetting = settingFor("audio.voice.enabled");
-    return /* @__PURE__ */ k("div", { class: "voice-panel" }, /* @__PURE__ */ k(EngineCard, { info }), /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Narrator"), /* @__PURE__ */ k(SettingField, { ...common, setting: enabledSetting, render: ({ id, value, onChange }) => /* @__PURE__ */ k(Switch3, { id, "aria-label": enabledSetting.label, checked: value ?? project.brief?.voice?.enabled === true, onCheckedChange: onChange }) }), /* @__PURE__ */ k(
+    return /* @__PURE__ */ k("div", { class: "voice-panel" }, /* @__PURE__ */ k(EngineCard, { info }), /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Narrator"), /* @__PURE__ */ k(SettingField, { ...common, setting: enabledSetting, render: ({ id: id13, value, onChange }) => /* @__PURE__ */ k(Switch3, { id: id13, "aria-label": enabledSetting.label, checked: value ?? project.brief?.voice?.enabled === true, onCheckedChange: onChange }) }), /* @__PURE__ */ k(
       SettingField,
       {
         ...common,
         setting: settingFor("audio.voice.voiceId"),
-        render: ({ id, value, onChange }) => /* @__PURE__ */ k(VoicePicker, { id, value, onChange, info, ctl, controller }),
-        extra: /* @__PURE__ */ k(VoiceBrowser, { info, ctl, controller, value: voiceId, onPick: (id) => store.change("audio.voice.voiceId", id) })
+        render: ({ id: id13, value, onChange }) => /* @__PURE__ */ k(VoicePicker, { id: id13, value, onChange, info, ctl, controller }),
+        extra: /* @__PURE__ */ k(VoiceBrowser, { info, ctl, controller, value: voiceId, onPick: (id13) => store.change("audio.voice.voiceId", id13) })
       }
     ), /* @__PURE__ */ k(SettingField, { ...common, setting: { ...settingFor("audio.voice.speed"), min: SPEED_MIN, max: SPEED_MAX, step: 0.05 }, help: "How fast the narrator speaks; one is the natural pace. Changing it makes new voice-overs." }), /* @__PURE__ */ k(SettingField, { ...common, setting: settingFor("audio.voice.gainDb") })), /* @__PURE__ */ k("section", { class: "script", "aria-label": "Script" }, /* @__PURE__ */ k("div", { class: "script-heading" }, /* @__PURE__ */ k("h3", null, "Script"), /* @__PURE__ */ k("span", { class: "setting-help", role: "status" }, summary.total ? `${summary.ready} of ${summary.total} voice-overs ready` : "No narration yet")), /* @__PURE__ */ k("div", { class: "job-bar" }, job.running ? /* @__PURE__ */ k(S, null, /* @__PURE__ */ k("progress", { "aria-label": "Voice-over progress", max: Math.max(1, job.total), value: job.done + job.failed }), /* @__PURE__ */ k("span", { class: "setting-help", role: "status" }, job.cancelling ? "Stopping after this step\u2026" : `Generating ${Math.min(job.total, job.done + job.failed + 1)} of ${job.total}\u2026`), /* @__PURE__ */ k(Button, { size: "sm", disabled: job.cancelling, onClick: () => controller.cancel() }, "Cancel")) : /* @__PURE__ */ k(Tooltip2, { text: !info.installed ? "Install the voice engine to generate voice-overs" : todo.length ? "Make voice-overs for every step that needs one" : "Every step already has an up-to-date voice-over" }, /* @__PURE__ */ k(Button, { variant: "outline", size: "sm", disabled: !info.installed || !todo.length, onClick: () => controller.generate({ stepIds: todo.map((r4) => r4.id) }) }, todo.length ? `Generate all (${todo.length})` : "Generate all"))), !job.running && job.result && /* @__PURE__ */ k("p", { class: job.result.error || job.result.failed ? "error" : "setting-help", role: "status" }, job.result.error ? job.result.error : job.result.kind === "cancelled" ? `Stopped. ${job.result.done} made.` : job.result.failed ? `${job.result.done} made, ${job.result.failed} could not be made.` : `Done. ${job.result.done} voice-over${job.result.done === 1 ? "" : "s"} ready.`), ctl.error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, ctl.error), rows.length ? /* @__PURE__ */ k("ul", { class: "script-list" }, rows.map((row) => /* @__PURE__ */ k(
       ScriptRow,
@@ -30404,16 +30828,16 @@
         setOpenRecorder,
         setSteps,
         fix,
-        pickFile: (id) => {
-          importFor.current = id;
+        pickFile: (id13) => {
+          importFor.current = id13;
           file.current.click();
         }
       }
     ))) : /* @__PURE__ */ k("p", { class: "empty" }, "This project has no steps to narrate."), /* @__PURE__ */ k("input", { ref: file, class: "sr-only", type: "file", accept: "audio/*", tabIndex: "-1", "aria-label": "Choose an audio file", onChange: (e3) => {
       const picked = e3.currentTarget.files?.[0];
-      const id = importFor.current;
+      const id13 = importFor.current;
       e3.currentTarget.value = "";
-      importFile(id, picked);
+      importFile(id13, picked);
     } })));
   }
 
@@ -30440,7 +30864,7 @@
     }, [url]);
     return seconds2;
   }
-  function MusicFile({ id, value, state, store, controller, ctl }) {
+  function MusicFile({ id: id13, value, state, store, controller, ctl }) {
     const input = A2(), [busy, setBusy] = d2(false), [error, setError] = d2("");
     const url = value ? editorAudioUrls.music(value) : "", seconds2 = useDuration(url), playing = ctl.playing?.kind === "music";
     async function choose(file) {
@@ -30465,7 +30889,7 @@
         setBusy(false);
       }
     }
-    return /* @__PURE__ */ k("div", { class: "music-file" }, value ? /* @__PURE__ */ k("p", { class: "music-name", id: `${id}-name` }, /* @__PURE__ */ k("strong", { title: value }, baseName(value)), seconds2 != null && /* @__PURE__ */ k("span", { class: "duration" }, " \xB7 ", formatDuration(seconds2))) : /* @__PURE__ */ k("p", { class: "setting-help", id: `${id}-name` }, "No music chosen yet."), /* @__PURE__ */ k("div", { class: "row-actions", role: "group", id, "aria-label": "Music file" }, /* @__PURE__ */ k(Button, { variant: "outline", size: "sm", disabled: busy, onClick: () => input.current.click() }, busy ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 14, "aria-hidden": "true" }) : /* @__PURE__ */ k(Upload, { size: 14, "aria-hidden": "true" }), value ? "Replace file" : "Choose file"), /* @__PURE__ */ k(Tooltip2, { text: value ? "Listen to the music on its own" : "Choose a music file first" }, /* @__PURE__ */ k(Button, { size: "sm", "aria-label": playing ? "Stop music preview" : "Play music preview", disabled: !value, onClick: () => controller.playMusic(url) }, playing ? /* @__PURE__ */ k(Square, { size: 14, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 14, "aria-hidden": "true" }), playing ? "Stop" : "Play preview")), /* @__PURE__ */ k(Tooltip2, { text: value ? "Take the music out of the video" : "There is no music to remove" }, /* @__PURE__ */ k(Button, { size: "sm", "aria-label": "Remove music", disabled: !value, onClick: () => {
+    return /* @__PURE__ */ k("div", { class: "music-file" }, value ? /* @__PURE__ */ k("p", { class: "music-name", id: `${id13}-name` }, /* @__PURE__ */ k("strong", { title: value }, baseName(value)), seconds2 != null && /* @__PURE__ */ k("span", { class: "duration" }, " \xB7 ", formatDuration(seconds2))) : /* @__PURE__ */ k("p", { class: "setting-help", id: `${id13}-name` }, "No music chosen yet."), /* @__PURE__ */ k("div", { class: "row-actions", role: "group", id: id13, "aria-label": "Music file" }, /* @__PURE__ */ k(Button, { variant: "outline", size: "sm", disabled: busy, onClick: () => input.current.click() }, busy ? /* @__PURE__ */ k(LoaderCircle, { class: "spin", size: 14, "aria-hidden": "true" }) : /* @__PURE__ */ k(Upload, { size: 14, "aria-hidden": "true" }), value ? "Replace file" : "Choose file"), /* @__PURE__ */ k(Tooltip2, { text: value ? "Listen to the music on its own" : "Choose a music file first" }, /* @__PURE__ */ k(Button, { size: "sm", "aria-label": playing ? "Stop music preview" : "Play music preview", disabled: !value, onClick: () => controller.playMusic(url) }, playing ? /* @__PURE__ */ k(Square, { size: 14, "aria-hidden": "true" }) : /* @__PURE__ */ k(Play, { size: 14, "aria-hidden": "true" }), playing ? "Stop" : "Play preview")), /* @__PURE__ */ k(Tooltip2, { text: value ? "Take the music out of the video" : "There is no music to remove" }, /* @__PURE__ */ k(Button, { size: "sm", "aria-label": "Remove music", disabled: !value, onClick: () => {
       controller.stopPlayback();
       store.setComposition(changeComposition(changeComposition(state.composition, "audio.music.file", null), "audio.music.enabled", false), "audio.music.file");
     } }, /* @__PURE__ */ k(Trash, { size: 14, "aria-hidden": "true" }), "Remove"))), /* @__PURE__ */ k(
@@ -30485,30 +30909,30 @@
       }
     ), !!error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, error));
   }
-  function MusicPanel({ state, store, controller, values, defaults }) {
-    const ctl = useController(controller), common = { values, defaults, state, store };
+  function MusicPanel({ state, store, controller, values, defaults: defaults13 }) {
+    const ctl = useController(controller), common = { values, defaults: defaults13, state, store };
     const field = (path) => /* @__PURE__ */ k(SettingField, { ...common, key: path, setting: settingFor(path) });
     const measured = loudnessText(state.project.lastExport);
-    return /* @__PURE__ */ k("div", { class: "music-panel" }, /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Background music"), MUSIC_PANEL_PATHS.music.map((path) => path === "audio.music.file" ? /* @__PURE__ */ k(SettingField, { ...common, key: path, setting: settingFor(path), render: ({ id, value }) => /* @__PURE__ */ k(MusicFile, { id, value, state, store, controller, ctl }) }) : field(path))), /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Music under the voice"), MUSIC_PANEL_PATHS.ducking.map(field), /* @__PURE__ */ k("details", null, /* @__PURE__ */ k("summary", null, "Advanced"), MUSIC_PANEL_PATHS.advanced.map(field))), /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Mix and loudness"), MUSIC_PANEL_PATHS.loudness.map((path) => /* @__PURE__ */ k(SettingField, { ...common, key: path, setting: settingFor(path), extra: /* @__PURE__ */ k("p", { class: "setting-help" }, MIX_HELP[path]) })), /* @__PURE__ */ k("p", { class: "last-measured", role: "status" }, /* @__PURE__ */ k("strong", null, "Last measured:"), " ", measured ?? "not yet. Export the video to measure it."), /* @__PURE__ */ k("p", { class: "setting-help" }, "The preview plays the same mix, including the level adjustment, so what you hear is close to what you export.")));
+    return /* @__PURE__ */ k("div", { class: "music-panel" }, /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Background music"), MUSIC_PANEL_PATHS.music.map((path) => path === "audio.music.file" ? /* @__PURE__ */ k(SettingField, { ...common, key: path, setting: settingFor(path), render: ({ id: id13, value }) => /* @__PURE__ */ k(MusicFile, { id: id13, value, state, store, controller, ctl }) }) : field(path))), /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Music under the voice"), MUSIC_PANEL_PATHS.ducking.map(field), /* @__PURE__ */ k("details", null, /* @__PURE__ */ k("summary", null, "Advanced"), MUSIC_PANEL_PATHS.advanced.map(field))), /* @__PURE__ */ k("details", { class: "setting-group", open: true }, /* @__PURE__ */ k("summary", null, "Mix and loudness"), MUSIC_PANEL_PATHS.loudness.map((path) => /* @__PURE__ */ k(SettingField, { ...common, key: path, setting: settingFor(path), extra: /* @__PURE__ */ k("p", { class: "setting-help" }, MIX_HELP[path]) })), /* @__PURE__ */ k("p", { class: "last-measured", role: "status" }, /* @__PURE__ */ k("strong", null, "Last measured:"), " ", measured ?? "not yet. Export the video to measure it."), /* @__PURE__ */ k("p", { class: "setting-help" }, "The preview plays the same mix, including the level adjustment, so what you hear is close to what you export.")));
   }
 
   // editor/Settings.jsx
   function Settings({ state, store, controller }) {
     const [query, setQuery] = d2(""), [tab, setTab] = d2("look");
     const groups = groupSettings(SETTINGS, query), names = Object.keys(groups);
-    const values = compositionPaths(state.composition), defaults = compositionPaths({});
+    const values = compositionPaths(state.composition), defaults13 = compositionPaths({});
     const audio = groups.audio ?? [];
     const tabNames = { look: "Look", cursor: "Cursor", zoom: "Zoom", captions: "Captions", cards: "Intro & outro", audio: "Audio", voice: "Voice", music: "Music", output: "Size & quality" };
     const has = { voice: audio.some((s3) => s3.path.startsWith("audio.voice.")), music: audio.some((s3) => !s3.path.startsWith("audio.voice.")) };
     const ordered = ["look", "cursor", "zoom", "captions", "cards", "voice", "music", "output"].filter((name) => name === "voice" || name === "music" ? has[name] && controller : names.includes(name));
     const active = ordered.includes(tab) ? tab : ordered[0];
-    const field = (s3) => /* @__PURE__ */ k(SettingField, { key: s3.path, setting: s3, values, defaults, state, store });
+    const field = (s3) => /* @__PURE__ */ k(SettingField, { key: s3.path, setting: s3, values, defaults: defaults13, state, store });
     function fields(entries) {
       const sections2 = {};
       for (const entry of entries) (sections2[entry.section] ??= []).push(entry);
       return Object.entries(sections2).map(([name, items]) => /* @__PURE__ */ k("details", { class: "setting-group", key: name, open: true }, /* @__PURE__ */ k("summary", null, name.replace(/^title card/, "Intro card")), items.map(field)));
     }
-    return /* @__PURE__ */ k("aside", { class: "settings", "aria-label": "Composition settings" }, /* @__PURE__ */ k("div", { class: "panel-heading" }, /* @__PURE__ */ k("h2", null, "Settings"), /* @__PURE__ */ k("span", null, "COMPOSITION")), /* @__PURE__ */ k(Label3, { class: "search" }, /* @__PURE__ */ k("span", { class: "sr-only" }, "Search settings"), /* @__PURE__ */ k(Input2, { type: "search", placeholder: "Search settings\u2026", value: query, onInput: (e3) => setQuery(e3.currentTarget.value) })), /* @__PURE__ */ k(Tabs3, { value: active ?? "", onValueChange: setTab, className: "settings-tabs" }, /* @__PURE__ */ k(TabsList3, { "aria-label": "Settings groups" }, ordered.map((name) => /* @__PURE__ */ k(TabsTrigger3, { key: name, value: name }, tabNames[name]))), active === "voice" ? /* @__PURE__ */ k(TabsContent3, { value: "voice" }, /* @__PURE__ */ k(VoicePanel, { state, store, controller, values, defaults })) : active === "music" ? /* @__PURE__ */ k(TabsContent3, { value: "music" }, /* @__PURE__ */ k(MusicPanel, { state, store, controller, values, defaults })) : active ? /* @__PURE__ */ k(TabsContent3, { value: active }, fields(groups[active].filter((s3) => !s3.advanced)), groups[active].some((s3) => s3.advanced) && /* @__PURE__ */ k("details", null, /* @__PURE__ */ k("summary", null, "Advanced"), fields(groups[active].filter((s3) => s3.advanced)))) : /* @__PURE__ */ k("p", { class: "empty" }, "No matching settings")));
+    return /* @__PURE__ */ k("aside", { class: "settings", "aria-label": "Composition settings" }, /* @__PURE__ */ k("div", { class: "panel-heading" }, /* @__PURE__ */ k("h2", null, "Settings"), /* @__PURE__ */ k("span", null, "COMPOSITION")), /* @__PURE__ */ k(Label3, { class: "search" }, /* @__PURE__ */ k("span", { class: "sr-only" }, "Search settings"), /* @__PURE__ */ k(Input2, { type: "search", placeholder: "Search settings\u2026", value: query, onInput: (e3) => setQuery(e3.currentTarget.value) })), /* @__PURE__ */ k(Tabs3, { value: active ?? "", onValueChange: setTab, className: "settings-tabs" }, /* @__PURE__ */ k(TabsList3, { "aria-label": "Settings groups" }, ordered.map((name) => /* @__PURE__ */ k(TabsTrigger3, { key: name, value: name }, tabNames[name]))), active === "voice" ? /* @__PURE__ */ k(TabsContent3, { value: "voice" }, /* @__PURE__ */ k(VoicePanel, { state, store, controller, values, defaults: defaults13 })) : active === "music" ? /* @__PURE__ */ k(TabsContent3, { value: "music" }, /* @__PURE__ */ k(MusicPanel, { state, store, controller, values, defaults: defaults13 })) : active ? /* @__PURE__ */ k(TabsContent3, { value: active }, fields(groups[active].filter((s3) => !s3.advanced)), groups[active].some((s3) => s3.advanced) && /* @__PURE__ */ k("details", null, /* @__PURE__ */ k("summary", null, "Advanced"), fields(groups[active].filter((s3) => s3.advanced)))) : /* @__PURE__ */ k("p", { class: "empty" }, "No matching settings")));
   }
 
   // node_modules/@radix-ui/react-dialog/dist/index.mjs
@@ -30770,8 +31194,8 @@
     const ids = /* @__PURE__ */ new Set();
     for (const value of values) {
       if (typeof value !== "string") continue;
-      for (const id of String(value).trim().split(/\s+/)) {
-        if (id) ids.add(id);
+      for (const id13 of String(value).trim().split(/\s+/)) {
+        if (id13) ids.add(id13);
       }
     }
     return ids.size > 0 ? Array.from(ids).join(" ") : void 0;
@@ -30876,7 +31300,7 @@
   }
 
   // editor/TopBar.jsx
-  function TopBar({ state, store, voice, theme, toggleTheme, notify }) {
+  function TopBar({ state, store, voice, theme: theme2, toggleTheme, notify }) {
     const [exportOpen, setExportOpen] = d2(false);
     const status = state.error ? "Error" : state.saving || state.dirty ? "Saving" : "Saved";
     return /* @__PURE__ */ k("header", { class: "topbar" }, /* @__PURE__ */ k("div", { class: "brand" }, /* @__PURE__ */ k(Clapperboard, { size: 20, "aria-hidden": "true" }), /* @__PURE__ */ k("span", null, "Showreel")), /* @__PURE__ */ k("div", { class: "project-name" }, /* @__PURE__ */ k("strong", null, state.project?.name ?? "Loading project\u2026")), /* @__PURE__ */ k("span", { class: `save-status ${state.error ? "error" : ""}`, role: "status", title: state.error ?? "" }, status), state.error && state.dirty && /* @__PURE__ */ k(Button, { onClick: () => store.save().catch(() => {
@@ -30886,7 +31310,7 @@
     } }, /* @__PURE__ */ k(Undo2, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: state.future.length ? "Redo (\u2318/Ctrl Shift Z)" : "Nothing to redo (\u2318/Ctrl Shift Z)" }, /* @__PURE__ */ k(Button, { size: "icon", disabled: !state.future.length, "aria-label": "Redo", onClick: () => {
       store.redo();
       notify("Redone");
-    } }, /* @__PURE__ */ k(Redo2, { size: 16, "aria-hidden": "true" })))), /* @__PURE__ */ k(Tooltip2, { text: `Switch to ${theme === "dark" ? "light" : "dark"} theme` }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Switch to ${theme === "dark" ? "light" : "dark"} theme`, onClick: toggleTheme }, theme === "dark" ? /* @__PURE__ */ k(Sun, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Moon, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: state.composition ? "Export your video" : "Load a recording before exporting" }, /* @__PURE__ */ k(Button, { variant: "default", disabled: !state.composition, onClick: () => setExportOpen(true) }, /* @__PURE__ */ k(Download, { size: 16, "aria-hidden": "true" }), "Export")), exportOpen && /* @__PURE__ */ k(ExportDialog, { store, voice, onClose: () => setExportOpen(false) }));
+    } }, /* @__PURE__ */ k(Redo2, { size: 16, "aria-hidden": "true" })))), /* @__PURE__ */ k(Tooltip2, { text: `Switch to ${theme2 === "dark" ? "light" : "dark"} theme` }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": `Switch to ${theme2 === "dark" ? "light" : "dark"} theme`, onClick: toggleTheme }, theme2 === "dark" ? /* @__PURE__ */ k(Sun, { size: 16, "aria-hidden": "true" }) : /* @__PURE__ */ k(Moon, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: state.composition ? "Export your video" : "Load a recording before exporting" }, /* @__PURE__ */ k(Button, { variant: "default", disabled: !state.composition, onClick: () => setExportOpen(true) }, /* @__PURE__ */ k(Download, { size: 16, "aria-hidden": "true" }), "Export")), exportOpen && /* @__PURE__ */ k(ExportDialog, { store, voice, onClose: () => setExportOpen(false) }));
   }
 
   // editor/ui/separator.jsx
@@ -30898,7 +31322,7 @@
     if (!map || !plan.audio?.narration?.length) return [];
     const toDisplay = (t3) => output ? t3 : sourceAt(map, t3).t;
     return plan.audio.narration.map((n2) => {
-      const step = storyboard?.steps?.find((s3) => s3.id === n2.stepId), text = effectiveNarration(step, composition);
+      const step = storyboard?.steps?.find((s3) => s3.id === n2.stepId), text2 = effectiveNarration(step, composition);
       const warnings = (plan.audio.warnings ?? []).filter((w4) => w4.stepId === n2.stepId);
       return {
         stepId: n2.stepId,
@@ -30906,7 +31330,7 @@
         outEnd: n2.outStart + n2.durationSec,
         start: toDisplay(n2.outStart),
         end: toDisplay(n2.outStart + n2.durationSec),
-        label: firstWords(text) || n2.stepId,
+        label: firstWords(text2) || n2.stepId,
         source: n2.source ?? "tts",
         warning: warnings.length ? warnings.map((w4) => w4.message).join(" ") : null
       };
@@ -30936,7 +31360,7 @@
     const [scale, setScale] = d2(80), [output, setOutput] = d2(false), [error, setError] = d2("");
     const [splits, setSplits] = d2([]), [speedOpen, setSpeedOpen] = d2(false), [rate, setRate] = d2(2);
     const [depth, setDepth] = d2(1.7), [editing, setEditing] = d2(null), [draft, setDraft] = d2(null);
-    const scroller = A2(), lanes = A2(), gesture = A2(null), anchor = A2(null);
+    const scroller = A2(), lanes = A2(), gesture = A2(null), anchor2 = A2(null);
     const duration = project?.record.durationSec ?? 0, map = plan?.timemap;
     const sourceT = map ? sourceAt(map, time).t : 0;
     const context = { duration, plan };
@@ -31150,8 +31574,8 @@
       if (e3.button !== 0) return;
       e3.preventDefault();
       e3.currentTarget.focus();
-      const t3 = snap(fromClient(e3.clientX), e3.altKey), initial = e3.shiftKey && anchor.current !== null ? anchor.current : t3;
-      anchor.current = initial;
+      const t3 = snap(fromClient(e3.clientX), e3.altKey), initial = e3.shiftKey && anchor2.current !== null ? anchor2.current : t3;
+      anchor2.current = initial;
       const select = (value) => setSelection({ type: "range", start: Math.min(initial, value), end: Math.max(initial, value) });
       const boundaries = [.../* @__PURE__ */ new Set([0, duration, ...steps.flatMap((s3) => [s3.tStart, s3.tEnd]), ...splits])].sort((a3, b3) => a3 - b3);
       if (e3.shiftKey) select(t3);
@@ -31226,7 +31650,7 @@
     const ticks = [];
     const tickStep = [0.25, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600].find((n2) => n2 * scale >= 65) ?? 600;
     for (let t3 = 0; t3 <= extent; t3 += tickStep) ticks.push(t3);
-    function block(sel, start, end, label, kind) {
+    function block(sel, start, end, label13, kind) {
       const active = selection?.type === sel.type && (sel.id ? selection.id === sel.id : selection.index === sel.index);
       return /* @__PURE__ */ k(
         "div",
@@ -31234,7 +31658,7 @@
           key: sel.id ?? sel.index,
           role: "button",
           tabIndex: "0",
-          "aria-label": `${kind}: ${label}, ${clock(start)} to ${clock(end)}; arrow keys move`,
+          "aria-label": `${kind}: ${label13}, ${clock(start)} to ${clock(end)}; arrow keys move`,
           "aria-pressed": active,
           class: `timeline-block ${kind} ${active ? "selected" : ""}`,
           style: style(start, end),
@@ -31242,17 +31666,17 @@
           onFocus: () => setSelection(sel),
           onClick: () => setSelection(sel),
           onDblClick: () => {
-            if (sel.type === "caption") setEditing({ id: sel.id, text: label });
+            if (sel.type === "caption") setEditing({ id: sel.id, text: label13 });
           },
           onKeyDown: (e3) => {
             if (e3.key === "Enter") {
               setSelection(sel);
-              if (sel.type === "caption") setEditing({ id: sel.id, text: label });
+              if (sel.type === "caption") setEditing({ id: sel.id, text: label13 });
             }
           }
         },
         /* @__PURE__ */ k(Button, { class: "edge start", "aria-label": `Resize ${kind} start`, onPointerDown: (e3) => drag(e3, sel, "start"), onKeyDown: (e3) => resizeKey(e3, sel, "start") }),
-        /* @__PURE__ */ k("span", null, kind === "zoom" ? /* @__PURE__ */ k(S, null, label.split(" \xB7 ")[0], " ", /* @__PURE__ */ k(Badge, null, label.split(" \xB7 ")[1])) : label),
+        /* @__PURE__ */ k("span", null, kind === "zoom" ? /* @__PURE__ */ k(S, null, label13.split(" \xB7 ")[0], " ", /* @__PURE__ */ k(Badge, null, label13.split(" \xB7 ")[1])) : label13),
         /* @__PURE__ */ k(Button, { class: "edge end", "aria-label": `Resize ${kind} end`, onPointerDown: (e3) => drag(e3, sel, "end"), onKeyDown: (e3) => resizeKey(e3, sel, "end") })
       );
     }
@@ -31276,7 +31700,7 @@
       setSpeedOpen(false);
     } }, "Apply"))), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: "Add zoom region (Z)" }, /* @__PURE__ */ k(Button, { onClick: addZoom }, "Add zoom")), /* @__PURE__ */ k("div", { class: "depth-control" }, /* @__PURE__ */ k("span", null, "Depth"), /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Decrease zoom depth", disabled: zoomDepth(selectedZoom?.depth ?? depth) <= 1.05, onClick: () => changeDepth(Math.max(1.05, +(zoomDepth(selectedZoom?.depth ?? depth) - 0.05).toFixed(2))) }, "\u2212"), /* @__PURE__ */ k(Tooltip2, { text: "Zoom depth" }, /* @__PURE__ */ k(Popover2, { label: "Zoom depth", trigger: /* @__PURE__ */ k(Button, { "aria-label": "Zoom depth" }, zoomDepth(selectedZoom?.depth ?? depth), "\xD7") }, /* @__PURE__ */ k(Label3, null, "Zoom depth", /* @__PURE__ */ k(Input2, { "aria-label": "Zoom depth value", type: "number", min: "1.05", max: "4", step: "0.05", value: zoomDepth(selectedZoom?.depth ?? depth), onInput: (e3) => {
       changeDepth(+e3.currentTarget.value);
-    } })))), /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Increase zoom depth", disabled: zoomDepth(selectedZoom?.depth ?? depth) >= 4, onClick: () => changeDepth(Math.min(4, +(zoomDepth(selectedZoom?.depth ?? depth) + 0.05).toFixed(2))) }, "+")), /* @__PURE__ */ k(Tooltip2, { text: "Regenerate automatic zooms; preserve manual regions" }, /* @__PURE__ */ k(Button, { onClick: () => commit(() => autoZoomRegenerate(working, project.events, project.record)) }, "Auto zoom")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: "Add caption (C)" }, /* @__PURE__ */ k(Button, { onClick: addCue }, "Add caption")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: selection?.type === "trim" ? "Restore the selected removed range" : "Select a removed range to restore it" }, /* @__PURE__ */ k(Button, { disabled: selection?.type !== "trim", onClick: () => restore() }, "Restore")), /* @__PURE__ */ k("div", { class: "time-mode" }, /* @__PURE__ */ k(Tooltip2, { text: "Show source or edited output time" }, /* @__PURE__ */ k("span", null, /* @__PURE__ */ k(ToggleGroup, { "aria-label": "Timeline time", value: output ? "output" : "source", onValueChange: (next) => setOutput(next === "output"), options: [{ value: "source", label: "Source" }, { value: "output", label: "Output" }] })))), /* @__PURE__ */ k("div", { class: "timeline-summary" }, /* @__PURE__ */ k("strong", null, "Result ", clock(map.outputDuration)), /* @__PURE__ */ k("span", null, " \xB7 ", clock(c3.edits.trims.reduce((n2, r4) => n2 + r4.end - r4.start, 0)), " removed \xB7 ", c3.edits.trims.length, " ", c3.edits.trims.length === 1 ? "cut" : "cuts")), /* @__PURE__ */ k(Tooltip2, { text: `${output ? "OUTPUT" : "SOURCE"} TIME \xB7 Drag to select \xB7 Alt disables snapping` }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Timeline help" }, /* @__PURE__ */ k(Info, { size: 14, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline out (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline out", onClick: () => changeScale(scale / 1.4) }, "\u2212")), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline in (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline in", onClick: () => changeScale(scale * 1.4) }, "+"))), error && /* @__PURE__ */ k("p", { role: "status", class: "timeline-message" }, error), selectedZoom && /* @__PURE__ */ k("p", { class: "timeline-message" }, "Click the preview to set this region\u2019s focus at the playhead."), /* @__PURE__ */ k("div", { class: "timeline-grid", ref: scroller, tabIndex: "0", role: "region", "aria-label": "Timeline; scroll to pan" }, /* @__PURE__ */ k("div", { class: "track-labels", "aria-hidden": "true" }, ["Time", "Video", "Speed", "Zoom", "Captions", "Cursor", "Voice", "Music"].map((label) => /* @__PURE__ */ k("div", { class: ["Voice", "Music"].includes(label) ? "compact" : "" }, label))), /* @__PURE__ */ k("div", { class: "timeline-scroll" }, /* @__PURE__ */ k("div", { class: "timeline-lanes", ref: lanes, style: { width } }, /* @__PURE__ */ k(
+    } })))), /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Increase zoom depth", disabled: zoomDepth(selectedZoom?.depth ?? depth) >= 4, onClick: () => changeDepth(Math.min(4, +(zoomDepth(selectedZoom?.depth ?? depth) + 0.05).toFixed(2))) }, "+")), /* @__PURE__ */ k(Tooltip2, { text: "Regenerate automatic zooms; preserve manual regions" }, /* @__PURE__ */ k(Button, { onClick: () => commit(() => autoZoomRegenerate(working, project.events, project.record)) }, "Auto zoom")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: "Add caption (C)" }, /* @__PURE__ */ k(Button, { onClick: addCue }, "Add caption")), /* @__PURE__ */ k(Separator, null), /* @__PURE__ */ k(Tooltip2, { text: selection?.type === "trim" ? "Restore the selected removed range" : "Select a removed range to restore it" }, /* @__PURE__ */ k(Button, { disabled: selection?.type !== "trim", onClick: () => restore() }, "Restore")), /* @__PURE__ */ k("div", { class: "time-mode" }, /* @__PURE__ */ k(Tooltip2, { text: "Show source or edited output time" }, /* @__PURE__ */ k("span", null, /* @__PURE__ */ k(ToggleGroup, { "aria-label": "Timeline time", value: output ? "output" : "source", onValueChange: (next) => setOutput(next === "output"), options: [{ value: "source", label: "Source" }, { value: "output", label: "Output" }] })))), /* @__PURE__ */ k("div", { class: "timeline-summary" }, /* @__PURE__ */ k("strong", null, "Result ", clock(map.outputDuration)), /* @__PURE__ */ k("span", null, " \xB7 ", clock(c3.edits.trims.reduce((n2, r4) => n2 + r4.end - r4.start, 0)), " removed \xB7 ", c3.edits.trims.length, " ", c3.edits.trims.length === 1 ? "cut" : "cuts")), /* @__PURE__ */ k(Tooltip2, { text: `${output ? "OUTPUT" : "SOURCE"} TIME \xB7 Drag to select \xB7 Alt disables snapping` }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Timeline help" }, /* @__PURE__ */ k(Info, { size: 14, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline out (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline out", onClick: () => changeScale(scale / 1.4) }, "\u2212")), /* @__PURE__ */ k(Tooltip2, { text: "Zoom timeline in (Ctrl/\u2318 + wheel)" }, /* @__PURE__ */ k(Button, { size: "icon", "aria-label": "Zoom timeline in", onClick: () => changeScale(scale * 1.4) }, "+"))), error && /* @__PURE__ */ k("p", { role: "status", class: "timeline-message" }, error), selectedZoom && /* @__PURE__ */ k("p", { class: "timeline-message" }, "Click the preview to set this region\u2019s focus at the playhead."), /* @__PURE__ */ k("div", { class: "timeline-grid", ref: scroller, tabIndex: "0", role: "region", "aria-label": "Timeline; scroll to pan" }, /* @__PURE__ */ k("div", { class: "track-labels", "aria-hidden": "true" }, ["Time", "Video", "Speed", "Zoom", "Captions", "Cursor", "Voice", "Music"].map((label13) => /* @__PURE__ */ k("div", { class: ["Voice", "Music"].includes(label13) ? "compact" : "" }, label13))), /* @__PURE__ */ k("div", { class: "timeline-scroll" }, /* @__PURE__ */ k("div", { class: "timeline-lanes", ref: lanes, style: { width } }, /* @__PURE__ */ k(
       "div",
       {
         class: "timeline-ruler",
@@ -31364,7 +31788,7 @@
     const height = timelineHeight(chosen, viewportH);
     const [hint, setHint] = d2(() => readPreference("hint-dismissed", "") !== "yes");
     const [sheet, setSheet] = d2(false);
-    const [theme, setTheme] = d2(() => readPreference("theme", "") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+    const [theme2, setTheme] = d2(() => readPreference("theme", "") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
     const [selection, setSelection] = d2(null);
     const [provider, setProvider] = d2(null), [mediaError, setMediaError] = d2("");
     const [time, setTime] = d2(0), [playing, setPlaying] = d2(false);
@@ -31451,8 +31875,8 @@
       }
     }, [toast]);
     h2(() => {
-      document.documentElement.dataset.theme = theme;
-    }, [theme]);
+      document.documentElement.dataset.theme = theme2;
+    }, [theme2]);
     h2(() => {
       const media = matchMedia("(prefers-color-scheme: dark)");
       const follow = () => {
@@ -31489,8 +31913,8 @@
       addEventListener("pointerup", finish2);
       addEventListener("pointercancel", finish2);
     }
-    return /* @__PURE__ */ k(TooltipProvider2, { delayDuration: 350 }, /* @__PURE__ */ k("div", { ref: shell, class: "editor-shell", style: { "--timeline-height": `${height}px` } }, /* @__PURE__ */ k(TopBar, { state, store, voice, theme, toggleTheme: () => {
-      const next = theme === "dark" ? "light" : "dark";
+    return /* @__PURE__ */ k(TooltipProvider2, { delayDuration: 350 }, /* @__PURE__ */ k("div", { ref: shell, class: "editor-shell", style: { "--timeline-height": `${height}px` } }, /* @__PURE__ */ k(TopBar, { state, store, voice, theme: theme2, toggleTheme: () => {
+      const next = theme2 === "dark" ? "light" : "dark";
       setTheme(next);
       writePreference("theme", next);
     }, notify: setToast }), /* @__PURE__ */ k("div", { class: "workspace" }, /* @__PURE__ */ k("div", { class: "viewer" }, /* @__PURE__ */ k("div", { class: "viewer-heading" }, /* @__PURE__ */ k("span", null, "PREVIEW"), /* @__PURE__ */ k("div", null, /* @__PURE__ */ k(Tooltip2, { text: "Keyboard shortcuts (?)" }, /* @__PURE__ */ k(Button, { size: "icon", onClick: () => setShortcuts(true), "aria-label": "Keyboard shortcuts" }, /* @__PURE__ */ k(Keyboard, { size: 16, "aria-hidden": "true" }))), /* @__PURE__ */ k(Tooltip2, { text: "Open composition settings" }, /* @__PURE__ */ k(Button, { class: "settings-toggle", size: "icon", onClick: () => setSheet(true), "aria-label": "Open settings" }, /* @__PURE__ */ k(Settings2, { size: 16, "aria-hidden": "true" }))))), (state.error || mediaError) && /* @__PURE__ */ k("p", { class: "error app-error", role: "alert" }, mediaError || state.error), /* @__PURE__ */ k(

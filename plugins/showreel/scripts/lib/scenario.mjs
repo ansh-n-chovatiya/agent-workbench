@@ -20,7 +20,7 @@ export function validateScenario(sc, { secrets = {} } = {}) {
     for (const [j, action] of step.actions.entries()) {
       const key = `${prefix}.${j}`;
       if (!object(action)) { fail(key, 'must be an object'); continue; }
-      if (!['goto', 'click', 'fill', 'press', 'wait'].includes(action.type)) fail(`${key}.type`, 'must be goto|click|fill|press|wait');
+      if (!['goto', 'click', 'fill', 'press', 'wait', 'scroll'].includes(action.type)) fail(`${key}.type`, 'must be goto|click|fill|press|wait|scroll');
       if (action.type === 'goto' && !httpURL(action.url)) fail(`${key}.url`, 'must be an http(s) URL');
       if (['click', 'fill', 'press'].includes(action.type)) {
         if (!nonempty(action.selector)) fail(`${key}.selector`, 'must be a non-empty string');
@@ -35,6 +35,7 @@ export function validateScenario(sc, { secrets = {} } = {}) {
         } else if (typeof action.value !== 'string') fail(`${key}.value`, 'must be a string');
       }
       if (action.type === 'press' && !nonempty(action.key)) fail(`${key}.key`, 'must be a non-empty string');
+      if (action.type === 'scroll' && (!Number.isFinite(action.deltaY) || Math.abs(action.deltaY) > 100000 || (action.deltaX !== undefined && !Number.isFinite(action.deltaX)))) fail(key, 'scroll needs a finite deltaY (up to 100000 pixels) and optional finite deltaX');
       if (action.type === 'wait' && (!Number.isFinite(action.ms) || action.ms < 0 || action.ms > 60000)) fail(`${key}.ms`, 'must be a number from 0 to 60000');
     }
   }

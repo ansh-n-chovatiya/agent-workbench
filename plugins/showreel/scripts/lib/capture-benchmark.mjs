@@ -1,3 +1,4 @@
+import { profileContext } from './record/profiles.mjs';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from 'playwright';
@@ -46,7 +47,7 @@ async function openPage(browser, url, scale, options = {}) {
   const viewport = options.viewport ?? { width: 1920, height: 1080 };
   const context = await browser.newContext({
     viewport: { width: Math.round(viewport.width * scale), height: Math.round(viewport.height * scale) },
-    deviceScaleFactor: 1,
+    deviceScaleFactor: 1, ...profileContext(options.profile),
     storageState: options.storageState,
   });
   try {
@@ -171,13 +172,13 @@ export async function measureLayoutGuard(browser, url, scale, options = {}) {
 }
 
 export async function benchmarkPipeline({ url, scales = [1, 1.33, 1.67, 2], seconds = 4,
-  browser: suppliedBrowser, viewport, guard = {}, storageState } = {}) {
+  browser: suppliedBrowser, viewport, profile, guard = {}, storageState } = {}) {
   if (!Number.isFinite(seconds) || seconds <= 0
     || scales.some((scale) => !Number.isFinite(scale) || scale <= 0)) {
     throw new Error('Capture scales and seconds must be positive finite numbers');
   }
   let browser, directory;
-  const options = { viewport, guard, storageState };
+  const options = { viewport, profile, guard, storageState };
   try {
     directory = await mkdtemp(path.join(os.tmpdir(), 'showreel-pipeline-'));
     browser = suppliedBrowser ?? await chromium.launch();

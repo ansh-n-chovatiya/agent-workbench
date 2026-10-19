@@ -7,6 +7,7 @@ const integer = (value) => Number.isInteger(value) && value >= 0;
 const dimension = (value) => Number.isInteger(value) && value > 0;
 const scale = (value) => number(value) && value >= 1 && value <= 2;
 const requested = (value) => ['auto', 1, 1.33, 1.67, 2].includes(value);
+const profile = (value) => value === undefined || ['desktop', 'phone'].includes(value);
 const boolean = (value) => typeof value === 'boolean';
 function iso(value) {
   if (typeof value !== 'string'
@@ -50,7 +51,7 @@ function validator(label) {
 
 export function validateEvents(events) {
   const v = validator('events.json');
-  if (!v.fields(events, '', { version: (value) => value === 1, scale })) return v.result();
+  if (!v.fields(events, '', { version: (value) => value === 1, scale, profile })) return v.result();
   v.fields(events.viewport, 'viewport', { width: dimension, height: dimension });
   const ids = new Set();
   v.ordered(events.steps, 'steps', {
@@ -64,7 +65,10 @@ export function validateEvents(events) {
   });
   const position = { t: nonnegative, x: number, y: number };
   v.ordered(events.cursor, 'cursor', position);
-  v.ordered(events.clicks, 'clicks', { ...position, stepId: text, tab: integer });
+  v.ordered(events.clicks, 'clicks', { ...position, stepId: text, tab: integer,
+    kind: (value) => value === undefined || ['click', 'tap'].includes(value) }, ['t'], (entry, key) => {
+      if (events.profile === 'phone' && entry.kind !== 'tap') v.fail(`${key}.kind`, 'must be tap for phone recordings');
+    });
   v.ordered(events.keys, 'keys', { t: nonnegative, stepId: text, count: integer }, ['t'], (entry, key) => {
     // Only counts belong in this file; unknown payloads can leak typed secrets.
     for (const name of Object.keys(entry)) {
@@ -88,7 +92,7 @@ export function validateRecord(record) {
   const v = validator('record.json');
   if (!v.fields(record, '', {
     version: (value) => value === 1, projectName: text, runId: text,
-    startedAt: iso, durationSec: nonnegative,
+    profile, startedAt: iso, durationSec: nonnegative,
   })) return v.result();
   v.fields(record.scale, 'scale', { requested, used: scale, reason: text });
   v.fields(record.fps, 'fps', {

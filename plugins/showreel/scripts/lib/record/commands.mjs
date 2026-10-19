@@ -6,7 +6,7 @@ import { readProjectFile } from '../project.mjs';
 
 export function parseRecordOptions(command, flags) {
   const allowed = {
-    record: ['--name', '--headed', '--no-rehearsal', '--scale', '--fps'],
+    record: ['--name', '--headed', '--no-rehearsal', '--scale', '--fps', '--profile'],
     login: ['--name', '--url'], runs: ['--name'], 'cursor-demo': ['--headed'],
   }[command];
   const switches = ['--headed', '--no-rehearsal'];
@@ -30,6 +30,7 @@ export function parseRecordOptions(command, flags) {
       throw new Error('--scale must be auto, 1, 1.33, 1.67 or 2');
     }
   }
+  if (options['--profile'] !== undefined && !['desktop', 'phone'].includes(options['--profile'])) throw new Error('--profile must be desktop or phone');
   if (options['--fps'] !== undefined) {
     options['--fps'] = Number(options['--fps']);
     if (![30, 60].includes(options['--fps'])) throw new Error('--fps must be 30 or 60');
@@ -47,7 +48,7 @@ export async function listRuns(name) {
     if (!entry.isDirectory()) continue;
     try {
       const record = JSON.parse(await readFile(path.join(dir, entry.name, 'record.json'), 'utf8'));
-      runs.push({ id: entry.name, durationSec: record.durationSec, bytes: record.video.bytes });
+      runs.push({ id: entry.name, profile: record.profile ?? 'desktop', durationSec: record.durationSec, bytes: record.video?.bytes ?? 0 });
     } catch (error) {
       // A failed rehearsal or interrupted recording has no completed metadata.
       if (error.code !== 'ENOENT') throw error;
@@ -102,12 +103,12 @@ export async function recordingCommand(command, flags) {
   if (command === 'record') {
     const { recordScenario } = await import('./recorder.mjs');
     return recordScenario({ name, headless: !options['--headed'],
-      rehearsal: !options['--no-rehearsal'], scale: options['--scale'], fps: options['--fps'] });
+      rehearsal: !options['--no-rehearsal'], profile: options['--profile'], scale: options['--scale'], fps: options['--fps'] });
   }
   if (command === 'login') return login({ name, url: options['--url'] });
   if (command === 'runs') {
     for (const run of await listRuns(name)) {
-      console.log(`${run.id}\t${run.durationSec.toFixed(1)} s\t${run.bytes} bytes`);
+      console.log(`${run.id}\t${run.profile}\t${run.durationSec.toFixed(1)} s\t${run.bytes} bytes`);
     }
     return;
   }

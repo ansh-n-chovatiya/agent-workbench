@@ -32,3 +32,15 @@ textarea { min-height: 180px; }
 .toast { position: fixed; bottom: 2rem; right: 2rem; max-width: 90%; padding: 1.5rem; background: #142c3a; color: #fff; border-radius: .5rem; z-index: 20; }
 footer { padding: 3rem 6%; }
 @media (max-width: 760px) { .cards { grid-template-columns: 1fr; } nav { gap: .5rem; justify-content: space-between; } main section { padding: 4rem 6%; } }
+
+@media (max-width: 480px) {
+  nav { padding: .75rem 2%; gap: 0; }
+  nav a { min-height: 44px; display: flex; align-items: center; }
+  main section { min-height: 760px; padding: 3rem 6%; gap: 1.25rem; }
+  h1 { font-size: 2.6rem; overflow-wrap: anywhere; }
+  h2 { font-size: 2rem; }
+  p { font-size: 1.1rem; }
+  .card { padding: 1.25rem; }
+  [role="tablist"] { flex-wrap: wrap; gap: .5rem; }
+  .toast { right: 5%; bottom: 1rem; }
+}

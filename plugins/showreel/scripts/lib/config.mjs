@@ -13,6 +13,7 @@ export const DEFAULTS = freeze({
   baseURL: null,
   project: null,
   viewport: { width: 1920, height: 1080 },
+  viewports: {},
   captureScale: 'auto',
   fps: 60,
   allowWrites: [],
@@ -33,6 +34,18 @@ export function mergeConfig(user, name = 'config.json') {
   const out = structuredClone(DEFAULTS);
   for (const [key, value] of Object.entries(user)) {
     if (!Object.hasOwn(DEFAULTS, key)) throw new Error(`${name}: unknown key "${key}"`);
+    if (key === 'viewports') {
+      if (!object(value)) fail(key, 'must be an object');
+      for (const [profile, viewport] of Object.entries(value)) {
+        if (!['desktop', 'phone'].includes(profile)) fail(`${key}.${profile}`, 'is unknown');
+        if (!object(viewport) || Object.keys(viewport).some(k => !['width', 'height'].includes(k))
+          || ![viewport.width, viewport.height].every(v => Number.isInteger(v) && v > 0)) {
+          fail(`${key}.${profile}`, 'must contain positive integer width and height');
+        }
+      }
+      out.viewports = structuredClone(value);
+      continue;
+    }
     const def = DEFAULTS[key];
     if (object(def)) {
       if (!object(value)) fail(key, 'must be an object');
