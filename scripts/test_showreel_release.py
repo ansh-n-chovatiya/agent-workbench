@@ -69,8 +69,9 @@ class ShowreelReleaseTests(unittest.TestCase):
                 self.assertEqual(result.returncode == 0, succeeds)
 
     def test_archive_filter_keeps_dist_and_drops_cache_fixtures_and_spikes(self):
-        names = ['dist/editor/editor.js', 'scripts/showreel.mjs', 'assets/fonts/OFL.txt',
-                 'fixtures/demo-app/index.html', 'node_modules/pkg/index.js', '.npm-cache/blob',
+        kept = ['.claude-plugin/plugin.json', 'skills/showreel/SKILL.md', 'dist/render-page.js', 'dist/audit-page.js',
+                'dist/editor/editor.js', 'scripts/showreel.mjs', 'assets/fonts/OFL.txt', 'fixtures/demo-app/index.html']
+        names = kept + ['node_modules/pkg/index.js', '.npm-cache/blob',
                  'test/fixtures/large.mp4', 'spikes/movie.mp4', 'nested/node_modules/pkg/index.js']
         with zipfile.ZipFile(self.root / 'showreel-source.zip', 'w') as output:
             for name in names:
@@ -79,7 +80,16 @@ class ShowreelReleaseTests(unittest.TestCase):
         result = subprocess.run(['python3', '-c', source], cwd=str(self.plugin), env=self.env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         with zipfile.ZipFile(self.root / 'showreel-0.1.0.zip') as archive:
-            self.assertEqual(set(archive.namelist()), {'showreel/' + name for name in names[:4]} | {'showreel/THIRD_PARTY_NOTICES.md'})
+            self.assertEqual(set(archive.namelist()), {'showreel/' + name for name in kept} | {'showreel/THIRD_PARTY_NOTICES.md'})
+
+    def test_incomplete_archive_is_rejected(self):
+        # Regression: git archive run from inside the plugin folder once produced an archive with a single file.
+        with zipfile.ZipFile(self.root / 'showreel-source.zip', 'w') as output:
+            output.writestr('showreel/README.md', 'only this')
+        source = heredoc('Build plugin archive', 'PY')
+        result = subprocess.run(['python3', '-c', source], cwd=str(self.plugin), env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('incomplete', result.stderr + result.stdout)
 
     def test_changelog_extracts_only_matching_section(self):
         source = block('Extract changelog notes').split('        run: |\n', 1)[1]

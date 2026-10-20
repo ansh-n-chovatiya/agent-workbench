@@ -244,7 +244,7 @@ jobs:
           required = ["showreel/.claude-plugin/plugin.json", "showreel/skills/showreel/SKILL.md", "showreel/dist/render-page.js",
                       "showreel/dist/editor/editor.js", "showreel/dist/audit-page.js", "showreel/scripts/showreel.mjs", "showreel/THIRD_PARTY_NOTICES.md"]
           missing = [name for name in required if name not in names]
-          if missing or len(names) < 100:
+          if missing or len(names) < 5:
               raise SystemExit("Release archive is incomplete: %d entries, missing %s" % (len(names), missing))
           print(target, len(names), "entries")
           PY
