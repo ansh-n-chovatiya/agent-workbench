@@ -15,7 +15,7 @@ makes it acceptable to leave this on for a two-line fix.
 """
 
 from . import (bundle, config as config_mod, findings as findings_mod, frontmatter,
-               journal, spec as spec_mod)
+               improve_digest, journal, spec as spec_mod)
 
 TRUNCATED = "…[briefing truncated]"
 
@@ -53,6 +53,12 @@ def _render(layout, config, state):
     cap = config_mod.briefing_cap(config, level)
     blocks = _blocks(layout, config, state, level)
     text, dropped = _fit(blocks, cap)
+    # The improvement line goes last and only whole: it is the least urgent thing here, so it never takes room from
+    # the active criteria and never makes a briefing "truncated" (which `ctx ci` and `ctx doctor` treat as a failure).
+    if cap > 0 and not dropped:
+        line = improve_digest.briefing_line(layout, config, room=cap - len(text) - 1)
+        if line:
+            text = f"{text}\n{line}"
     return level, cap, text, dropped
 
 

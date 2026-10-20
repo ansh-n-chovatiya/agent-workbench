@@ -33,7 +33,7 @@ import webbrowser
 from . import (
     advice, atomic, briefing, bundle, complexity as complexity_mod,
     config as config_mod, contract as contract_mod, detect, dispatch,
-    frontmatter, improve as improve_mod, journal, lock, log, migrate as migrate_mod, paths,
+    frontmatter, improve as improve_mod, improve_digest, journal, lock, log, migrate as migrate_mod, paths,
     phases as phases_mod, plain as plain_mod, plan as plan_mod,
     preview, preview_page, spec as spec_mod,
     findings as findings_mod, review as review_mod, snapshot as snapshot_mod,
@@ -3070,6 +3070,36 @@ def cmd_unit(args):
     remaining = plan_mod.next_wave(layout, slug)
     if remaining is None:
         _echo(f"plan {slug} is complete")
+    return 0
+
+
+def cmd_improve(args):
+    """Build the improvement digest now and print where it is."""
+    layout, config = _loaded(args)
+    if args.backfill:
+        try:
+            improve_mod.backfill(layout, config, force=True)
+        except Exception as exc:  # the digest is still worth building from what is already logged
+            _warn(f"backfill failed: {exc}")
+    path = improve_digest.build(layout, config)
+    if path is None:
+        _warn("improve is off (improve.enabled) or the digest could not be written")
+        return 1
+    _echo(str(path))
+    return 0
+
+
+def cmd_miss(args):
+    """Record a manual miss (high confidence; the text is scrubbed first)."""
+    layout, config = _loaded(args)
+    text = " ".join(args.rest).strip()
+    if not text:
+        _warn('say what went wrong: ctx miss "what went wrong"')
+        return 1
+    if not improve_mod.record(layout, config, "manual-miss", summary=text):
+        _warn("nothing recorded (improve is off, or the store is not writable)")
+        return 1
+    _echo("recorded; it reaches the digest at the next session end")
     return 0
 
 

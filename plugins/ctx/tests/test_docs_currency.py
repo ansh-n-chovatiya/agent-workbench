@@ -419,7 +419,10 @@ class SplitTests(unittest.TestCase):
     # 305 since the README header image: a two-line, prose-free `<p><img>` block
     # and its blank line, added without moving the cap. It carries no prose, so
     # the cap moved by exactly those two lines.
-    CAP = 305
+    #
+    # 307 since `ctx improve` and `ctx miss`: two CLI-table rows (the table test
+    # needs one row per subcommand), so the cap moved by exactly those two lines.
+    CAP = 307
 
     def test_the_readme_stays_short_enough_to_read(self):
         lines = len(read(README).splitlines())
