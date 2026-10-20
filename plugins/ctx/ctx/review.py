@@ -24,7 +24,7 @@ import json
 import re
 import subprocess
 
-from . import atomic, callers, plan, redact, snapshot
+from . import atomic, callers, plan, redact, snapshot, testmap
 
 REVIEW_SUBDIR = "reviews"
 
@@ -456,8 +456,15 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
     if (config.get("review") or {}).get("callers", False):
         caller_lines = _caller_lines(layout, root, delta, base_key, head_key)
 
+    test_lines = None
+    if (config.get("review") or {}).get("tests_table", False):
+        test_lines = testmap.render(
+            unit.doc.list_items("acceptance criteria", "criteria"),
+            testmap.gather(lambda p: snapshot.stored_text(layout, head_key, p),
+                           [p for p in delta.added + delta.modified if not snapshot.is_ledger(p)]))
+
     text = _render(layout, config, unit, slug, delta, stray, base_key, head_key,
-                   round_number, siblings, len(ignored), caller_lines)
+                   round_number, siblings, len(ignored), caller_lines, test_lines)
     path = package_path(layout, slug, unit.name, round_number)
     path.parent.mkdir(parents=True, exist_ok=True)
     # `newline=""` writes the string's own "\n" through untranslated. On
@@ -552,7 +559,7 @@ def _caller_lines(layout, root, delta, base_key, head_key):
 
 
 def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
-            round_number, siblings=(), ignored=0, caller_lines=None):
+            round_number, siblings=(), ignored=0, caller_lines=None, test_lines=None):
     patterns = config.get("redact") or []
     out = [
         f"# Review package — unit `{unit.name}` of plan `{slug}`, round {round_number}",
@@ -663,6 +670,8 @@ def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
 
     if caller_lines is not None:
         out += ["", "## Callers", "", *caller_lines]
+    if test_lines is not None:
+        out += ["", "## Tests by criterion", "", *test_lines]
 
     uncapped = []
     body = _diff_body(layout, delta, base_key, head_key, siblings, uncapped)

@@ -178,6 +178,9 @@ DEFAULTS = {
         # Add a `## Callers` section to each review package: functions and classes whose signature changed, and the
         # files outside the change that still mention them. Computed in code, no model. Off until measured (D20).
         "callers": False,
+        # Add a `## Tests by criterion` section: which acceptance criterion has a test in this change, which has
+        # none. Computed in code, no model. Off until measured (D20).
+        "tests_table": False,
     },
     "auto_load": [],
     "redact": [],
@@ -858,6 +861,9 @@ def render(config):
         "# review.callers adds a `## Callers` section to each review package:\n"
         "# changed function/class signatures and the files outside the change\n"
         "# that still mention them (computed in code; ships false).\n"
+        "# review.tests_table adds a `## Tests by criterion` section: which\n"
+        "# acceptance criterion has a test in the change and which has none\n"
+        "# (computed in code; ships false).\n"
         "# spec.failure_modes makes each new spec carry a `## Failure modes`\n"
         "# checklist (error paths, concurrency, existing data, callers, UI\n"
         "# states, cleanup) that must be answered before `ctx plan` will run.\n"

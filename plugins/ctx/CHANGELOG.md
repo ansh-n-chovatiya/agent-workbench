@@ -5,6 +5,7 @@
 ### Added
 
 - `review.callers` (default `false`): review packages gain a `## Callers` section, computed in code, listing functions and classes whose signature changed (Python, JavaScript, TypeScript) and the files outside the change that still mention them. Second slice of the review-system work (docs/22).
+- `review.tests_table` (default `false`): review packages gain a `## Tests by criterion` section, computed in code, mapping each acceptance criterion to the tests the change added or modified (explicit `AC<N>` tags, or a marked guess from shared words) and naming criteria with none. Third slice of the review-system work (docs/22).
 - `spec.failure_modes` (default `false`): new specs carry a `## Failure modes` checklist that must be answered (a criterion, or `n/a` with a reason) before `ctx plan` runs. Recorded in each spec when created. First slice of the review-system work (docs/22).
 
 ## 1.3.0
