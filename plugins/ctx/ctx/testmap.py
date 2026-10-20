@@ -6,7 +6,6 @@ criterion; that second kind is marked as a guess. A criterion with no test is th
 here calls a model.
 """
 import re
-from pathlib import Path
 
 _TEST_FILE = re.compile(r"(^|/)(test_[^/]*\.py|[^/]*_test\.py|[^/]*\.(test|spec)\.(js|jsx|mjs|cjs|ts|tsx))$")
 _PY_TEST = re.compile(r"^[ \t]*(?:async[ \t]+)?def[ \t]+(test\w*)[ \t]*\(", re.M)
