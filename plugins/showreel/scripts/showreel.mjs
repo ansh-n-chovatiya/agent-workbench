@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { meteredRun, tokensCommand } from './lib/meter.mjs';
+import { withShortOutput } from './lib/output.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { configTemplate, mergeConfig, readConfigFile } from './lib/config.mjs';
@@ -37,6 +39,8 @@ Commands:
   composition reset --name <name> --path a.b     Restore the theme default
   voice <install|list|samples|generate|status|import|clean>    Local voice-over (Kokoro); see: showreel voice install --check
   cursor-demo [--headed]                        Compare planned and linear motion
+  tokens --name <name> [--json] [--budget N] [--skill] [--reset]    Surface token estimates
+  --verbose                       Full command output
   --help                          Show this help
 `;
 
@@ -176,6 +180,7 @@ async function snapshotCommand(flags) {
 
 async function main(args) {
   const [command, ...flags] = args;
+  if (command === 'tokens') return tokensCommand(flags);
   if (command === 'scenes') { const { scenesCommand } = await import('./lib/scene-commands.mjs'); return scenesCommand(flags); }
   if (command === 'brand') { const { brandCommand } = await import('./lib/brand/commands.mjs'); return brandCommand(flags); }
   if (['record', 'login', 'runs', 'cursor-demo'].includes(command)) {
@@ -206,8 +211,8 @@ async function main(args) {
   if (command === 'composition') {
     const [subcommand, ...rest] = flags;
     if (!['show', 'validate', 'set', 'reset'].includes(subcommand)) throw new Error('Usage: showreel composition <show|validate|set|reset> --name <name>');
-    const allowed = ['--name', ...(subcommand === 'show' ? ['--paths'] : []), ...(['set','reset'].includes(subcommand) ? ['--path'] : []), ...(subcommand === 'set' ? ['--value'] : [])];
-    const { options } = parseOptions(rest, allowed, ['--paths']);
+    const allowed = ['--name', ...(subcommand === 'show' ? ['--paths', '--json'] : []), ...(['set','reset'].includes(subcommand) ? ['--path'] : []), ...(subcommand === 'set' ? ['--value'] : [])];
+    const { options } = parseOptions(rest, allowed, ['--paths', '--json']);
     const name = options['--name'], file = path.join(projectDir(name), 'composition.json');
     let c;
     try { c = JSON.parse(await readFile(file, 'utf8')); }
@@ -216,7 +221,7 @@ async function main(args) {
       const { loadRunComposition } = await import('./lib/compose/render.mjs');
       c = (await loadRunComposition({ name })).composition;
     }
-    if (subcommand === 'show') console.log(options['--paths'] ? Object.entries(compositionPaths(c)).map(([p,v]) => `${p} = ${JSON.stringify(v)} [${settingFor(p)?.group ?? "managed"}] ${settingFor(p)?.label ?? EXCLUDED.find(s => s.path === p)?.reason ?? p}`).join('\n') : JSON.stringify(c, null, 2));
+    if (subcommand === 'show') console.log(options['--paths'] ? Object.entries(compositionPaths(c)).map(([p,v]) => `${p} = ${JSON.stringify(v)} [${settingFor(p)?.group ?? "managed"}] ${settingFor(p)?.label ?? EXCLUDED.find(s => s.path === p)?.reason ?? p}`).join('\n') : options['--json'] || process.argv.includes('--verbose') ? JSON.stringify(c, null, 2) : `Theme: ${c.theme}; output: ${c.output.width}x${c.output.height} at ${c.output.fps} fps\n${c.edits?.trims?.length ?? 0} trims; ${c.zoom?.regions?.length ?? 0} zoom regions. Use --json or --paths for details.`);
     else {
       if (['set','reset'].includes(subcommand)) {
         if (!options['--path'] || (subcommand === 'set' && options['--value'] === undefined)) throw new Error('--path and (for set) --value are required');
@@ -313,5 +318,8 @@ async function main(args) {
   process.exitCode = 2;
 }
 
-try { await main(process.argv.slice(2)); }
-catch (err) { console.error(err.message); process.exitCode = 1; }
+const args = process.argv.slice(2);
+await meteredRun(args, () => withShortOutput(args, async () => {
+  try { await main(args.filter(arg => arg !== '--verbose')); }
+  catch (err) { console.error(err.message); process.exitCode = 1; }
+}));

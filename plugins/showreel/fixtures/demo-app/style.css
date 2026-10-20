@@ -44,3 +44,14 @@ footer { padding: 3rem 6%; }
   [role="tablist"] { flex-wrap: wrap; gap: .5rem; }
   .toast { right: 5%; bottom: 1rem; }
 }
+
+.benchmark section { min-height: auto; padding: 4rem 6%; gap: 1.5rem; }
+.benchmark h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); }
+.benchmark table { border-collapse: collapse; width: 100%; background: white; }
+.benchmark th, .benchmark td { padding: 1rem; border-bottom: 1px solid #829e90; text-align: left; }
+.benchmark caption { text-align: left; padding: 1rem; font-weight: 700; }
+.benchmark .table-wrap { overflow-x: auto; max-width: 100%; }
+.benchmark .long-chapter { min-height: 100vh; }
+.benchmark li { padding: 1rem; }
+
+.benchmark-app nav { flex-wrap: wrap; gap: .5rem; }

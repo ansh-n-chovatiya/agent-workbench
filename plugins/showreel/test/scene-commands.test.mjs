@@ -19,14 +19,14 @@ test('scenes CLI adds any run, lists, sets, validates, reorders and removes with
     await writeFile(path.join(dir,'composition.json'),'unchanged');
     run('add','--run','r1','--title','First','--transition','crossfade','--duration','0.5');
     assert.match(run('add','--run','r2'),/profiles differ/);
-    assert.equal(JSON.parse(run('list')).scenes.length,2);
+    assert.equal(JSON.parse(run('list','--json')).scenes.length,2);
     run('set','--id','sc2','--path','title','--value','"Second"');
     run('set','--id','sc1','--path','speeds','--value','[{"start":1,"end":2,"rate":2}]');
-    run('move','--id','sc2','--to','0'); assert.equal(JSON.parse(run('list')).scenes[0].id,'sc2');
+    run('move','--id','sc2','--to','0'); assert.equal(JSON.parse(run('list','--json')).scenes[0].id,'sc2');
     assert.match(run('validate'),/ok/);
     assert.throws(()=>run('set','--id','sc1','--path','transition.durationSec','--value','99'),/0.2 to 1.5/);
     assert.throws(()=>run('set','--id','sc1','--path','__proto__.polluted','--value','true'),/Unsupported/);
-    run('remove','--id','sc1'); assert.equal(JSON.parse(run('list')).scenes.length,1);
+    run('remove','--id','sc1'); assert.equal(JSON.parse(run('list','--json')).scenes.length,1);
     assert.equal(await readFile(path.join(dir,'composition.json'),'utf8'),'unchanged');
     // The voice selector reads the selected storyboard and namespaces step lookups.
     await writeFile(path.join(dir,'storyboard.json'),JSON.stringify({steps:[{id:'s1',caption:'Default'}]}));

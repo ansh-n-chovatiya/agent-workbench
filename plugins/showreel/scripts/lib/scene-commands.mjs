@@ -3,16 +3,17 @@ import { readScenes, validateScenesInProject, writeScenesAtomic } from './scenes
 
 export async function scenesCommand(flags, log = console.log) {
   const [sub,...rest] = flags;
-  const specs = {list:[],add:['--run','--title','--transition','--duration'],remove:['--id'],move:['--id','--to'],set:['--id','--path','--value'],validate:[]};
+  const specs = {list:['--json'],add:['--run','--title','--transition','--duration'],remove:['--id'],move:['--id','--to'],set:['--id','--path','--value'],validate:[]};
   if (!Object.hasOwn(specs,sub ?? '')) throw new Error('Usage: scenes list|add|remove|move|set|validate --name N');
   const options = {};
   for (let i=0;i<rest.length;i+=2) {
+    if (rest[i] === '--json' && sub === 'list') { options['--json'] = true; i--; continue; }
     if (!['--name',...specs[sub]].includes(rest[i]) || options[rest[i]] !== undefined || rest[i+1] === undefined || rest[i+1].startsWith('--')) throw new Error(`Invalid option: ${rest[i]}`);
     options[rest[i]] = rest[i+1];
   }
   if (!options['--name']) throw new Error('--name is required');
   const dir = projectDir(options['--name']), data = await readScenes(dir) ?? {version:1,scenes:[]};
-  if (sub === 'list') { log(JSON.stringify(data,null,2)); return data; }
+  if (sub === 'list') { log(options['--json'] || process.argv.includes('--verbose') ? JSON.stringify(data,null,2) : `${data.scenes.length} scenes\n${data.scenes.map(s => `${s.id}: ${s.run}`).join('\n')}\nUse --json for details.`); return data; }
   if (sub === 'validate') {
     const report = await validateScenesInProject(dir,data);
     report.warnings.forEach(w => log(`warning: ${w}`));

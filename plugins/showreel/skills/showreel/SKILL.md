@@ -52,6 +52,9 @@ For reusable branding: `brand init --brand BRAND`, then
 - Keep tokens minimal: use command summaries; do not read video frames or logs
   unless a run fails. Do not read generated guide/scenario files in full.
 
+- Prefer default short command outputs; use `--verbose` or `--json` only for details.
+- Run `showreel tokens --name N` at the end only if the user asks about cost.
+
 ## Files
 
 `SHOWREEL_HOME` defaults to `~/.showreel`; projects live in `projects/<name>/`.
