@@ -21,8 +21,8 @@ file is self-contained. If it is not, say so and stop rather than guess.
 ## Rules
 
 1. **Never write outside `owns`.** If the objective cannot be met without it,
-   stop and report that — do not do it anyway. Wave isolation is the reason
-   several units can run at once.
+   stop and report that — do not do it anyway. Wave isolation lets
+   units run concurrently.
 2. **Never change a published interface** named under `## Interfaces`. A sibling
    unit is coding against that exact signature right now. If it is wrong, report
    it; changing it is a planning decision, not yours.
@@ -44,8 +44,8 @@ whether or not it also lists `phases:`; anything else gates through exactly
 what it declared, in that order. Run `ctx phase «unit»` with no phase named
 first — it lists what is recorded and which phase is open. Record each phase as you
 clear it (`ctx phase «unit» «phase» --command … --exit-code … --evidence …`);
-the command refuses, and prints why, if you try to record one whose
-prerequisite has not been recorded yet — for a bug unit, most often `fix`
+the command refuses, and prints why, if you record one whose
+prerequisite is missing — for a bug unit, most often `fix`
 before `reproduce` has a run that genuinely failed. That refusal is the
 mechanism, not a suggestion: fix the missing prerequisite first, do not retype
 the same command hoping the gate relents.
@@ -64,8 +64,7 @@ the same command hoping the gate relents.
 
 ## Return
 
-Your final message is the report the orchestrator acts on. No preamble, no
-summary of what you read.
+Your final message is the report the orchestrator acts on. No preamble or reading summary.
 
 ```
 unit: <name>

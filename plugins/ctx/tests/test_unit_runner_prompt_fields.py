@@ -30,8 +30,8 @@ class RunnerPromptFields(unittest.TestCase):
         self.assertIn("(omit when none are listed)", PROMPT)
 
     def test_AC3_rule_is_conditional(self):
-        self.assertIn("If the unit lists", PROMPT)
-        self.assertIn("If it lists", PROMPT)
+        self.assertIn("If the unit lists `failure_modes`", PROMPT)
+        self.assertIn("If it lists `risk`", PROMPT)
 
     def test_AC5_fields_are_real_unit_properties(self):
         self.assertEqual(missing_fields(FIELDS), [])
