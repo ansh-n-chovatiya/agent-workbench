@@ -2627,7 +2627,8 @@ def cmd_findings(args):
         # the seal takes it verbatim. Once sealed, deleting the finding from the
         # file by hand is visible to the done-gate.
         contract_mod.seal_findings(
-            layout, slug, unit.name, ledger, authoritative=True
+            layout, slug, unit.name, ledger, authoritative=True,
+            only=[finding.id],
         )
         journal.append(layout, config, "finding", unit.name,
                        f"{finding.severity} #{finding.id}")
@@ -2647,7 +2648,8 @@ def cmd_findings(args):
         # Also authoritative: `--set` is how a finding is *meant* to move, so a
         # legitimate close re-seals rather than tripping the gate.
         contract_mod.seal_findings(
-            layout, slug, unit.name, ledger, authoritative=True
+            layout, slug, unit.name, ledger, authoritative=True,
+            only=[args.set],
         )
         journal.append(layout, config, "finding", unit.name,
                        f"#{args.set} -> {args.status or conf}")
