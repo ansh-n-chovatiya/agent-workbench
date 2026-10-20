@@ -221,7 +221,8 @@ jobs:
         run: npm test
       - name: Build plugin archive
         run: |
-          git archive --format=zip --prefix=showreel/ --output="$RUNNER_TEMP/showreel-source.zip" HEAD:plugins/showreel
+          # Run from the repository root: inside a subfolder git archive adds that folder as a path filter and returns almost nothing.
+          git -C "$GITHUB_WORKSPACE" archive --format=zip --prefix=showreel/ --output="$RUNNER_TEMP/showreel-source.zip" HEAD:plugins/showreel
           python3 - <<'PY'
           import json, os, pathlib, zipfile
 
@@ -237,7 +238,15 @@ jobs:
                       continue
                   output.writestr(item, source.read(item.filename))
               output.write("../../THIRD_PARTY_NOTICES.md", "showreel/THIRD_PARTY_NOTICES.md")
-          print(target)
+          # Guard: a release archive without the manifest, the skill or the built bundles must never be published.
+          with zipfile.ZipFile(target) as built:
+              names = set(built.namelist())
+          required = ["showreel/.claude-plugin/plugin.json", "showreel/skills/showreel/SKILL.md", "showreel/dist/render-page.js",
+                      "showreel/dist/editor/editor.js", "showreel/dist/audit-page.js", "showreel/scripts/showreel.mjs", "showreel/THIRD_PARTY_NOTICES.md"]
+          missing = [name for name in required if name not in names]
+          if missing or len(names) < 100:
+              raise SystemExit("Release archive is incomplete: %d entries, missing %s" % (len(names), missing))
+          print(target, len(names), "entries")
           PY
       - name: Extract changelog notes
         shell: python
