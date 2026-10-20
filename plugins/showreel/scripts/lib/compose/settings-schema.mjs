@@ -5,9 +5,10 @@ export const EXCLUDED = [
   ...['themeSource','brandDefaults','watermark', ...['enabled','image','position','opacity','sizePct','marginPct'].map(k=>`watermark.${k}`)].map(path=>({path,reason:'Brand-derived settings and provenance; managed by the brand kit, editor panels follow in Phase 7 E.'})),
   { path: 'output.preset', reason: 'Output format is selected by render --format; editor controls are added in Phase 7 E.' },
   { path: 'layout.safeZones', reason: 'Platform safe areas are selected in composition.json; editor controls are added in Phase 7 E.' },
-  { path: 'overlays', reason: 'Source-time overlays edited on the timeline.' },
   { path: 'version', reason: 'Composition format version; managed by Showreel.' },
   { path: 'run.id', reason: 'Recording identity; selected when opening the project.' },
+  { path: 'edits.splits', reason: 'Clip boundaries edited on the timeline.' },
+  { path: 'edits.mutes', reason: 'Clip mute edited in the Clip panel.' },
   { path: 'edits.trims', reason: 'Edited on the timeline.' },
   { path: 'edits.speeds', reason: 'Edited on the timeline.' },
   { path: 'edits.holds', reason: 'Frozen frames are added from the narration fixes in the Voice tab.' },
@@ -28,7 +29,6 @@ const copy = {
   "output.fps": ["Frame rate", "More frames per second make movement smoother in the finished video."],
   "output.quality": ["Quality", "Higher quality keeps more detail in the video and makes a larger file."],
   "theme": ["Theme", "Choose clean, dark or bold colours, typography, cursor and motion defaults."],
-  "motion.pace": ["Motion pace", "Lengthen entrances and exits from normal (1) to cinematic (1.6)."],
   "frame.paddingXPct": ["Horizontal padding", "Space to the left and right of the recording, as a percentage of the video width."],
   "frame.paddingYPct": ["Vertical padding", "Space above and below the recording, as a percentage of the video height."],
   "frame.radiusPx": ["Corner radius", "Round the corners of the recording; set to zero for square corners."],
@@ -156,7 +156,7 @@ const unitFor = path => /Pct$/.test(path) ? '%' : /Px$|output\.(width|height)$/.
   : /Sec$|cards.fade$/.test(path) ? 's' : /Db$/.test(path) ? 'dB' : /Ms$/.test(path) ? 'ms' : /Lufs$/.test(path) ? 'LUFS' : /Mult$|pressScale$|zoom.depth$/.test(path) ? 'x' : undefined;
 export const SETTINGS = Object.entries(compositionPaths({})).filter(([path]) => !excluded.has(path)).map(([path,value]) => {
   const [label, help] = copy[path];
-  const group = /^(frame\.|theme$|motion\.)/.test(path) ? 'look' : path.split('.')[0];
+  const group = /^(frame\.|theme$)/.test(path) ? 'look' : path.split('.')[0];
   const options = SETTING_ENUMS[path];
   const range = SETTING_RANGES[path];
   const control = path === 'audio.voice.enabled' ? 'toggle' : options ? 'select' : range ? 'number' : typeof value === 'boolean' ? 'toggle'

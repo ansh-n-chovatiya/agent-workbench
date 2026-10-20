@@ -1,6 +1,5 @@
-import { overlaySafeArea } from './templates/shared.mjs';
+import { EASING } from './easing.mjs';
 import { isVertical, layoutFor, verticalCaptionMetrics } from './layout.mjs';
-import { TEMPLATES } from './templates/index.mjs';
 import { stateAt } from './plan.mjs';
 import { wrapLines } from './captions.mjs';
 import { customCursorSpec, loadCustomCursorImages } from './custom-cursor.mjs';
@@ -39,8 +38,7 @@ const loadCursorImage = (url) => new Promise((resolve, reject) => {
 });
 export async function loadImages(plan, { assetBase = 'assets/' } = {}) {
   const specs = [plan.watermark, plan.frame.background, plan.cards.title.background, plan.cards.outro.background,
-    plan.cards.title.logo, plan.cards.outro.logo,
-    ...(plan.overlays ?? []).filter(o => o.template === 'logo-sting' && o.params.useLogo).map(o => ({ image:o.params.logo }))];
+    plan.cards.title.logo, plan.cards.outro.logo];
   const loadedImages = new Map();
   await Promise.all(specs.filter((s) => s?.image).map(async ({ image }) => {
     const brandUrl = plan.brand?.assetUrls?.[image];
@@ -53,6 +51,15 @@ export async function loadImages(plan, { assetBase = 'assets/' } = {}) {
   return loadedImages;
 }
 export async function loadAssets(plan, options = {}) {
+  if (plan.scenes) {
+    const all = {images:new Map(),cursorImages:new Map()};
+    for (const child of [ {...plan,scenes:undefined}, ...plan.scenes.map(s => s.plan)]) {
+      const loaded = await loadAssets(child,options);
+      for (const [k,v] of loaded.images) all.images.set(k,v);
+      for (const [k,v] of loaded.cursorImages) all.cursorImages.set(k,v);
+    }
+    images = all.images; cursorImages = all.cursorImages; return all;
+  }
   await loadBrandFonts(plan);
   const loadedImages = await loadImages(plan, options);
   const urls = options.cursorImages ?? (options.assetBase ? Object.fromEntries(
@@ -181,7 +188,7 @@ export function sourceSize(source) {
 
 export function sourceCrop(plan, camera, decoded) {
   const size = sourceSize(decoded);
-  // Camera and overlays stay in real capture coordinates even for reduced preview canvases.
+  // Camera coordinates stay in real capture coordinates even for reduced preview canvases.
   const sx = size.width / plan.sourceSize.width, sy = size.height / plan.sourceSize.height;
   const w = plan.sourceSize.width / camera.z, h = plan.sourceSize.height / camera.z;
   return { x: (camera.cx * plan.scale - w / 2) * sx,
@@ -193,8 +200,42 @@ export function mapSourcePoint(plan, cam, point) {
   return { x:f.x+(point.x*plan.scale-(cam.cx*plan.scale-w/2))*f.w/w,
     y:f.y+(point.y*plan.scale-(cam.cy*plan.scale-h/2))*f.h/h };
 }
+const sceneBuffers = new WeakMap();
+function drawSequence(canvas,plan,tOut,decoded) {
+  const state = stateAt(plan,tOut), ctx = canvas.getContext('2d'), {width,height} = plan.output;
+  let buffers = sceneBuffers.get(canvas);
+  if (!buffers) { buffers=[canvasFor(plan),canvasFor(plan)]; sceneBuffers.set(canvas,buffers); }
+  const render = (s,buffer) => {
+    const child = plan.scenes.find(x => x.id === s.sceneId);
+    drawFrame(buffer,child.plan,s.localOutputT,decoded?.[s.sceneId]); return buffer;
+  };
+  ctx.save(); ctx.clearRect(0,0,width,height);
+  if (!state.transition) ctx.drawImage(render(state,buffers[0]),0,0);
+  else {
+    const tr=state.transition, p=EASING.moveInOut(tr.progress);
+    const from=render(tr.from,buffers[0]), to=render(tr.to,buffers[1]);
+    if (tr.type === 'slide') {
+      background(ctx,plan.frame.background,width,height,plan.theme.background);
+      ctx.drawImage(from,-width*0.3*p,0); ctx.drawImage(to,width*(1-p),0);
+    } else if (tr.type === 'zoom-through') {
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,width,height);
+      const layer=(image,scale,alpha) => {
+        ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=alpha;
+        ctx.translate(width/2,height/2); ctx.scale(scale,scale); ctx.drawImage(image,-width/2,-height/2); ctx.restore();
+      };
+      layer(from,1+0.15*p,1-p); layer(to,0.92+0.08*p,p);
+    } else {
+      ctx.drawImage(from,0,0); ctx.globalAlpha=p; ctx.drawImage(to,0,0); ctx.globalAlpha=1;
+    }
+  }
+  card(ctx,plan,state.alphaTitle,plan.cards.title,plan.cards.title.title);
+  card(ctx,plan,state.alphaOutro,plan.cards.outro,plan.cards.outro.text);
+  if (state.section !== 'main') drawWatermark(ctx,plan);
+  ctx.restore(); return canvas;
+}
 export function drawFrame(canvas, plan, tOut, decoded, assets) {
   if (assets) { images = assets.images; cursorImages = assets.cursorImages; }
+  if (plan.scenes) return drawSequence(canvas,plan,tOut,decoded);
   const ctx = canvas.getContext('2d'), { width, height } = plan.output;
   if (isVertical(plan.output)) {
     ctx.font=`${plan.captions.fontWeight} ${height*plan.captions.fontSizePct/100}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
@@ -266,16 +307,6 @@ export function drawFrame(canvas, plan, tOut, decoded, assets) {
     if (plan.frame.border.enabled) {
       ctx.save(); rounded(ctx, f, radius); ctx.strokeStyle = plan.frame.border.color;
       ctx.lineWidth = plan.frame.border.widthPx * unit; ctx.stroke(); ctx.restore();
-    }
-    for (const overlay of state.overlays) {
-      const spec = plan.overlays.find(o => o.id === overlay.id);
-      ctx.save(); ctx.globalAlpha = overlay.alpha;
-      if (overlay.params.placement === 'frame' && !['callout-arrow','spotlight','highlight-box'].includes(overlay.template)) {
-        const safe=overlaySafeArea({width,height,layout:plan.layout});ctx.beginPath();ctx.rect(safe.x,safe.y,safe.w,safe.h);ctx.clip();
-      }
-      TEMPLATES[overlay.template].draw(ctx, { width, height, theme:plan.theme, layout:plan.layout,
-        mapSource: point => mapSourcePoint(plan,cam,point), anchor:spec.anchor, images }, overlay.params, overlay);
-      ctx.restore();
     }
     drawCaption(ctx, plan, state.caption);
   }

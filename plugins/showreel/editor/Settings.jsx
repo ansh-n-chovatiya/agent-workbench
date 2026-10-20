@@ -1,42 +1,77 @@
 import { h } from 'preact';
-import { useState } from 'preact/hooks';
-import { SETTINGS } from '../scripts/lib/compose/settings-schema.mjs';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { compositionPaths } from '../scripts/lib/compose/composition.mjs';
+import { sourceAt } from '../scripts/lib/compose/timemap.mjs';
+import { clipsOf } from './clips.mjs';
+import { panelFor } from './rail-model.mjs';
+import { PANEL_META } from './panel-model.mjs';
+import { buildSearchIndex, searchSettings } from './search-model.mjs';
+import { setCaption } from './edit-ops.mjs';
 import { Input } from './ui/input.jsx';
-import { Label } from './ui/label.jsx';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs.jsx';
-import { groupSettings } from './helpers.mjs';
-import { SettingField } from './SettingField.jsx';
+import { PanelShell, SearchBox } from './panels/PanelShell.jsx';
+import { SettingsCard } from './panels/SettingsCard.jsx';
+import { Row, NumberPill } from './panels/Rows.jsx';
+import { TopicPanel } from './panels/TopicPanel.jsx';
+import { SearchResults } from './panels/SearchResults.jsx';
+import { Type } from './panels/icons.js';
+import { ZoomPanel } from './ZoomPanel.jsx';
+import { ClipPanel } from './ClipPanel.jsx';
 import { VoicePanel } from './VoicePanel.jsx';
 import { MusicPanel } from './MusicPanel.jsx';
+import { BrandPanel } from './BrandPanel.jsx';
 
-export function Settings({ state, store, controller }) {
-  const [query, setQuery] = useState(''), [tab, setTab] = useState('look');
-  const groups = groupSettings(SETTINGS, query), names = Object.keys(groups);
-  const values = compositionPaths(state.composition), defaults = compositionPaths({});
-  // The schema's 'audio' group is shown by two custom panels: Voice (audio.voice.*) and Music (music, ducking and loudness).
-  const audio = groups.audio ?? [];
-  const tabNames = {look:'Look',cursor:'Cursor',zoom:'Zoom',captions:'Captions',cards:'Intro & outro',audio:'Audio',voice:'Voice',music:'Music',output:'Size & quality'};
-  const has = {voice: audio.some(s => s.path.startsWith('audio.voice.')), music: audio.some(s => !s.path.startsWith('audio.voice.'))};
-  const ordered = ['look','cursor','zoom','captions','cards','voice','music','output'].filter(name => name === 'voice' || name === 'music' ? has[name] && controller : names.includes(name));
-  const active = ordered.includes(tab) ? tab : ordered[0];
-  const field = s => <SettingField key={s.path} setting={s} values={values} defaults={defaults} state={state} store={store} />;
-  function fields(entries) {
-    const sections = {};
-    for (const entry of entries) (sections[entry.section] ??= []).push(entry);
-    return Object.entries(sections).map(([name,items]) => <details class="setting-group" key={name} open><summary>{name.replace(/^title card/,"Intro card")}</summary>{items.map(field)}</details>);
+function CaptionPanel({ state, store, cue, onClose }) {
+  const [error, setError] = useState('');
+  function patch(value) { try { store.setComposition(setCaption(state.composition, cue.id, value, { duration: state.project.record.durationSec, plan: state.plan }), `captions.${cue.id}`); setError(''); } catch (e) { setError(e.message); } }
+  return <PanelShell ariaLabel="Caption settings" title="Caption" subtitle={`${cue.start.toFixed(2)}–${cue.end.toFixed(2)} s on the recording`} onClose={onClose} footer="Drag the caption on the timeline to move it">
+    <SettingsCard id="caption-text" title="Text" icon={Type}>
+      <Row stacked id="caption-text-input" label="Caption"><Input id="caption-text-input" aria-label="Caption text" value={cue.text} maxLength={140} onInput={e => patch({ text: e.currentTarget.value })} /></Row>
+      {['start', 'end'].map(key => <Row key={key} id={`caption-${key}`} label={key === 'start' ? 'Start' : 'End'} tip={`When the caption ${key === 'start' ? 'appears' : 'disappears'}, in recording seconds.`}>
+        <NumberPill id={`caption-${key}`} aria-label={`Caption ${key}`} min={0} step={0.01} unit="s" value={cue[key]} onChange={v => { if (v !== null) patch({ [key]: v }); }} /></Row>)}
+      {error && <p class="error" role="alert">{error}</p>}
+    </SettingsCard>
+  </PanelShell>;
+}
+export function Settings(props) {
+  const { state, store, controller, selection, setSelection, time, provider, topic = 'zoom', setTopic, reveal, setReveal } = props;
+  const [query, setQuery] = useState(''), [audioTab, setAudioTab] = useState(reveal?.tab ?? 'voice');
+  useEffect(() => { if (reveal?.tab) setAudioTab(reveal.tab); }, [reveal?.n]);
+  const index = useMemo(() => buildSearchIndex(), []);
+  const panel = panelFor(selection, topic), values = compositionPaths(state.composition), defaults = compositionPaths({});
+  if (panel === 'zoom-selection') {
+    const region = (state.plan?.regions ?? state.composition.zoom.regions).find(z => z.id === selection.id);
+    if (region) return <ZoomPanel key={region.id} state={state} store={store} region={region} time={state.plan ? sourceAt(state.plan.timemap, time).t : 0} onClose={() => setSelection(null)} />;
   }
-  return <aside class="settings" aria-label="Composition settings">
-    <div class="panel-heading"><h2>Settings</h2><span>COMPOSITION</span></div>
-    <Label class="search"><span class="sr-only">Search settings</span><Input type="search" placeholder="Search settings…" value={query} onInput={e => setQuery(e.currentTarget.value)} /></Label>
-    <Tabs value={active ?? ''} onValueChange={setTab} className="settings-tabs">
-      <TabsList aria-label="Settings groups">{ordered.map(name => <TabsTrigger key={name} value={name}>{tabNames[name]}</TabsTrigger>)}</TabsList>
-      {active === 'voice' ? <TabsContent value="voice"><VoicePanel state={state} store={store} controller={controller} values={values} defaults={defaults} /></TabsContent>
-        : active === 'music' ? <TabsContent value="music"><MusicPanel state={state} store={store} controller={controller} values={values} defaults={defaults} /></TabsContent>
-        : active ? <TabsContent value={active}>
-          {fields(groups[active].filter(s => !s.advanced))}
-          {groups[active].some(s => s.advanced) && <details><summary>Advanced</summary>{fields(groups[active].filter(s => s.advanced))}</details>}
-        </TabsContent> : <p class="empty">No matching settings</p>}
-    </Tabs>
-  </aside>;
+  if (panel === 'clip-selection') {
+    const clip = clipsOf(state.composition, state.project.record.durationSec).find(c => c.id === selection.id);
+    if (clip) return <ClipPanel key={clip.id} state={state} store={store} clip={clip} onClose={() => setSelection(null)} />;
+  }
+  if (panel === 'caption-selection') {
+    const cue = (state.composition.captions.cues ?? state.plan?.cues ?? []).find(c => c.id === selection.id);
+    if (cue) return <CaptionPanel key={cue.id} state={state} store={store} cue={cue} onClose={() => setSelection(null)} />;
+  }
+  const ctx = { state, store, controller, values, defaults, time, provider };
+  const meta = PANEL_META[topic] ?? PANEL_META.zoom, trimmed = query.trim();
+  const searchBox = <SearchBox value={query} onChange={setQuery} />;
+  const alert = state.error && !state.plan ? state.error : null;
+  if (trimmed) {
+    const results = searchSettings(index, trimmed);
+    return <PanelShell ariaLabel="Composition settings" title={meta.title} subtitle={meta.subtitle} search={searchBox} alert={alert} footer="Searching every topic">
+      <SearchResults query={trimmed} results={results} ctx={ctx} onClear={() => setQuery('')} onSuggest={setQuery}
+        onGo={entry => { setQuery(''); setReveal?.({ path: entry.host, card: entry.card, tab: entry.tab, n: Date.now() }); setTopic?.(entry.topic); }} />
+    </PanelShell>;
+  }
+  if (topic === 'audio') {
+    return <PanelShell ariaLabel="Composition settings" title={meta.title} subtitle={meta.subtitle} search={searchBox} alert={alert} scroll={false}>
+      <Tabs value={audioTab} onValueChange={setAudioTab} className="panel-tabs">
+        <TabsList aria-label="Audio settings"><TabsTrigger value="voice">Voice</TabsTrigger><TabsTrigger value="music">Music</TabsTrigger></TabsList>
+        <div class="panel-scroll"><div class="panel-body"><TabsContent value="voice"><VoicePanel {...ctx} reveal={reveal} /></TabsContent><TabsContent value="music"><MusicPanel {...ctx} reveal={reveal} /></TabsContent></div>
+          <p class="panel-foot">Changes save automatically</p></div>
+      </Tabs>
+    </PanelShell>;
+  }
+  return <PanelShell ariaLabel="Composition settings" title={meta.title} subtitle={meta.subtitle} search={searchBox} alert={alert}>
+    {topic === 'brand' ? <BrandPanel state={state} store={store} /> : <TopicPanel topic={topic} ctx={ctx} reveal={reveal} />}
+  </PanelShell>;
 }

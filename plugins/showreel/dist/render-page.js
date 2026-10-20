@@ -1,4 +1,4 @@
-// showreel render sources sha256: 7bef05f43d9abe8d90f5e25c25a00c13984727dc180d53f2933306de7ddc8309
+// showreel render sources sha256: ea36d43a998a854e20b6511eaed207b9522de3bcfa67e07de5ac602ebb896b0c
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -177,8 +177,8 @@
     }
   };
   var TextDecoder = typeof globalThis.TextDecoder !== "undefined" ? globalThis.TextDecoder : class TextDecoder2 {
-    constructor(label13 = "utf-8") {
-      const normalized = label13.trim().toLowerCase();
+    constructor(label = "utf-8") {
+      const normalized = label.trim().toLowerCase();
       if (normalized === "utf-8" || normalized === "utf8" || normalized === "unicode-1-1-utf-8") {
         this.encoding = "utf-8";
       } else if (normalized === "utf-16le" || normalized === "utf-16") {
@@ -186,7 +186,7 @@
       } else if (normalized === "utf-16be") {
         this.encoding = "utf-16be";
       } else {
-        throw new RangeError(`The encoding label provided ('${label13}') is invalid.`);
+        throw new RangeError(`The encoding label provided ('${label}') is invalid.`);
       }
     }
     decode(input) {
@@ -3264,14 +3264,14 @@
     for (let i = 0; i < listLength; i++) {
       const stringLength = commentView.getUint32(commentPos, true);
       commentPos += 4;
-      const string2 = textDecoder.decode(bytes2.subarray(commentPos, commentPos + stringLength));
+      const string = textDecoder.decode(bytes2.subarray(commentPos, commentPos + stringLength));
       commentPos += stringLength;
-      const separatorIndex = string2.indexOf("=");
+      const separatorIndex = string.indexOf("=");
       if (separatorIndex === -1) {
         continue;
       }
-      const key = string2.slice(0, separatorIndex).toUpperCase();
-      const value = string2.slice(separatorIndex + 1);
+      const key = string.slice(0, separatorIndex).toUpperCase();
+      const value = string.slice(separatorIndex + 1);
       metadataTags.raw ??= {};
       if (Array.isArray(metadataTags.raw[key])) {
         metadataTags.raw[key] = [...metadataTags.raw[key], value];
@@ -4460,12 +4460,12 @@
       const transferCharacteristics = vp9CodecInfo.transferCharacteristics.toString().padStart(2, "0");
       const matrixCoefficients = vp9CodecInfo.matrixCoefficients.toString().padStart(2, "0");
       const videoFullRangeFlag = vp9CodecInfo.videoFullRangeFlag.toString().padStart(2, "0");
-      let string2 = `vp09.${profile}.${level}.${bitDepth}.${chromaSubsampling}`;
-      string2 += `.${colourPrimaries}.${transferCharacteristics}.${matrixCoefficients}.${videoFullRangeFlag}`;
-      if (string2.endsWith(VP9_DEFAULT_SUFFIX)) {
-        string2 = string2.slice(0, -VP9_DEFAULT_SUFFIX.length);
+      let string = `vp09.${profile}.${level}.${bitDepth}.${chromaSubsampling}`;
+      string += `.${colourPrimaries}.${transferCharacteristics}.${matrixCoefficients}.${videoFullRangeFlag}`;
+      if (string.endsWith(VP9_DEFAULT_SUFFIX)) {
+        string = string.slice(0, -VP9_DEFAULT_SUFFIX.length);
       }
-      return string2;
+      return string;
     } else if (codec === "av1") {
       if (!av1CodecInfo) {
         const pictureSize = trackInfo.width * trackInfo.height;
@@ -4499,16 +4499,16 @@
         matrixCoefficients = colorSpace?.matrix ? MATRIX_COEFFICIENTS_MAP[colorSpace.matrix] : 1;
         videoFullRangeFlag = colorSpace?.fullRange ? 1 : 0;
       }
-      let string2 = `av01.${profile}.${level}${tier}.${bitDepth}`;
-      string2 += `.${monochrome}.${chromaSubsampling.toString().padStart(3, "0")}`;
-      string2 += `.${colorPrimaries.toString().padStart(2, "0")}`;
-      string2 += `.${transferCharacteristics.toString().padStart(2, "0")}`;
-      string2 += `.${matrixCoefficients.toString().padStart(2, "0")}`;
-      string2 += `.${videoFullRangeFlag}`;
-      if (string2.endsWith(AV1_DEFAULT_SUFFIX)) {
-        string2 = string2.slice(0, -AV1_DEFAULT_SUFFIX.length);
+      let string = `av01.${profile}.${level}${tier}.${bitDepth}`;
+      string += `.${monochrome}.${chromaSubsampling.toString().padStart(3, "0")}`;
+      string += `.${colorPrimaries.toString().padStart(2, "0")}`;
+      string += `.${transferCharacteristics.toString().padStart(2, "0")}`;
+      string += `.${matrixCoefficients.toString().padStart(2, "0")}`;
+      string += `.${videoFullRangeFlag}`;
+      if (string.endsWith(AV1_DEFAULT_SUFFIX)) {
+        string = string.slice(0, -AV1_DEFAULT_SUFFIX.length);
       }
-      return string2;
+      return string;
     } else if (codec === "prores") {
       return proresFormat ?? "apch";
     } else if (codec !== null) {
@@ -5422,12 +5422,12 @@
   // node_modules/mediabunny/dist/modules/src/isobmff/isobmff-misc.js
   var buildIsobmffMimeType = (info) => {
     const base = info.hasVideo ? "video/" : info.hasAudio ? "audio/" : "application/";
-    let string2 = base + (info.isQuickTime ? "quicktime" : "mp4");
+    let string = base + (info.isQuickTime ? "quicktime" : "mp4");
     if (info.codecStrings.length > 0) {
       const uniqueCodecMimeTypes = [...new Set(info.codecStrings)];
-      string2 += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
+      string += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
     }
-    return string2;
+    return string;
   };
   var parsePsshBoxContents = (contents) => {
     const view2 = toDataView(contents);
@@ -7334,14 +7334,14 @@
             if (!track) {
               break;
             }
-            const defaults14 = this.fragmentTrackDefaults.find((x) => x.trackId === trackId);
+            const defaults2 = this.fragmentTrackDefaults.find((x) => x.trackId === trackId);
             this.currentTrack = track;
             track.currentFragmentState = {
               baseDataOffset: this.currentFragment.implicitBaseDataOffset,
-              sampleDescriptionIndex: defaults14?.defaultSampleDescriptionIndex ?? null,
-              defaultSampleDuration: defaults14?.defaultSampleDuration ?? null,
-              defaultSampleSize: defaults14?.defaultSampleSize ?? null,
-              defaultSampleFlags: defaults14?.defaultSampleFlags ?? null,
+              sampleDescriptionIndex: defaults2?.defaultSampleDescriptionIndex ?? null,
+              defaultSampleDuration: defaults2?.defaultSampleDuration ?? null,
+              defaultSampleSize: defaults2?.defaultSampleSize ?? null,
+              defaultSampleFlags: defaults2?.defaultSampleFlags ?? null,
               startTimestamp: null,
               encryptionAuxInfo: null
             };
@@ -7930,16 +7930,16 @@
     getNumber() {
       const demuxer = this.internalTrack.demuxer;
       const trackType = this.internalTrack.trackBacking.getType();
-      let number2 = 0;
+      let number = 0;
       for (const track of demuxer.tracks) {
         if (track.trackBacking.getType() === trackType) {
-          number2++;
+          number++;
         }
         if (track === this.internalTrack) {
           break;
         }
       }
-      return number2;
+      return number;
     }
     getCodec() {
       throw new Error("Not implemented on base class.");
@@ -8999,8 +8999,8 @@
     if (slice.remainingLength < size) {
       return null;
     }
-    const id13 = readUnsignedInt(slice, size);
-    return id13;
+    const id = readUnsignedInt(slice, size);
+    return id;
   };
   var readElementSize = (slice) => {
     if (slice.remainingLength < 1) {
@@ -9022,15 +9022,15 @@
   };
   var readElementHeader = (slice) => {
     assert(slice.remainingLength >= MIN_HEADER_SIZE);
-    const id13 = readElementId(slice);
-    if (id13 === null) {
+    const id = readElementId(slice);
+    if (id === null) {
       return null;
     }
     const size = readElementSize(slice);
     if (size === null) {
       return null;
     }
-    return { id: id13, size };
+    return { id, size };
   };
   var readAsciiString = (slice, length) => {
     const bytes2 = readBytes(slice, length);
@@ -9136,12 +9136,12 @@
   // node_modules/mediabunny/dist/modules/src/matroska/matroska-misc.js
   var buildMatroskaMimeType = (info) => {
     const base = info.hasVideo ? "video/" : info.hasAudio ? "audio/" : "application/";
-    let string2 = base + (info.isWebM ? "webm" : "x-matroska");
+    let string = base + (info.isWebM ? "webm" : "x-matroska");
     if (info.codecStrings.length > 0) {
       const uniqueCodecMimeTypes = [...new Set(info.codecStrings.filter(Boolean))];
-      string2 += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
+      string += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
     }
-    return string2;
+    return string;
   };
 
   // node_modules/mediabunny/dist/modules/src/matroska/matroska-demuxer.js
@@ -9235,10 +9235,10 @@
           if (!header) {
             break;
           }
-          const id13 = header.id;
+          const id = header.id;
           let size = header.size;
           const dataStartPos = slice.filePos;
-          if (id13 === EBMLId.EBML) {
+          if (id === EBMLId.EBML) {
             assertDefinedSize(size);
             let slice2 = this.reader.requestSlice(dataStartPos, size);
             if (isThenable(slice2))
@@ -9246,7 +9246,7 @@
             if (!slice2)
               break;
             this.readContiguousElements(slice2);
-          } else if (id13 === EBMLId.Segment) {
+          } else if (id === EBMLId.Segment) {
             await this.readSegment(dataStartPos, size);
             if (size === void 0) {
               break;
@@ -9254,7 +9254,7 @@
             if (this.reader.fileSize === null) {
               break;
             }
-          } else if (id13 === EBMLId.Cluster) {
+          } else if (id === EBMLId.Cluster) {
             if (this.reader.fileSize === null) {
               break;
             }
@@ -9313,13 +9313,13 @@
             break;
           }
         }
-        const { id: id13, size } = header;
+        const { id, size } = header;
         const dataStartPos = slice.filePos;
-        const metadataElementIndex = METADATA_ELEMENTS.findIndex((x) => x.id === id13);
+        const metadataElementIndex = METADATA_ELEMENTS.findIndex((x) => x.id === id);
         if (metadataElementIndex !== -1) {
           const field = METADATA_ELEMENTS[metadataElementIndex].flag;
           this.currentSegment[field] = true;
-          if (id13 === EBMLId.SeekHead) {
+          if (id === EBMLId.SeekHead) {
             visitedSeekHeadPositions.add(elementStartPos - segmentDataStart);
           }
           assertDefinedSize(size);
@@ -9329,8 +9329,8 @@
           if (slice2) {
             this.readContiguousElements(slice2);
           }
-        } else if (id13 === EBMLId.Tags || id13 === EBMLId.Attachments) {
-          if (id13 === EBMLId.Tags) {
+        } else if (id === EBMLId.Tags || id === EBMLId.Attachments) {
+          if (id === EBMLId.Tags) {
             this.currentSegment.tagsSeen = true;
           } else {
             this.currentSegment.attachmentsSeen = true;
@@ -9342,7 +9342,7 @@
           if (slice2) {
             this.readContiguousElements(slice2);
           }
-        } else if (id13 === EBMLId.Cluster) {
+        } else if (id === EBMLId.Cluster) {
           this.currentSegment.clusterSeekStartPos = elementStartPos;
           break;
         }
@@ -9394,8 +9394,8 @@
           const header = readElementHeader(slice);
           if (!header)
             continue;
-          const { id: id13, size } = header;
-          if (id13 !== target.id)
+          const { id, size } = header;
+          if (id !== target.id)
             continue;
           assertDefinedSize(size);
           this.currentSegment[target.flag] = true;
@@ -9460,8 +9460,8 @@
       const elementStartPos = startPos;
       const elementHeader = readElementHeader(headerSlice);
       assert(elementHeader);
-      const id13 = elementHeader.id;
-      assert(id13 === EBMLId.Cluster);
+      const id = elementHeader.id;
+      assert(id === EBMLId.Cluster);
       let size = elementHeader.size;
       const dataStartPos = headerSlice.filePos;
       if (size === void 0) {
@@ -9693,10 +9693,10 @@
       if (stopIds && stopIds.includes(header.id)) {
         return false;
       }
-      const { id: id13, size } = header;
+      const { id, size } = header;
       const dataStartPos = slice.filePos;
       assertDefinedSize(size);
-      switch (id13) {
+      switch (id) {
         case EBMLId.DocType:
           {
             this.isWebM = readAsciiString(slice, size) === "webm";
@@ -10823,18 +10823,18 @@
     getNumber() {
       const demuxer = this.internalTrack.demuxer;
       const trackType = this.internalTrack.trackBacking.getType();
-      let number2 = 0;
+      let number = 0;
       for (const segment of demuxer.segments) {
         for (const track of segment.tracks) {
           if (track.trackBacking.getType() === trackType) {
-            number2++;
+            number++;
           }
           if (track === this.internalTrack) {
             break;
           }
         }
       }
-      return number2;
+      return number;
     }
     getCodec() {
       throw new Error("Not implemented on base class.");
@@ -11099,10 +11099,10 @@
             break;
           }
         }
-        const id13 = elementHeader.id;
+        const id = elementHeader.id;
         let size = elementHeader.size;
         const dataStartPos = slice.filePos;
-        if (id13 === EBMLId.Cluster) {
+        if (id === EBMLId.Cluster) {
           currentCluster = await demuxer.readCluster(elementStartPos, segment);
           size = currentCluster.elementEndPos - dataStartPos;
           const { blockIndex, correctBlockFound } = getMatchInCluster(currentCluster);
@@ -11115,7 +11115,7 @@
           }
         }
         if (size === void 0) {
-          assert(id13 !== EBMLId.Cluster);
+          assert(id !== EBMLId.Cluster);
           const nextElementPos = await searchForNextElementId(demuxer.reader, dataStartPos, LEVEL_0_AND_1_EBML_IDS, segment.elementEndPos);
           size = nextElementPos.pos - dataStartPos;
         }
@@ -11669,12 +11669,12 @@
     };
   };
   var buildOggMimeType = (info) => {
-    let string2 = "audio/ogg";
+    let string = "audio/ogg";
     if (info.codecStrings) {
       const uniqueCodecMimeTypes = [...new Set(info.codecStrings)];
-      string2 += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
+      string += `; codecs="${uniqueCodecMimeTypes.join(", ")}"`;
     }
-    return string2;
+    return string;
   };
 
   // node_modules/mediabunny/dist/modules/src/ogg/ogg-reader.js
@@ -13809,12 +13809,12 @@
   var TIMESTAMP_MODULUS = 2 ** 33;
   var TS_PACKET_SIZE = 188;
   var buildMpegTsMimeType = (codecStrings) => {
-    let string2 = "video/MP2T";
+    let string = "video/MP2T";
     const uniqueCodecStrings = [...new Set(codecStrings.filter(Boolean))];
     if (uniqueCodecStrings.length > 0) {
-      string2 += `; codecs="${uniqueCodecStrings.join(", ")}"`;
+      string += `; codecs="${uniqueCodecStrings.join(", ")}"`;
     }
-    return string2;
+    return string;
   };
 
   // node_modules/mediabunny/dist/modules/src/mpeg-ts/mpeg-ts-demuxer.js
@@ -13909,12 +13909,12 @@
             while (8 * (sectionLength + BYTES_BEFORE_SECTION_LENGTH) - bitstream.pos > BITS_IN_CRC_32) {
               const programNumber = bitstream.readBits(16);
               bitstream.skipBits(3);
-              const id13 = bitstream.readBits(13);
+              const id = bitstream.readBits(13);
               if (programNumber !== 0) {
                 if (programMapPid !== null) {
                   throw new Error("Only files with a single program are supported.");
                 } else {
-                  programMapPid = id13;
+                  programMapPid = id;
                 }
               }
             }
@@ -14548,17 +14548,17 @@
     getNumber() {
       const demuxer = this.elementaryStream.demuxer;
       const trackType = this.elementaryStream.info.type;
-      let number2 = 0;
+      let number = 0;
       for (const backing of demuxer.trackBackingEntries) {
         if (backing.getType() === trackType) {
-          number2++;
+          number++;
         }
         assert(backing instanceof _MpegTsTrackBacking);
         if (backing.elementaryStream === this.elementaryStream) {
           break;
         }
       }
-      return number2;
+      return number;
     }
     getCodec() {
       throw new Error("Not implemented on base class.");
@@ -15790,11 +15790,11 @@
         if (this.trackDeclarations) {
           for (const decl of this.trackDeclarations) {
             if (decl.type === "video") {
-              const number2 = arrayCount(backings, (x) => x.getType() === "video") + 1;
-              backings.push(new SegmentedInputInputVideoTrackBacking(this, decl, number2));
+              const number = arrayCount(backings, (x) => x.getType() === "video") + 1;
+              backings.push(new SegmentedInputInputVideoTrackBacking(this, decl, number));
             } else if (decl.type === "audio") {
-              const number2 = arrayCount(backings, (x) => x.getType() === "audio") + 1;
-              backings.push(new SegmentedInputInputAudioTrackBacking(this, decl, number2));
+              const number = arrayCount(backings, (x) => x.getType() === "audio") + 1;
+              backings.push(new SegmentedInputInputAudioTrackBacking(this, decl, number));
             }
           }
         } else {
@@ -15806,17 +15806,17 @@
           const inputTracks = await input.getTracks();
           for (const track of inputTracks) {
             if (track.type === "video") {
-              const number2 = arrayCount(backings, (x) => x.getType() === "video") + 1;
+              const number = arrayCount(backings, (x) => x.getType() === "video") + 1;
               backings.push(new SegmentedInputInputVideoTrackBacking(this, {
                 id: backings.length + 1,
                 type: "video"
-              }, number2));
+              }, number));
             } else if (track.type === "audio") {
-              const number2 = arrayCount(backings, (x) => x.getType() === "audio") + 1;
+              const number = arrayCount(backings, (x) => x.getType() === "audio") + 1;
               backings.push(new SegmentedInputInputAudioTrackBacking(this, {
                 id: backings.length + 1,
                 type: "audio"
-              }, number2));
+              }, number));
             }
           }
         }
@@ -15864,14 +15864,14 @@
     }
   };
   var SegmentedInputInputTrackBacking = class {
-    constructor(segmentedInput, decl, number2) {
+    constructor(segmentedInput, decl, number) {
       this.packetInfos = /* @__PURE__ */ new WeakMap();
       this.hydrationPromise = null;
       this.firstInputTrack = null;
       this.firstSegment = null;
       this.segmentedInput = segmentedInput;
       this.decl = decl;
-      this.number = number2;
+      this.number = number;
     }
     hydrate() {
       return this.hydrationPromise ??= (async () => {
@@ -17619,11 +17619,11 @@
         }
         return { length, offset };
       };
-      const setNextSequenceNumber = (number2) => {
-        nextSequenceNumber = number2;
+      const setNextSequenceNumber = (number) => {
+        nextSequenceNumber = number;
         if (prevLastSegment) {
           assert(prevLastSegment.sequenceNumber !== null);
-          if (prevLastSegment.sequenceNumber < number2) {
+          if (prevLastSegment.sequenceNumber < number) {
             accumulatedTime = prevLastSegment.timestamp + prevLastSegment.duration;
             currentFirstSegment = prevLastSegment.firstSegment;
             currentInitSegment = prevLastSegment.initSegment;
@@ -17815,11 +17815,11 @@
           }
         } else if (line.startsWith(TAG_MEDIA_SEQUENCE)) {
           const value = line.slice(TAG_MEDIA_SEQUENCE.length);
-          const number2 = Number(value);
-          if (!Number.isInteger(number2) || number2 < 0) {
+          const number = Number(value);
+          if (!Number.isInteger(number) || number < 0) {
             throw new Error(`Invalid EXT-X-MEDIA-SEQUENCE value '${value}'.`);
           }
-          setNextSequenceNumber(number2);
+          setNextSequenceNumber(number);
         } else if (line.startsWith(TAG_BYTERANGE)) {
           const parsed = parseByteRange(line.slice(TAG_BYTERANGE.length));
           if (parsed.offset === null) {
@@ -18503,16 +18503,16 @@
     getNumber() {
       assert(this.internalTrack.demuxer.internalTracks);
       const trackType = this.internalTrack.info.type;
-      let number2 = 0;
+      let number = 0;
       for (const track of this.internalTrack.demuxer.internalTracks) {
         if (track.info.type === trackType) {
-          number2++;
+          number++;
         }
         if (track === this.internalTrack) {
           break;
         }
       }
-      return number2;
+      return number;
     }
     getTimeResolution() {
       return this.delegate(() => this.internalTrack.backingTrack.getTimeResolution());
@@ -18798,8 +18798,8 @@
       if (varIntSize < 1 || varIntSize > 8) {
         return false;
       }
-      const id13 = readUnsignedInt(headerSlice, varIntSize);
-      if (id13 !== EBMLId.EBML) {
+      const id = readUnsignedInt(headerSlice, varIntSize);
+      if (id !== EBMLId.EBML) {
         return false;
       }
       const dataSize = readElementSize(headerSlice);
@@ -18816,11 +18816,11 @@
         const header = readElementHeader(dataSlice);
         if (!header)
           break;
-        const { id: id14, size } = header;
+        const { id: id2, size } = header;
         const dataStartPos = dataSlice.filePos;
         if (size === void 0)
           return false;
-        switch (id14) {
+        switch (id2) {
           case EBMLId.EBMLVersion:
             {
               const ebmlVersion = readUnsignedInt(dataSlice, size);
@@ -20515,7 +20515,7 @@
     return ComputeLayoutAndAllocationSize(parsedRect, format, optLayout);
   };
   var ParseVisibleRect = (defaultRect, overrideRect, codedWidth, codedHeight, format) => {
-    const sourceRect2 = { ...defaultRect };
+    const sourceRect = { ...defaultRect };
     if (overrideRect !== void 0) {
       if (overrideRect.width === 0 || overrideRect.height === 0) {
         throw new TypeError("visibleRect dimensions cannot be zero.");
@@ -20526,16 +20526,16 @@
       if ((overrideRect.y || 0) + (overrideRect.height || 0) > codedHeight) {
         throw new TypeError("visibleRect exceeds codedHeight.");
       }
-      sourceRect2.x = overrideRect.x || 0;
-      sourceRect2.y = overrideRect.y || 0;
-      sourceRect2.width = overrideRect.width || 0;
-      sourceRect2.height = overrideRect.height || 0;
+      sourceRect.x = overrideRect.x || 0;
+      sourceRect.y = overrideRect.y || 0;
+      sourceRect.width = overrideRect.width || 0;
+      sourceRect.height = overrideRect.height || 0;
     }
-    const validAlignment = VerifyRectOffsetAlignment(format, sourceRect2);
+    const validAlignment = VerifyRectOffsetAlignment(format, sourceRect);
     if (!validAlignment) {
       throw new TypeError("visibleRect alignment is invalid for the format.");
     }
-    return sourceRect2;
+    return sourceRect;
   };
   var VerifyRectOffsetAlignment = (format, rect) => {
     if (format === null)
@@ -21945,24 +21945,24 @@
   var toUlaw = (s16) => {
     const MULAW_MAX = 8191;
     const MULAW_BIAS = 33;
-    let number2 = s16 >> 2;
+    let number = s16 >> 2;
     let mask = 4096;
     let sign = 0;
     let position = 12;
     let lsb = 0;
-    if (number2 < 0) {
-      number2 = -number2;
+    if (number < 0) {
+      number = -number;
       sign = 128;
     }
-    number2 += MULAW_BIAS;
-    if (number2 > MULAW_MAX) {
-      number2 = MULAW_MAX;
+    number += MULAW_BIAS;
+    if (number > MULAW_MAX) {
+      number = MULAW_MAX;
     }
-    while ((number2 & mask) !== mask && position >= 5) {
+    while ((number & mask) !== mask && position >= 5) {
       mask >>= 1;
       position--;
     }
-    lsb = number2 >> position - 4 & 15;
+    lsb = number >> position - 4 & 15;
     return ~(sign | position - 5 << 4 | lsb) & 255;
   };
   var toAlaw = (s16) => {
@@ -21971,20 +21971,20 @@
     let sign = 0;
     let position = 11;
     let lsb = 0;
-    let number2 = s16 >> 3;
-    if (number2 < 0) {
-      number2 = -number2 - 1;
+    let number = s16 >> 3;
+    if (number < 0) {
+      number = -number - 1;
     } else {
       sign = 128;
     }
-    if (number2 > ALAW_MAX) {
-      number2 = ALAW_MAX;
+    if (number > ALAW_MAX) {
+      number = ALAW_MAX;
     }
-    while ((number2 & mask) !== mask && position >= 5) {
+    while ((number & mask) !== mask && position >= 5) {
       mask >>= 1;
       position--;
     }
-    lsb = number2 >> (position === 4 ? 1 : position - 4) & 15;
+    lsb = number >> (position === 4 ? 1 : position - 4) & 15;
     return (sign | position - 4 << 4 | lsb) ^ 85;
   };
 
@@ -22868,17 +22868,17 @@
       sample.setFlip(this.flip);
       this.onSample(sample);
     }
-    async mergeAlpha(color2, alpha) {
+    async mergeAlpha(color, alpha) {
       const resolver = promiseWithResolvers();
       this.mergeAlphaPromises.push(resolver.promise);
       const result = { sample: null };
       this.finalSamples.push(result);
       try {
         if (!alpha) {
-          result.sample = new VideoSample(color2);
+          result.sample = new VideoSample(color);
         } else {
           assert(this.merger);
-          const finalFrame = await this.merger.merge(color2, alpha);
+          const finalFrame = await this.merger.merge(color, alpha);
           result.sample = new VideoSample(finalFrame);
         }
         while (this.finalSamples.length > 0 && this.finalSamples[0].sample !== null) {
@@ -22954,7 +22954,7 @@
       this.pendingRequests = /* @__PURE__ */ new Map();
       this.nextRequestId = 0;
     }
-    merge(color2, alpha) {
+    merge(color, alpha) {
       if (this.workers.length === 0) {
         if (!mergerWorkerUrl) {
           const blob = new Blob([`(${colorAlphaMergerWorkerCode.toString()})()`], { type: "application/javascript" });
@@ -22986,12 +22986,12 @@
           this.workers.push(worker2);
         }
       }
-      const id13 = this.nextRequestId++;
+      const id = this.nextRequestId++;
       const pending = promiseWithResolvers();
-      this.pendingRequests.set(id13, pending);
+      this.pendingRequests.set(id, pending);
       const worker = this.workers[this.nextWorkerIndex];
       this.nextWorkerIndex = (this.nextWorkerIndex + 1) % this.workers.length;
-      worker.postMessage({ id: id13, color: color2, alpha }, { transfer: [color2, alpha] });
+      worker.postMessage({ id, color, alpha }, { transfer: [color, alpha] });
       return pending.promise;
     }
     close() {
@@ -23011,21 +23011,21 @@
     let cpuColorBuffer = null;
     let chain = Promise.resolve();
     self.addEventListener("message", (event) => {
-      const { id: id13, color: color2, alpha } = event.data;
+      const { id, color, alpha } = event.data;
       chain = chain.then(async () => {
         try {
-          const frame = await merge(color2, alpha);
-          self.postMessage({ id: id13, frame }, { transfer: [frame] });
+          const frame = await merge(color, alpha);
+          self.postMessage({ id, frame }, { transfer: [frame] });
         } catch (error) {
-          self.postMessage({ id: id13, error: error.message });
+          self.postMessage({ id, error: error.message });
         } finally {
-          color2.close();
+          color.close();
           alpha.close();
         }
       });
     });
-    const merge = async (color2, alpha) => {
-      const format = color2.format;
+    const merge = async (color, alpha) => {
+      const format = color.format;
       const alphaFormat = alpha.format;
       if (!format || !alphaFormat) {
         throw new Error("CPU color/alpha merging requires a known VideoFrame format.");
@@ -23038,20 +23038,20 @@
         throw new Error(`CPU color/alpha merging requires the alpha frame to have the same bit depth as the color frame (color: '${format}', alpha: '${alphaFormat}').`);
       }
       if (format === "RGBX" || format === "RGBA" || format === "BGRX" || format === "BGRA") {
-        return await mergeInterleavedRgba(color2, alpha, format);
+        return await mergeInterleavedRgba(color, alpha, format);
       } else if (format === "I420" || format === "I420P10" || format === "I420P12" || format === "I422" || format === "I422P10" || format === "I422P12" || format === "I444" || format === "I444P10" || format === "I444P12") {
-        return await mergePlanarYuv(color2, alpha, format);
+        return await mergePlanarYuv(color, alpha, format);
       } else if (format === "NV12") {
-        return await mergeNv12(color2, alpha);
+        return await mergeNv12(color, alpha);
       }
       throw new Error(`CPU color/alpha merging does not support format '${format}'.`);
     };
-    const mergeInterleavedRgba = async (color2, alpha, format) => {
-      const width = color2.visibleRect?.width ?? color2.codedWidth;
-      const height = color2.visibleRect?.height ?? color2.codedHeight;
+    const mergeInterleavedRgba = async (color, alpha, format) => {
+      const width = color.visibleRect?.width ?? color.codedWidth;
+      const height = color.visibleRect?.height ?? color.codedHeight;
       const pixelCount = width * height;
       const output = new Uint8Array(pixelCount * 4);
-      await color2.copyTo(output);
+      await color.copyTo(output);
       const alphaY = await readAlpha(alpha, width, height, 1);
       for (let i = 0, j = 3; i < pixelCount; i++, j += 4) {
         output[j] = alphaY[i];
@@ -23061,15 +23061,15 @@
         format: outputFormat,
         codedWidth: width,
         codedHeight: height,
-        timestamp: color2.timestamp,
-        duration: color2.duration ?? void 0,
+        timestamp: color.timestamp,
+        duration: color.duration ?? void 0,
         transfer: [output.buffer]
       };
       return new VideoFrame(output, init);
     };
-    const mergePlanarYuv = async (color2, alpha, format) => {
-      const width = color2.visibleRect?.width ?? color2.codedWidth;
-      const height = color2.visibleRect?.height ?? color2.codedHeight;
+    const mergePlanarYuv = async (color, alpha, format) => {
+      const width = color.visibleRect?.width ?? color.codedWidth;
+      const height = color.visibleRect?.height ?? color.codedHeight;
       const is10 = format.includes("P10");
       const is12 = format.includes("P12");
       const bytesPerSample = is10 || is12 ? 2 : 1;
@@ -23092,7 +23092,7 @@
       const aBytes = ySamples * bytesPerSample;
       const outputBytes = yBytes + 2 * uvBytes + aBytes;
       const output = new Uint8Array(outputBytes);
-      await color2.copyTo(output);
+      await color.copyTo(output);
       const alphaY = await readAlpha(alpha, width, height, bytesPerSample);
       const aOffset = yBytes + 2 * uvBytes;
       output.set(alphaY, aOffset);
@@ -23101,24 +23101,24 @@
         format: outputFormat,
         codedWidth: width,
         codedHeight: height,
-        timestamp: color2.timestamp,
-        duration: color2.duration ?? void 0,
+        timestamp: color.timestamp,
+        duration: color.duration ?? void 0,
         transfer: [output.buffer]
       };
       return new VideoFrame(output, init);
     };
-    const mergeNv12 = async (color2, alpha) => {
-      const width = color2.visibleRect?.width ?? color2.codedWidth;
-      const height = color2.visibleRect?.height ?? color2.codedHeight;
+    const mergeNv12 = async (color, alpha) => {
+      const width = color.visibleRect?.width ?? color.codedWidth;
+      const height = color.visibleRect?.height ?? color.codedHeight;
       const ySize = width * height;
       const chromaW = Math.ceil(width / 2);
       const chromaH = Math.ceil(height / 2);
       const uvSize = chromaW * chromaH;
-      const sourceSize2 = color2.allocationSize();
+      const sourceSize2 = color.allocationSize();
       if (!cpuColorBuffer || cpuColorBuffer.byteLength !== sourceSize2) {
         cpuColorBuffer = new Uint8Array(sourceSize2);
       }
-      await color2.copyTo(cpuColorBuffer);
+      await color.copyTo(cpuColorBuffer);
       const output = new Uint8Array(ySize + 2 * uvSize + ySize);
       output.set(cpuColorBuffer.subarray(0, ySize), 0);
       const uOffset = ySize;
@@ -23134,8 +23134,8 @@
         format: "I420A",
         codedWidth: width,
         codedHeight: height,
-        timestamp: color2.timestamp,
-        duration: color2.duration ?? void 0,
+        timestamp: color.timestamp,
+        duration: color.duration ?? void 0,
         transfer: [output.buffer]
       };
       return new VideoFrame(output, init);
@@ -25082,8 +25082,8 @@
     return str;
   };
   var readAllLines = (slice, length, options) => {
-    const text2 = textDecoder.decode(readBytes(slice, length));
-    const lines = text2.split("\n").map((x) => x.trim()).filter((x) => x.length > 0 && !options?.ignore?.(x));
+    const text = textDecoder.decode(readBytes(slice, length));
+    const lines = text.split("\n").map((x) => x.trim()).filter((x) => x.length > 0 && !options?.ignore?.(x));
     return lines;
   };
 
@@ -25692,15 +25692,15 @@
     }
     readId3V2Frame() {
       if (this.header.majorVersion === 2) {
-        const id13 = this.readAscii(3);
-        if (id13 === "\0\0\0") {
+        const id = this.readAscii(3);
+        if (id === "\0\0\0") {
           return null;
         }
         const size = this.readU24();
-        return { id: id13, size, flags: 0 };
+        return { id, size, flags: 0 };
       } else {
-        const id13 = this.readAscii(4);
-        if (id13 === "\0\0\0\0") {
+        const id = this.readAscii(4);
+        if (id === "\0\0\0\0") {
           return null;
         }
         const sizeRaw = this.readU32();
@@ -25728,15 +25728,15 @@
           }
         }
         this.pos = headerEndPos;
-        return { id: id13, size, flags };
+        return { id, size, flags };
       }
     }
     readId3V2TextEncoding() {
-      const number2 = this.readU8();
-      if (number2 > 3) {
-        throw new Error(`Unsupported text encoding: ${number2}`);
+      const number = this.readU8();
+      if (number > 3) {
+        throw new Error(`Unsupported text encoding: ${number}`);
       }
-      return number2;
+      return number;
     }
     readId3V2Text(encoding, until) {
       const startPos = this.pos;
@@ -25853,65 +25853,65 @@
       this.helperView.setUint32(4, value, false);
       this.writer.write(this.helper.subarray(0, 8));
     }
-    writeAscii(text2) {
-      for (let i = 0; i < text2.length; i++) {
-        this.helperView.setUint8(i % 8, text2.charCodeAt(i));
+    writeAscii(text) {
+      for (let i = 0; i < text.length; i++) {
+        this.helperView.setUint8(i % 8, text.charCodeAt(i));
         if (i % 8 === 7)
           this.writer.write(this.helper);
       }
-      if (text2.length % 8 !== 0) {
-        this.writer.write(this.helper.subarray(0, text2.length % 8));
+      if (text.length % 8 !== 0) {
+        this.writer.write(this.helper.subarray(0, text.length % 8));
       }
     }
-    writeBox(box3) {
-      this.offsets.set(box3, this.writer.getPos());
-      if (box3.contents && !box3.children) {
-        this.writeBoxHeader(box3, box3.size ?? box3.contents.byteLength + 8);
-        this.writer.write(box3.contents);
+    writeBox(box2) {
+      this.offsets.set(box2, this.writer.getPos());
+      if (box2.contents && !box2.children) {
+        this.writeBoxHeader(box2, box2.size ?? box2.contents.byteLength + 8);
+        this.writer.write(box2.contents);
       } else {
         const startPos = this.writer.getPos();
-        this.writeBoxHeader(box3, 0);
-        if (box3.contents)
-          this.writer.write(box3.contents);
-        if (box3.children) {
-          for (const child of box3.children)
+        this.writeBoxHeader(box2, 0);
+        if (box2.contents)
+          this.writer.write(box2.contents);
+        if (box2.children) {
+          for (const child of box2.children)
             if (child)
               this.writeBox(child);
         }
         const endPos = this.writer.getPos();
-        const size = box3.size ?? endPos - startPos;
+        const size = box2.size ?? endPos - startPos;
         this.writer.seek(startPos);
-        this.writeBoxHeader(box3, size);
+        this.writeBoxHeader(box2, size);
         this.writer.seek(endPos);
       }
     }
-    writeBoxHeader(box3, size) {
-      this.writeU32(box3.largeSize ? 1 : size);
-      this.writeAscii(box3.type);
-      if (box3.largeSize)
+    writeBoxHeader(box2, size) {
+      this.writeU32(box2.largeSize ? 1 : size);
+      this.writeAscii(box2.type);
+      if (box2.largeSize)
         this.writeU64(size);
     }
-    measureBoxHeader(box3) {
-      return 8 + (box3.largeSize ? 8 : 0);
+    measureBoxHeader(box2) {
+      return 8 + (box2.largeSize ? 8 : 0);
     }
-    patchBox(box3) {
-      const boxOffset = this.offsets.get(box3);
+    patchBox(box2) {
+      const boxOffset = this.offsets.get(box2);
       assert(boxOffset !== void 0);
       const endPos = this.writer.getPos();
       this.writer.seek(boxOffset);
-      this.writeBox(box3);
+      this.writeBox(box2);
       this.writer.seek(endPos);
     }
-    measureBox(box3) {
-      if (box3.contents && !box3.children) {
-        const headerSize = this.measureBoxHeader(box3);
-        return headerSize + box3.contents.byteLength;
+    measureBox(box2) {
+      if (box2.contents && !box2.children) {
+        const headerSize = this.measureBoxHeader(box2);
+        return headerSize + box2.contents.byteLength;
       } else {
-        let result = this.measureBoxHeader(box3);
-        if (box3.contents)
-          result += box3.contents.byteLength;
-        if (box3.children) {
-          for (const child of box3.children)
+        let result = this.measureBoxHeader(box2);
+        if (box2.contents)
+          result += box2.contents.byteLength;
+        if (box2.children) {
+          for (const child of box2.children)
             if (child)
               result += this.measureBox(child);
         }
@@ -25982,8 +25982,8 @@
     } while (remaining > 0 || byteLength);
     return bytes2.reverse();
   };
-  var ascii = (text2, nullTerminated = false) => {
-    const bytes2 = Array(text2.length).fill(null).map((_, i) => text2.charCodeAt(i));
+  var ascii = (text, nullTerminated = false) => {
+    const bytes2 = Array(text.length).fill(null).map((_, i) => text.charCodeAt(i));
     if (nullTerminated)
       bytes2.push(0);
     return bytes2;
@@ -27294,8 +27294,8 @@
         case "trackNumber":
           {
             if (isMdta) {
-              const string2 = tags.tracksTotal !== void 0 ? `${value}/${tags.tracksTotal}` : value.toString();
-              pairs.push({ key: "track", value: dataStringBoxLong(string2) });
+              const string = tags.tracksTotal !== void 0 ? `${value}/${tags.tracksTotal}` : value.toString();
+              pairs.push({ key: "track", value: dataStringBoxLong(string) });
             } else {
               pairs.push({ key: "trkn", value: box("data", [
                 u32(0),
@@ -28511,8 +28511,8 @@
         }
         if (trackData.lastCueEndTimestamp < sampleStart) {
           this.auxWriter.seek(0);
-          const box3 = vtte();
-          this.auxBoxWriter.writeBox(box3);
+          const box2 = vtte();
+          this.auxBoxWriter.writeBox(box2);
           const body2 = this.auxTarget._getSlice(0, this.auxWriter.getPos());
           const sample2 = this.createSampleForTrack(trackData, body2, trackData.lastCueEndTimestamp, sampleStart - trackData.lastCueEndTimestamp, "key");
           await this.registerSample(trackData, sample2);
@@ -28533,11 +28533,11 @@
             trackData.cueToSourceId.set(cue, sourceId);
           }
           if (cue.notes) {
-            const box4 = vtta(cue.notes);
-            this.auxBoxWriter.writeBox(box4);
+            const box3 = vtta(cue.notes);
+            this.auxBoxWriter.writeBox(box3);
           }
-          const box3 = vttc(cue.text, containsTimestamp ? sampleStart : null, cue.identifier ?? null, cue.settings ?? null, sourceId ?? null);
-          this.auxBoxWriter.writeBox(box3);
+          const box2 = vttc(cue.text, containsTimestamp ? sampleStart : null, cue.identifier ?? null, cue.settings ?? null, sourceId ?? null);
+          this.auxBoxWriter.writeBox(box2);
           if (endTimestamp === sampleEnd) {
             trackData.cueQueue.splice(i--, 1);
           }
@@ -30145,10 +30145,10 @@
           this.pendingRequests.clear();
         });
       }
-      const id13 = this.nextRequestId++;
+      const id = this.nextRequestId++;
       const pending = promiseWithResolvers();
-      this.pendingRequests.set(id13, pending);
-      this.worker.postMessage({ id: id13, sourceFrame }, { transfer: [sourceFrame] });
+      this.pendingRequests.set(id, pending);
+      this.worker.postMessage({ id, sourceFrame }, { transfer: [sourceFrame] });
       return pending.promise;
     }
     close() {
@@ -30165,13 +30165,13 @@
     let cpuSourceBuffer = null;
     let chain = Promise.resolve();
     self.addEventListener("message", (event) => {
-      const { id: id13, sourceFrame } = event.data;
+      const { id, sourceFrame } = event.data;
       chain = chain.then(async () => {
         try {
           const { colorFrame, alphaFrame } = await split(sourceFrame);
-          self.postMessage({ id: id13, colorFrame, alphaFrame }, { transfer: [colorFrame, alphaFrame] });
+          self.postMessage({ id, colorFrame, alphaFrame }, { transfer: [colorFrame, alphaFrame] });
         } catch (error) {
-          self.postMessage({ id: id13, error: error.message });
+          self.postMessage({ id, error: error.message });
         } finally {
           sourceFrame.close();
         }
@@ -31049,8 +31049,8 @@
   var ALL_TRACK_TYPES = ["video", "audio", "subtitle"];
   var OutputTrack = class _OutputTrack {
     /** @internal */
-    constructor(id13, output, type, source, metadata) {
-      this.id = id13;
+    constructor(id, output, type, source, metadata) {
+      this.id = id;
       this.output = output;
       this.type = type;
       this.source = source;
@@ -31096,20 +31096,20 @@
   };
   var OutputVideoTrack = class extends OutputTrack {
     /** @internal */
-    constructor(id13, output, source, metadata) {
-      super(id13, output, "video", source, metadata);
+    constructor(id, output, source, metadata) {
+      super(id, output, "video", source, metadata);
     }
   };
   var OutputAudioTrack = class extends OutputTrack {
     /** @internal */
-    constructor(id13, output, source, metadata) {
-      super(id13, output, "audio", source, metadata);
+    constructor(id, output, source, metadata) {
+      super(id, output, "audio", source, metadata);
     }
   };
   var OutputSubtitleTrack = class extends OutputTrack {
     /** @internal */
-    constructor(id13, output, source, metadata) {
-      super(id13, output, "subtitle", source, metadata);
+    constructor(id, output, source, metadata) {
+      super(id, output, "subtitle", source, metadata);
     }
   };
   var OutputTrackGroup = class _OutputTrackGroup {
@@ -31610,16 +31610,43 @@
     };
   }
 
+  // scripts/lib/compose/scene-timemap.mjs
+  function sceneSourceAt(map, tOut) {
+    const t = Math.max(0, Math.min(map.outputDuration, tOut));
+    const cards = sourceAt(map.cardsMap, t);
+    const active = map.scenes.findLast((s) => t >= s.outputStart) ?? map.scenes[0];
+    const local = sourceAt(active.timemap, t - active.outputStart);
+    const overlap = cards.section === "main" && map.transitions.find((x) => t >= x.outputStart && t < x.outputEnd);
+    const point = (id) => {
+      const s = map.scenes.find((s2) => s2.id === id);
+      return { sceneId: id, t: sourceAt(s.timemap, t - s.outputStart).t };
+    };
+    return {
+      section: cards.section,
+      sceneId: active.id,
+      t: local.t,
+      rate: local.rate,
+      alphaTitle: cards.alphaTitle,
+      alphaOutro: cards.alphaOutro,
+      transition: overlap ? {
+        type: overlap.type,
+        from: point(overlap.from),
+        to: point(overlap.to),
+        progress: (t - overlap.outputStart) / (overlap.outputEnd - overlap.outputStart)
+      } : null
+    };
+  }
+
   // scripts/lib/compose/captions.mjs
   var smooth = (t) => t * t * (3 - 2 * t);
   function captionAlpha(cue, t) {
     if (t <= cue.start || t >= cue.end) return 0;
     return smooth(Math.min(1, (t - cue.start) / 0.2, (cue.end - t) / 0.2));
   }
-  function wrap(text2, width, measure) {
+  function wrap(text, width, measure) {
     const lines = [];
     let line = "";
-    for (const word of text2.trim().split(/\s+/).filter(Boolean)) {
+    for (const word of text.trim().split(/\s+/).filter(Boolean)) {
       const candidate = line ? `${line} ${word}` : word;
       if (measure(candidate) <= width) {
         line = candidate;
@@ -31644,11 +31671,11 @@
     if (line) lines.push(line);
     return lines;
   }
-  function wrapLines(text2, maxWidth, measure, { maxLines = 2 } = {}) {
+  function wrapLines(text, maxWidth, measure, { maxLines = 2 } = {}) {
     if (!Number.isFinite(maxWidth) || maxWidth <= 0 || !Number.isInteger(maxLines) || maxLines < 1) throw new Error("Invalid caption wrapping bounds");
     let lines;
     for (const scale of [1, 0.9, 0.8]) {
-      lines = wrap(text2, maxWidth / scale, measure);
+      lines = wrap(text, maxWidth / scale, measure);
       if (lines.length <= maxLines) return { lines, scale };
     }
     lines = lines.slice(0, maxLines);
@@ -31662,6 +31689,7 @@
 
   // scripts/lib/compose/layout.mjs
   var OUTPUT_PRESETS = Object.freeze({ landscape: [1920, 1080], vertical: [1080, 1920], square: [1080, 1080] });
+  var OUTPUT_SIZES = Object.freeze({ "720": 2 / 3, "1080": 1, "1440": 4 / 3, "4k": 2 });
   var isVertical = (output) => output.preset === "vertical" || output.height > output.width;
   function safeArea(output, enabled = isVertical(output)) {
     const top = enabled ? Math.ceil(output.height * 0.07) : 0;
@@ -31677,8 +31705,8 @@
   function verticalCaptionMetrics(output, captions, texts = [], measureText) {
     const size = output.height * (captions?.fontSizePct ?? 3.9) / 100, padding = size * 0.6;
     const w = Math.round(output.width * 0.88), maxLines = Math.min(3, captions?.maxLines ?? 3);
-    const measure = measureText ?? ((text2) => Array.from(text2).length * size * 0.55);
-    const lines = Math.max(1, ...texts.map((text2) => wrapLines(text2, w - padding * 2, measure, { maxLines }).lines.length));
+    const measure = measureText ?? ((text) => Array.from(text).length * size * 0.55);
+    const lines = Math.max(1, ...texts.map((text) => wrapLines(text, w - padding * 2, measure, { maxLines }).lines.length));
     return { size, w, lines, h: Math.ceil(lines * size * 1.25 + padding) };
   }
   function verticalLayout({ output, source, composition, captionTexts = [], measureCaption }) {
@@ -31728,7 +31756,7 @@
     }
     return value;
   }
-  function theme(name, colors, ink, muted, accent, font2, weight, radius, size, speed, depth) {
+  function theme(name, colors, ink, muted, accent, font, weight, radius, size, speed, depth) {
     return {
       name,
       background: { type: "gradient", angle: 135, colors },
@@ -31737,15 +31765,15 @@
         shadow: { enabled: true, blurPx: radius * 2.8, offsetYPx: radius, opacity: 0.25, color: "rgba(0,0,0,0.25)" },
         border: { enabled: name !== "clean", color: accent, widthPx: name === "bold" ? 4 : 1 }
       },
-      cursor: { fill: name === "clean" ? "#ffffff" : accent, stroke: name === "bold" ? "#24124b" : "#111827", sizePct: size },
+      cursor: { fill: "#ffffff", stroke: "#111827", sizePct: size },
+      // always the familiar white pointer with a dark outline, never the brand colour
       ripple: { color: accent },
       caption: { background: name === "clean" ? "rgba(17,24,39,0.86)" : name === "dark" ? "#202b40" : "#24124b", color: "#ffffff", fontWeight: weight },
       card: { background: { type: "gradient", angle: 135, colors }, titleColor: ink, subtitleColor: muted, accent },
-      overlay: { accent, onAccent: name === "clean" ? "#ffffff" : "#111827", surfaceBorder: name === "clean" ? "#c2cbd7" : name === "dark" ? "#0b1220" : "#160b30", surface: name === "clean" ? "#ffffff" : name === "dark" ? "#172033" : "#24124b", onSurface: name === "clean" ? "#111827" : "#ffffff", muted },
-      typography: { family: font2, weights: { body: 400, display: weight }, captionSizeMultiplier: name === "bold" ? 1.2 : 1 },
+      typography: { family: font, weights: { body: 400, display: weight }, captionSizeMultiplier: name === "bold" ? 1.2 : 1 },
       zoom: { depth, speed },
       transition: name === "bold" ? "cut" : "crossfade",
-      font: font2
+      font
     };
   }
   var THEMES = freeze({
@@ -31753,387 +31781,6 @@
     dark: theme("dark", ["#0b1220", "#172033"], "#f9fafb", "#cbd5e1", "#2dd4bf", "Inter", 400, 8, 3.1, "slow", "subtle"),
     bold: theme("bold", ["#6d28d9", "#ea3788"], "#ffffff", "#f5d0fe", "#facc15", "Space Grotesk", 700, 24, 4.2, "fast", "strong")
   });
-
-  // scripts/lib/compose/easing.mjs
-  var clamp01 = (t) => Math.max(0, Math.min(1, t));
-  var EASING = Object.freeze({
-    standard: (t) => {
-      t = clamp01(t);
-      return t * t * (3 - 2 * t);
-    },
-    enterOut: (t) => 1 - (1 - clamp01(t)) ** 3,
-    moveInOut: (t) => {
-      t = clamp01(t);
-      return t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
-    },
-    exitIn: (t) => clamp01(t) ** 3,
-    springSoft: (t) => {
-      t = clamp01(t);
-      return (1 - (1 + 8 * t) * Math.exp(-8 * t)) / (1 - 9 * Math.exp(-8));
-    },
-    none: clamp01
-  });
-  var DURATIONS = Object.freeze({ enter: 0.5, exit: 0.3, move: 0.6 });
-  function enterExit(t, start, end, { enter = DURATIONS.enter, exit = DURATIONS.exit, ease = "enterOut" } = {}) {
-    if (t < start || t >= end || end <= start) return { progress: 0, phase: "off", alpha: 0 };
-    const factor = Math.min(1, (end - start) / Math.max(enter + exit, Number.EPSILON));
-    enter *= factor;
-    exit *= factor;
-    const progress = clamp01((t - start) / (end - start));
-    const curve = typeof ease === "function" ? ease : EASING[ease] ?? EASING.enterOut;
-    if (enter > 0 && t < start + enter) return { progress, phase: "enter", alpha: curve((t - start) / enter) };
-    if (exit > 0 && t > end - exit) return { progress, phase: "exit", alpha: 1 - EASING.exitIn((t - end + exit) / exit) };
-    return { progress, phase: "hold", alpha: 1 };
-  }
-
-  // scripts/lib/compose/templates/shared.mjs
-  var POSITIONS = ["top-left", "top-center", "top-right", "center-left", "center", "center-right", "bottom-left", "bottom-center", "bottom-right"];
-  var string = (value, maxLength = 140) => ({ type: "string", maxLength, default: value });
-  var number = (value, min = 0, max = 100) => ({ type: "number", min, max, default: value });
-  var enumeration = (value, values) => ({ type: "enum", values, default: value });
-  var color = (value = "accent") => ({ type: "color", default: value });
-  var boolean = (value) => ({ type: "boolean", default: value });
-  function define(id13, label13, help13, params13, draw13, defaultDuration13 = 3) {
-    const canvas = ["title-card", "outro-card", "animated-gradient", "logo-sting"].includes(id13);
-    params13 = { placement: enumeration(canvas ? "canvas" : "frame", ["frame", "canvas"]), position: { type: "position", values: POSITIONS, default: "center" }, offsetX: number(0, -100, 100), offsetY: number(0, -100, 100), color: color(), ...params13 };
-    return Object.freeze({ id: id13, label: label13, help: help13, params: params13, defaults: Object.fromEntries(Object.entries(params13).map(([k, s]) => [k, s.default])), defaultDuration: defaultDuration13, draw: draw13 });
-  }
-  var paint = (f, c) => f.theme.overlay[c] ?? c;
-  function overlaySafeArea(f, placement = "frame") {
-    if (placement === "canvas" || !f.layout?.frame) return { x: 0, y: 0, w: f.width, h: f.height };
-    const frame = f.layout.frame, margin = frame.w * 0.03;
-    let r = { x: frame.x + margin, y: frame.y + margin, w: Math.max(0, frame.w - 2 * margin), h: Math.max(0, frame.h - 2 * margin) };
-    const c = f.layout.caption;
-    if (c && c.x < r.x + r.w && c.x + c.w > r.x && c.y < r.y + r.h && c.y + c.h > r.y) {
-      const right = r.x + r.w, bottom = r.y + r.h;
-      const parts = [
-        { x: r.x, y: r.y, w: r.w, h: Math.max(0, c.y - r.y) },
-        { x: r.x, y: Math.max(r.y, c.y + c.h), w: r.w, h: Math.max(0, bottom - Math.max(r.y, c.y + c.h)) },
-        { x: r.x, y: r.y, w: Math.max(0, c.x - r.x), h: r.h },
-        { x: Math.max(r.x, c.x + c.w), y: r.y, w: Math.max(0, right - Math.max(r.x, c.x + c.w)), h: r.h }
-      ];
-      r = parts.sort((a, b) => b.w * b.h - a.w * a.h)[0];
-    }
-    return r;
-  }
-  var clamp3 = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  function anchor(f, p) {
-    const r = overlaySafeArea(f, p.placement), pos = f.anchor ?? p.position;
-    const x = pos.endsWith("left") ? 0 : pos.endsWith("right") ? 1 : 0.5;
-    const y = pos.startsWith("top") ? 0 : pos.startsWith("bottom") ? 1 : 0.5;
-    return { x: r.x + r.w * clamp3(x + (p.offsetX ?? 0) / 100, 0, 1), y: r.y + r.h * clamp3(y + (p.offsetY ?? 0) / 100, 0, 1) };
-  }
-  function fitPlate(f, p, size, point = anchor(f, p)) {
-    const r = overlaySafeArea(f, p.placement), w = Math.min(size.w, r.w), h = Math.min(size.h, r.h);
-    const pos = f.anchor ?? p.position;
-    return {
-      x: clamp3(point.x - (pos.endsWith("left") ? 0 : pos.endsWith("right") ? w : w / 2), r.x, r.x + r.w - w),
-      y: clamp3(point.y - (pos.startsWith("top") ? 0 : pos.startsWith("bottom") ? h : h / 2), r.y, r.y + r.h - h),
-      w,
-      h
-    };
-  }
-  var font = (f, size) => `${f.theme.typography.weights.display} ${size}px "${f.theme.typography.family}"`;
-  function plateSize(lines, measureText, { minWidth = 0, extraWidth = 0 } = {}) {
-    const em = Math.max(...lines.map((l) => l.size)), px = em * 0.9, py = em * 0.55;
-    return {
-      w: Math.max(minWidth, Math.max(...lines.map((l) => measureText(l.text, l.size).width)) + 2 * px + extraWidth),
-      h: lines.reduce((n, l) => n + l.size * 1.25, 0) + 2 * py,
-      px,
-      py,
-      em
-    };
-  }
-  function measurePlate(ctx, f, lines, options) {
-    return plateSize(lines, (value, size) => {
-      ctx.font = font(f, size);
-      return ctx.measureText(value);
-    }, options);
-  }
-  function drawPlate(ctx, f, r, size, accent = "accent", pill = false) {
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.22)";
-    ctx.shadowBlur = size.em * 0.45;
-    ctx.shadowOffsetY = size.em * 0.15;
-    ctx.fillStyle = paint(f, "surface");
-    ctx.globalAlpha *= 0.96;
-    ctx.beginPath();
-    ctx.roundRect(r.x, r.y, r.w, r.h, pill ? r.h / 2 : size.em * 0.5);
-    ctx.fill();
-    ctx.shadowColor = "transparent";
-    ctx.strokeStyle = paint(f, "surfaceBorder");
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.restore();
-    if (!pill) {
-      ctx.fillStyle = paint(f, accent);
-      ctx.fillRect(r.x + 1, r.y + size.em * 0.5, Math.max(2, size.em * 0.12), Math.max(0, r.h - size.em));
-    }
-  }
-  function plateText(ctx, f, value, x, y, size, maxWidth) {
-    ctx.font = font(f, size);
-    ctx.fillStyle = paint(f, "onSurface");
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(value, x, y, Math.max(1, maxWidth));
-  }
-  function calloutGeometry(f, p, size, target) {
-    if ((f.anchor ?? p.position) !== "auto") {
-      const r = fitPlate(f, p, size);
-      return { plate: r, start: leaderStart(r, target), target };
-    }
-    const safe = overlaySafeArea(f, p.placement), gap = 90 * f.height / 1080;
-    const w = Math.min(size.w, safe.w * 0.65), h = Math.min(size.h, safe.h * 0.4);
-    const sides = [
-      ["right", safe.x + safe.w - target.x, w],
-      ["left", target.x - safe.x, w],
-      ["bottom", safe.y + safe.h - target.y, h],
-      ["top", target.y - safe.y, h]
-    ];
-    sides.sort((a, b) => b[1] - b[2] - (a[1] - a[2]));
-    const side = sides[0][0];
-    let x = target.x - w / 2, y = target.y - h / 2;
-    if (side === "right") x = target.x + Math.min(gap, Math.max(8, sides[0][1] - w));
-    if (side === "left") x = target.x - w - Math.min(gap, Math.max(8, sides[0][1] - w));
-    if (side === "bottom") y = target.y + Math.min(gap, Math.max(8, sides[0][1] - h));
-    if (side === "top") y = target.y - h - Math.min(gap, Math.max(8, sides[0][1] - h));
-    const plate = { x: clamp3(x, safe.x, safe.x + safe.w - w), y: clamp3(y, safe.y, safe.y + safe.h - h), w, h };
-    return { plate, start: leaderStart(plate, target), target };
-  }
-  function leaderStart(r, t) {
-    const cx = r.x + r.w / 2, cy = r.y + r.h / 2, dx = t.x - cx, dy = t.y - cy;
-    const scale = 1 / Math.max(Math.abs(dx) / (r.w / 2), Math.abs(dy) / (r.h / 2), 1);
-    return { x: cx + dx * scale, y: cy + dy * scale };
-  }
-  function text(ctx, f, value, x, y, size, c = "onSurface", align = "center") {
-    ctx.font = font(f, size);
-    ctx.fillStyle = paint(f, c);
-    ctx.textAlign = align;
-    ctx.textBaseline = "middle";
-    ctx.fillText(value, x, y, f.width * 0.84);
-  }
-  function panel(ctx, f, x, y, w, h, c = "surface") {
-    ctx.fillStyle = paint(f, c);
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, f.height * 0.012);
-    ctx.fill();
-  }
-  function box2(f, p) {
-    const pad = p.pad ?? 6, x = p.x - (p.origin === "center" ? p.width / 2 : 0), y = p.y - (p.origin === "center" ? p.height / 2 : 0);
-    const a = f.mapSource({ x: x - pad, y: y - pad }), b = f.mapSource({ x: x + p.width + pad, y: y + p.height + pad });
-    return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
-  }
-  var sourceRect = { origin: enumeration("topleft", ["topleft", "center"]), pad: number(6, 0, 200), x: number(320, 0, 1e5), y: number(180, 0, 1e5), width: number(320, 1, 1e5), height: number(180, 1, 1e5) };
-  var motion = (s) => EASING.enterOut(Math.min(1, s.progress * 6));
-
-  // scripts/lib/compose/templates/title-card.mjs
-  var template = define("title-card", "Title card", "Full canvas opening title and subtitle.", { title: string("Your title", 80), subtitle: string("A closer look", 140) }, (ctx, f, p, s) => {
-    const h = Math.min(f.height, f.width * 1.25);
-    const a = anchor(f, p);
-    panel(ctx, f, 0, 0, f.width, f.height);
-    text(ctx, f, p.title, a.x, a.y - h * 0.05, h * 0.075, p.color);
-    text(ctx, f, p.subtitle, a.x, a.y + h * 0.07, h * 0.032, "muted");
-  });
-  var { id, label, help, params, defaults, defaultDuration, draw } = template;
-  var title_card_default = template;
-
-  // scripts/lib/compose/templates/outro-card.mjs
-  var template2 = define("outro-card", "Outro card", "Full canvas closing message.", { title: string("Thank you", 80), subtitle: string("Discover more", 140) }, (ctx, f, p, s) => {
-    const h = Math.min(f.height, f.width * 1.25);
-    const a = anchor(f, p);
-    panel(ctx, f, 0, 0, f.width, f.height);
-    ctx.fillStyle = paint(f, p.color);
-    ctx.fillRect(f.width * 0.42, h * 0.3, f.width * 0.16, h * 9e-3);
-    text(ctx, f, p.title, a.x, a.y, h * 0.075);
-    text(ctx, f, p.subtitle, a.x, a.y + h * 0.11, h * 0.032, "muted");
-  });
-  var { id: id2, label: label2, help: help2, params: params2, defaults: defaults2, defaultDuration: defaultDuration2, draw: draw2 } = template2;
-  var outro_card_default = template2;
-
-  // scripts/lib/compose/templates/lower-third.mjs
-  var template3 = define("lower-third", "Lower third", "Name and subtitle on a compact plate.", { position: { type: "position", values: POSITIONS, default: "bottom-left" }, name: string("Alex Morgan", 70), subtitle: string("Product designer", 100) }, (ctx, f, p, s) => {
-    const lines = [{ text: p.name, size: f.height * 0.028 }, { text: p.subtitle, size: f.height * 0.02 }];
-    const size = measurePlate(ctx, f, lines, { minWidth: f.height * 0.12 }), r = fitPlate(f, p, size);
-    drawPlate(ctx, f, r, size, p.color);
-    let y = r.y + size.py;
-    for (const l of lines) {
-      plateText(ctx, f, l.text, r.x + size.px, y + l.size * 0.625, l.size, r.w - 2 * size.px);
-      y += l.size * 1.25;
-    }
-  });
-  var { id: id3, label: label3, help: help3, params: params3, defaults: defaults3, defaultDuration: defaultDuration3, draw: draw3 } = template3;
-  var lower_third_default = template3;
-
-  // scripts/lib/compose/templates/step-badge.mjs
-  var template4 = define("step-badge", "Step badge", "Number and label in a chip.", { number: number(1, 0, 999), label: string("Open the report", 80) }, (ctx, f, p, s) => {
-    const em = f.height * 0.024, diameter = em * 1.45;
-    const size = measurePlate(ctx, f, [{ text: p.label, size: em }], { minWidth: em * 4, extraWidth: diameter + em * 0.5 }), r = fitPlate(f, p, size);
-    drawPlate(ctx, f, r, size, p.color, true);
-    const cx = r.x + size.px + diameter / 2, cy = r.y + r.h / 2;
-    ctx.fillStyle = paint(f, p.color);
-    ctx.beginPath();
-    ctx.arc(cx, cy, diameter / 2, 0, Math.PI * 2);
-    ctx.fill();
-    text(ctx, f, String(p.number), cx, cy, em * 0.85, "onAccent");
-    plateText(ctx, f, p.label, cx + diameter / 2 + em * 0.5, cy, em, r.w - 2 * size.px - diameter - em * 0.5);
-  });
-  var { id: id4, label: label4, help: help4, params: params4, defaults: defaults4, defaultDuration: defaultDuration4, draw: draw4 } = template4;
-  var step_badge_default = template4;
-
-  // scripts/lib/compose/templates/callout-arrow.mjs
-  var template5 = define("callout-arrow", "Callout arrow", "Label with an arrow to a source point.", { position: { type: "position", values: ["auto", ...POSITIONS], default: "auto" }, x: number(640, 0, 1e5), y: number(360, 0, 1e5), text: string("Look here", 100) }, (ctx, f, p, s) => {
-    const em = f.height * 0.024, size = measurePlate(ctx, f, [{ text: p.text, size: em }], { minWidth: em * 4 });
-    const { plate: r, start, target } = calloutGeometry(f, p, size, f.mapSource(p));
-    const angle = Math.atan2(target.y - start.y, target.x - start.x), head = 12 * f.height / 1080;
-    ctx.strokeStyle = paint(f, p.color);
-    ctx.lineWidth = 3 * f.height / 1080;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(target.x, target.y);
-    ctx.moveTo(target.x - Math.cos(angle - 0.5) * head, target.y - Math.sin(angle - 0.5) * head);
-    ctx.lineTo(target.x, target.y);
-    ctx.lineTo(target.x - Math.cos(angle + 0.5) * head, target.y - Math.sin(angle + 0.5) * head);
-    ctx.stroke();
-    drawPlate(ctx, f, r, size, p.color);
-    plateText(ctx, f, p.text, r.x + size.px, r.y + r.h / 2, em, r.w - 2 * size.px);
-  });
-  var { id: id5, label: label5, help: help5, params: params5, defaults: defaults5, defaultDuration: defaultDuration5, draw: draw5 } = template5;
-  var callout_arrow_default = template5;
-
-  // scripts/lib/compose/templates/spotlight.mjs
-  var template6 = define("spotlight", "Spotlight", "Dim the canvas around a source rectangle or circle. x/y are the TOP-LEFT in page pixels at capture scale 1; origin=center makes them the centre. pad adds breathing room.", { ...sourceRect, shape: enumeration("rect", ["rect", "circle"]), dim: number(0.65, 0, 1), softness: number(12, 0, 80) }, (ctx, f, p, s) => {
-    const h = f.height;
-    const r = box2(f, p);
-    ctx.fillStyle = "#000000";
-    ctx.globalAlpha *= p.dim;
-    ctx.beginPath();
-    ctx.rect(0, 0, f.width, h);
-    if (p.shape === "circle") ctx.arc(r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) / 2, 0, Math.PI * 2);
-    else ctx.roundRect(r.x, r.y, r.w, r.h, h * 0.012);
-    ctx.fill("evenodd");
-    if (p.softness) {
-      ctx.shadowColor = "#000000";
-      ctx.shadowBlur = p.softness * h / 1080;
-      ctx.strokeStyle = "#000000";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      if (p.shape === "circle") ctx.arc(r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) / 2, 0, Math.PI * 2);
-      else ctx.roundRect(r.x, r.y, r.w, r.h, h * 0.012);
-      ctx.stroke();
-    }
-  });
-  var { id: id6, label: label6, help: help6, params: params6, defaults: defaults6, defaultDuration: defaultDuration6, draw: draw6 } = template6;
-  var spotlight_default = template6;
-
-  // scripts/lib/compose/templates/highlight-box.mjs
-  var template7 = define("highlight-box", "Highlight box", "Outline a source rectangle with an optional label. x/y are the TOP-LEFT in page pixels at capture scale 1; origin=center makes them the centre. pad adds breathing room.", { ...sourceRect, label: string("Selected", 80), showLabel: boolean(true) }, (ctx, f, p, s) => {
-    const h = f.height;
-    const r = box2(f, p);
-    ctx.strokeStyle = paint(f, p.color);
-    ctx.lineWidth = h * 5e-3;
-    ctx.beginPath();
-    ctx.roundRect(r.x, r.y, r.w, r.h, h * 8e-3);
-    ctx.stroke();
-    if (p.showLabel) {
-      const em = h * 0.024, size = measurePlate(ctx, f, [{ text: p.label, size: em }], { minWidth: em * 3 });
-      const plate = fitPlate(f, { ...p, position: "bottom-left" }, size, { x: r.x, y: r.y });
-      drawPlate(ctx, f, plate, size, p.color);
-      plateText(ctx, f, p.label, plate.x + size.px, plate.y + plate.h / 2, em, plate.w - 2 * size.px);
-    }
-  });
-  var { id: id7, label: label7, help: help7, params: params7, defaults: defaults7, defaultDuration: defaultDuration7, draw: draw7 } = template7;
-  var highlight_box_default = template7;
-
-  // scripts/lib/compose/templates/number-counter.mjs
-  var template8 = define("number-counter", "Number counter", "Count between two values with a suffix.", { from: number(0, -1e9, 1e9), to: number(100, -1e9, 1e9), format: enumeration("integer", ["integer", "decimal", "percent"]), suffix: string("users", 30) }, (ctx, f, p, s) => {
-    const h = f.height;
-    const v = p.from + (p.to - p.from) * EASING.moveInOut(s.progress);
-    const value = p.format === "decimal" ? v.toFixed(1) : Math.round(v).toString();
-    const label13 = `${value}${p.format === "percent" ? "%" : ""} ${p.suffix}`, size = h * 0.085;
-    ctx.font = `${f.theme.typography.weights.display} ${size}px "${f.theme.typography.family}"`;
-    const r = fitPlate(f, p, { w: ctx.measureText(label13).width, h: size * 1.25 });
-    text(ctx, f, label13, r.x + r.w / 2, r.y + r.h / 2, Math.min(size, r.w / Math.max(1, ctx.measureText(label13).width) * size), p.color);
-  });
-  var { id: id8, label: label8, help: help8, params: params8, defaults: defaults8, defaultDuration: defaultDuration8, draw: draw8 } = template8;
-  var number_counter_default = template8;
-
-  // scripts/lib/compose/templates/progress-bar.mjs
-  var template9 = define("progress-bar", "Progress bar", "Progress from zero to one hundred with a label.", { label: string("Loading", 80), widthPct: number(48, 5, 90) }, (ctx, f, p, s) => {
-    const h = f.height;
-    const r = fitPlate(f, p, { w: f.width * p.widthPct / 100, h: h * 0.09 }), w = r.w, a = { x: r.x + w / 2, y: r.y + h * 0.065 };
-    panel(ctx, f, a.x - w / 2, a.y, w, h * 0.025);
-    if (s.progress > 0) panel(ctx, f, a.x - w / 2, a.y, w * s.progress, h * 0.025, p.color);
-    text(ctx, f, `${p.label} ${Math.round(s.progress * 100)}%`, a.x, a.y - h * 0.04, h * 0.029, p.color);
-  });
-  var { id: id9, label: label9, help: help9, params: params9, defaults: defaults9, defaultDuration: defaultDuration9, draw: draw9 } = template9;
-  var progress_bar_default = template9;
-
-  // scripts/lib/compose/templates/animated-gradient.mjs
-  var template10 = define("animated-gradient", "Animated gradient", "Moving colour band behind a canvas area.", { widthPct: number(70, 1, 100), heightPct: number(20, 1, 100), color2: color("surface") }, (ctx, f, p, s) => {
-    const h = f.height;
-    const a = anchor(f, p), w = f.width * p.widthPct / 100, bh = h * p.heightPct / 100;
-    const shift = (EASING.moveInOut(s.progress) - 0.5) * w * 0.4;
-    const g = ctx.createLinearGradient(a.x - w / 2 + shift, a.y, a.x + w / 2 + shift, a.y + bh);
-    g.addColorStop(0, paint(f, p.color));
-    g.addColorStop(1, paint(f, p.color2));
-    ctx.fillStyle = g;
-    ctx.fillRect(a.x - w / 2, a.y - bh / 2, w, bh);
-  });
-  var { id: id10, label: label10, help: help10, params: params10, defaults: defaults10, defaultDuration: defaultDuration10, draw: draw10 } = template10;
-  var animated_gradient_default = template10;
-
-  // scripts/lib/compose/templates/text-callout.mjs
-  var template11 = define("text-callout", "Text callout", "Large phrase with staggered word entrances.", { text: string("Make every moment count", 100) }, (ctx, f, p, s) => {
-    const words = p.text.split(/\s+/), safe = overlaySafeArea(f, p.placement);
-    let size = Math.min(f.height * 0.065, safe.w * 0.8 / Math.max(1, p.text.length) * 1.7);
-    ctx.font = `${f.theme.typography.weights.display} ${size}px "${f.theme.typography.family}"`;
-    let gap = size * 0.28, total = words.reduce((v, w) => v + ctx.measureText(w).width + gap, -gap);
-    const scale = Math.min(1, safe.w / total, safe.h / (size * 1.5));
-    size *= scale;
-    gap *= scale;
-    total *= scale;
-    const r = fitPlate(f, p, { w: total, h: size * 1.5 });
-    let x = r.x;
-    words.forEach((word, i) => {
-      const v = EASING.enterOut(Math.max(0, Math.min(1, s.progress * 8 - i * 0.25)));
-      ctx.save();
-      ctx.globalAlpha *= v;
-      text(ctx, f, word, x, r.y + r.h / 2 + (1 - v) * size * 0.3, size, p.color, "left");
-      ctx.restore();
-      ctx.font = `${f.theme.typography.weights.display} ${size}px "${f.theme.typography.family}"`;
-      x += ctx.measureText(word).width + gap;
-    });
-  });
-  var { id: id11, label: label11, help: help11, params: params11, defaults: defaults11, defaultDuration: defaultDuration11, draw: draw11 } = template11;
-  var text_callout_default = template11;
-
-  // scripts/lib/compose/templates/logo-sting.mjs
-  var template12 = define("logo-sting", "Logo sting", "Text mark or preloaded brand logo with a gentle reveal.", { text: string("SHOWREEL", 60), logo: string("brand", 120), useLogo: boolean(false) }, (ctx, f, p, s) => {
-    const h = Math.min(f.height, f.width * 1.25);
-    const a = anchor(f, p), scale = 0.92 + 0.08 * motion(s);
-    ctx.translate(a.x, a.y);
-    ctx.scale(scale, scale);
-    const img = p.useLogo ? f.images?.get(p.logo) : null;
-    if (img) {
-      const bh = h * 0.16;
-      ctx.drawImage(img, -bh * img.width / img.height / 2, -bh / 2, bh * img.width / img.height, bh);
-    } else text(ctx, f, p.text, 0, 0, h * 0.085, p.color);
-  });
-  var { id: id12, label: label12, help: help12, params: params12, defaults: defaults12, defaultDuration: defaultDuration12, draw: draw12 } = template12;
-  var logo_sting_default = template12;
-
-  // scripts/lib/compose/templates/index.mjs
-  var TEMPLATES = Object.freeze(Object.fromEntries([title_card_default, outro_card_default, lower_third_default, step_badge_default, callout_arrow_default, spotlight_default, highlight_box_default, number_counter_default, progress_bar_default, animated_gradient_default, text_callout_default, logo_sting_default].map((t) => [t.id, t])));
-
-  // scripts/lib/compose/overlays.mjs
-  function overlayStates(overlays, t, pace = 1) {
-    return overlays.flatMap((o) => {
-      const state = enterExit(t, o.outStart, o.outEnd, { enter: DURATIONS.enter * pace, exit: DURATIONS.exit * pace });
-      return state.phase === "off" ? [] : [{ id: o.id, template: o.template, ...state, params: o.params }];
-    });
-  }
 
   // scripts/lib/compose/composition.mjs
   function freeze2(value) {
@@ -32216,9 +31863,7 @@
       fade: 0.4,
       transition: "crossfade"
     },
-    motion: { pace: 1 },
-    overlays: [],
-    edits: { trims: [], speeds: [], holds: [] },
+    edits: { trims: [], speeds: [], holds: [], splits: [], mutes: [] },
     audio: {
       voice: { enabled: null, voiceId: "af_heart", speed: 1, gainDb: 0 },
       music: {
@@ -32235,7 +31880,6 @@
     }
   });
   var COMPOSITION_RANGES = [
-    ["motion.pace", 1, 1.6],
     ["output.width", 2, 7680, true],
     ["output.height", 2, 4320, true],
     ["frame.paddingXPct", 0, 25],
@@ -32283,7 +31927,7 @@
   var SETTING_RANGES = Object.fromEntries([
     ...COMPOSITION_RANGES,
     ["frame.paddingPct", 0, 25],
-    ["zoom.depth", 1.05, 4],
+    ["zoom.depth", 1.05, 5],
     ["cursor.custom.heightPct", 1, 8],
     ...["arrow", "hand", "text"].flatMap((s) => ["x", "y"].map((k) => [`cursor.custom.${s}.hotspot.${k}`, 0, 1])),
     ...["title", "outro"].flatMap((k) => [["durationSec", 0, 30], ["titleSizePct", 1, 20], ["subtitleSizePct", 1, 12], ["accent.widthPct", 0, 100], ["logo.heightPct", 1, 40]].map(([p, a, b]) => [`cards.${k}.${p}`, a, b])),
@@ -32354,8 +31998,50 @@
     return c && t < c.t + durationSec ? { x: c.x, y: c.y, progress: (t - c.t) / durationSec } : null;
   }
 
+  // scripts/lib/compose/easing.mjs
+  var clamp01 = (t) => Math.max(0, Math.min(1, t));
+  var EASING = Object.freeze({
+    standard: (t) => {
+      t = clamp01(t);
+      return t * t * (3 - 2 * t);
+    },
+    enterOut: (t) => 1 - (1 - clamp01(t)) ** 3,
+    moveInOut: (t) => {
+      t = clamp01(t);
+      return t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+    },
+    exitIn: (t) => clamp01(t) ** 3,
+    springSoft: (t) => {
+      t = clamp01(t);
+      return (1 - (1 + 8 * t) * Math.exp(-8 * t)) / (1 - 9 * Math.exp(-8));
+    },
+    none: clamp01
+  });
+  var DURATIONS = Object.freeze({ enter: 0.5, exit: 0.3, move: 0.6 });
+
   // scripts/lib/compose/plan.mjs
   function stateAt(plan, tOut) {
+    if (plan.scenes) {
+      const mapped2 = sceneSourceAt(plan.timemap, tOut);
+      const sceneState = (id) => {
+        const s = plan.scenes.find((s2) => s2.id === id);
+        const local = Math.max(0, Math.min(s.plan.timemap.outputDuration, tOut - s.outputStart));
+        return { ...stateAt(s.plan, local), sceneId: id, localOutputT: local };
+      };
+      const state = sceneState(mapped2.sceneId);
+      return {
+        ...state,
+        section: mapped2.section,
+        alphaTitle: EASING.standard(mapped2.alphaTitle),
+        alphaOutro: EASING.standard(mapped2.alphaOutro),
+        transition: mapped2.transition ? {
+          type: mapped2.transition.type,
+          progress: mapped2.transition.progress,
+          from: sceneState(mapped2.transition.from.sceneId),
+          to: sceneState(mapped2.transition.to.sceneId)
+        } : null
+      };
+    }
     const mapped = sourceAt(plan.timemap, tOut), t = mapped.t;
     const events = { cursor: plan.cursor.samples, clicks: plan.clicks, viewport: plan.viewport };
     const cue = plan.cues.find((c) => t >= c.start && t <= c.end);
@@ -32376,7 +32062,6 @@
     const effect = plan.cursor.clickEffect;
     const ripple = effect.style !== "none" ? rippleAt(events, t, effect.durationSec) : null;
     return {
-      overlays: mapped.section === "main" ? overlayStates(plan.overlays ?? [], tOut, plan.motion?.pace ?? 1) : [],
       section: mapped.section,
       alphaTitle: EASING.standard(mapped.alphaTitle),
       alphaOutro: EASING.standard(mapped.alphaOutro),
@@ -32431,10 +32116,10 @@
   var cursorImages = /* @__PURE__ */ new Map();
   var brandFontLoads = /* @__PURE__ */ new Map();
   async function loadBrandFonts(plan) {
-    await Promise.all((plan.brand?.fonts ?? []).map(async (font2) => {
-      const key = JSON.stringify(font2);
+    await Promise.all((plan.brand?.fonts ?? []).map(async (font) => {
+      const key = JSON.stringify(font);
       if (!brandFontLoads.has(key)) brandFontLoads.set(key, (async () => {
-        const face = new FontFace(font2.family, `url(${JSON.stringify(font2.url)})`, { weight: String(font2.weight) });
+        const face = new FontFace(font.family, `url(${JSON.stringify(font.url)})`, { weight: String(font.weight) });
         document.fonts.add(await face.load());
       })());
       await brandFontLoads.get(key);
@@ -32453,8 +32138,7 @@
       plan.cards.title.background,
       plan.cards.outro.background,
       plan.cards.title.logo,
-      plan.cards.outro.logo,
-      ...(plan.overlays ?? []).filter((o) => o.template === "logo-sting" && o.params.useLogo).map((o) => ({ image: o.params.logo }))
+      plan.cards.outro.logo
     ];
     const loadedImages = /* @__PURE__ */ new Map();
     await Promise.all(specs.filter((s) => s?.image).map(async ({ image }) => {
@@ -32472,6 +32156,17 @@
     return loadedImages;
   }
   async function loadAssets(plan, options = {}) {
+    if (plan.scenes) {
+      const all = { images: /* @__PURE__ */ new Map(), cursorImages: /* @__PURE__ */ new Map() };
+      for (const child of [{ ...plan, scenes: void 0 }, ...plan.scenes.map((s) => s.plan)]) {
+        const loaded = await loadAssets(child, options);
+        for (const [k, v] of loaded.images) all.images.set(k, v);
+        for (const [k, v] of loaded.cursorImages) all.cursorImages.set(k, v);
+      }
+      images = all.images;
+      cursorImages = all.cursorImages;
+      return all;
+    }
     await loadBrandFonts(plan);
     const loadedImages = await loadImages(plan, options);
     const urls = options.cursorImages ?? (options.assetBase ? Object.fromEntries(
@@ -32505,7 +32200,7 @@
       width / 2 + dx * length / 2,
       height / 2 + dy * length / 2
     );
-    spec.colors.forEach((color2, i) => gradient.addColorStop(i / Math.max(1, spec.colors.length - 1), color2));
+    spec.colors.forEach((color, i) => gradient.addColorStop(i / Math.max(1, spec.colors.length - 1), color));
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
   }
@@ -32523,7 +32218,7 @@
     ctx.clip();
     ctx.globalAlpha = caption.alpha;
     ctx.font = `${spec.fontWeight} ${size}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
-    const wrapped = wrapLines(caption.text, r.w - padding * 2, (text2) => ctx.measureText(text2).width, { maxLines: spec.maxLines });
+    const wrapped = wrapLines(caption.text, r.w - padding * 2, (text) => ctx.measureText(text).width, { maxLines: spec.maxLines });
     const scale = Math.min(wrapped.scale, (r.h - padding) / (size * 1.25 * wrapped.lines.length));
     ctx.font = `${spec.fontWeight} ${size * scale}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
     const lineH = size * scale * 1.25;
@@ -32566,16 +32261,16 @@
     }
     ctx.textAlign = spec.align;
     ctx.textBaseline = "middle";
-    for (const [text2, fraction, weight, color2, y] of [
+    for (const [text, fraction, weight, color, y] of [
       [title, spec.titleSizePct / 100, plan.theme.typography.weights.display, spec.titleColor, 0.48],
       [spec.subtitle, spec.subtitleSizePct / 100, 400, spec.subtitleColor, 0.64]
     ]) {
-      if (!text2) continue;
+      if (!text) continue;
       const size = (isVertical(plan.output) ? width * 1.25 : height) * fraction;
       ctx.font = `${weight} ${size}px "${plan.theme.typography.family}"`;
-      const wrapped = wrapLines(text2, width * 0.84, (s) => ctx.measureText(s).width);
+      const wrapped = wrapLines(text, width * 0.84, (s) => ctx.measureText(s).width);
       ctx.font = `${weight} ${size * wrapped.scale}px "${plan.theme.typography.family}"`;
-      ctx.fillStyle = color2;
+      ctx.fillStyle = color;
       wrapped.lines.forEach((line, i) => ctx.fillText(
         line,
         x,
@@ -32690,11 +32385,62 @@
       y: f.y + (point.y * plan.scale - (cam.cy * plan.scale - h / 2)) * f.h / h
     };
   }
+  var sceneBuffers = /* @__PURE__ */ new WeakMap();
+  function drawSequence(canvas, plan, tOut, decoded) {
+    const state = stateAt(plan, tOut), ctx = canvas.getContext("2d"), { width, height } = plan.output;
+    let buffers = sceneBuffers.get(canvas);
+    if (!buffers) {
+      buffers = [canvasFor(plan), canvasFor(plan)];
+      sceneBuffers.set(canvas, buffers);
+    }
+    const render = (s, buffer) => {
+      const child = plan.scenes.find((x) => x.id === s.sceneId);
+      drawFrame(buffer, child.plan, s.localOutputT, decoded?.[s.sceneId]);
+      return buffer;
+    };
+    ctx.save();
+    ctx.clearRect(0, 0, width, height);
+    if (!state.transition) ctx.drawImage(render(state, buffers[0]), 0, 0);
+    else {
+      const tr = state.transition, p = EASING.moveInOut(tr.progress);
+      const from = render(tr.from, buffers[0]), to = render(tr.to, buffers[1]);
+      if (tr.type === "slide") {
+        background2(ctx, plan.frame.background, width, height, plan.theme.background);
+        ctx.drawImage(from, -width * 0.3 * p, 0);
+        ctx.drawImage(to, width * (1 - p), 0);
+      } else if (tr.type === "zoom-through") {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, width, height);
+        const layer = (image, scale, alpha) => {
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.globalAlpha = alpha;
+          ctx.translate(width / 2, height / 2);
+          ctx.scale(scale, scale);
+          ctx.drawImage(image, -width / 2, -height / 2);
+          ctx.restore();
+        };
+        layer(from, 1 + 0.15 * p, 1 - p);
+        layer(to, 0.92 + 0.08 * p, p);
+      } else {
+        ctx.drawImage(from, 0, 0);
+        ctx.globalAlpha = p;
+        ctx.drawImage(to, 0, 0);
+        ctx.globalAlpha = 1;
+      }
+    }
+    card(ctx, plan, state.alphaTitle, plan.cards.title, plan.cards.title.title);
+    card(ctx, plan, state.alphaOutro, plan.cards.outro, plan.cards.outro.text);
+    if (state.section !== "main") drawWatermark(ctx, plan);
+    ctx.restore();
+    return canvas;
+  }
   function drawFrame(canvas, plan, tOut, decoded, assets) {
     if (assets) {
       images = assets.images;
       cursorImages = assets.cursorImages;
     }
+    if (plan.scenes) return drawSequence(canvas, plan, tOut, decoded);
     const ctx = canvas.getContext("2d"), { width, height } = plan.output;
     if (isVertical(plan.output)) {
       ctx.font = `${plan.captions.fontWeight} ${height * plan.captions.fontSizePct / 100}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
@@ -32703,12 +32449,12 @@
         source: plan.sourceSize,
         composition: { ...plan, layout: { safeZones: plan.layout.safe.y > 0 } },
         captionTexts: plan.cues.map((c) => c.text),
-        measureCaption: (text2) => ctx.measureText(text2).width
+        measureCaption: (text) => ctx.measureText(text).width
       }) };
     }
     const state = stateAt(plan, tOut), f = plan.layout.frame, cam = state.camera;
     if (isVertical(plan.output) && plan.layout.caption) {
-      const h = state.caption ? verticalCaptionMetrics(plan.output, plan.captions, [state.caption.text], (text2) => ctx.measureText(text2).width).h : 0;
+      const h = state.caption ? verticalCaptionMetrics(plan.output, plan.captions, [state.caption.text], (text) => ctx.measureText(text).width).h : 0;
       plan = { ...plan, layout: { ...plan.layout, caption: { ...plan.layout.caption, h } } };
     }
     background2(ctx, plan.frame.background, width, height, plan.theme.background);
@@ -32792,27 +32538,6 @@
         ctx.strokeStyle = plan.frame.border.color;
         ctx.lineWidth = plan.frame.border.widthPx * unit;
         ctx.stroke();
-        ctx.restore();
-      }
-      for (const overlay of state.overlays) {
-        const spec = plan.overlays.find((o) => o.id === overlay.id);
-        ctx.save();
-        ctx.globalAlpha = overlay.alpha;
-        if (overlay.params.placement === "frame" && !["callout-arrow", "spotlight", "highlight-box"].includes(overlay.template)) {
-          const safe = overlaySafeArea({ width, height, layout: plan.layout });
-          ctx.beginPath();
-          ctx.rect(safe.x, safe.y, safe.w, safe.h);
-          ctx.clip();
-        }
-        TEMPLATES[overlay.template].draw(ctx, {
-          width,
-          height,
-          theme: plan.theme,
-          layout: plan.layout,
-          mapSource: (point) => mapSourcePoint(plan, cam, point),
-          anchor: spec.anchor,
-          images
-        }, overlay.params, overlay);
         ctx.restore();
       }
       drawCaption(ctx, plan, state.caption);
@@ -33079,7 +32804,7 @@
     }
     return out;
   }
-  function mixAudio({ durationSec, sampleRate = SAMPLE_RATE, clips = [], music = null, duck = {}, loudness = {} }) {
+  function mixAudio({ durationSec, sampleRate = SAMPLE_RATE, clips = [], music = null, duck = {}, loudness = {}, mutes = [] }) {
     if (sampleRate !== SAMPLE_RATE) throw new Error("mixAudio supports 48 kHz only");
     if (!Number.isFinite(durationSec) || durationSec <= 0) throw new Error("durationSec must be positive");
     const length = Math.round(durationSec * sampleRate);
@@ -33096,6 +32821,13 @@
         return c;
       });
     }
+    const silence = (channels) => {
+      for (const r of mutes) {
+        if (!Number.isFinite(r.start + r.end) || r.start < 0 || r.end <= r.start) throw new Error("Invalid mute range");
+        for (const channel of channels) channel.fill(0, Math.min(length, Math.round(r.start * sampleRate)), Math.min(length, Math.round(r.end * sampleRate)));
+      }
+    };
+    silence(mixed);
     const ceilingDb = loudness.truePeakDb ?? -1, preGainLufs = integratedLufs(mixed);
     let gainDb = loudness.enabled ? gainToTarget(preGainLufs, loudness.targetLufs ?? -16) : 0;
     let result;
@@ -33106,6 +32838,7 @@
       if (Math.abs(error) <= 0.05 || result.reductionDb === 0 && pass > 0) break;
       gainDb += error;
     }
+    silence(result.channels);
     return {
       channels: result.channels,
       measured: { integratedLufs: result.integrated, truePeakDb: toDb2(truePeakLinear(result.channels)), preGainLufs },
@@ -33121,7 +32854,7 @@
     const a = plan.audio, warnings = [];
     const clips = await Promise.all(a.narration.map(async (n) => ({ channels: await loadAudio(n.clipUrl), start: n.outStart, gainDb: n.gainDb })));
     const music = a.music ? { ...a.music, channels: await loadAudio(a.music.url) } : null;
-    const mix = mixAudio({ durationSec: a.durationSec ?? plan.timemap.outputDuration, sampleRate: a.sampleRate, clips, music, duck: a.duck, loudness: a.loudness });
+    const mix = mixAudio({ durationSec: a.durationSec ?? plan.timemap.outputDuration, sampleRate: a.sampleRate, clips, music, mutes: a.mutes, duck: a.duck, loudness: a.loudness });
     const config = { numberOfChannels: 2, sampleRate: a.sampleRate, bitrate: AUDIO_BITRATE };
     let codec = null;
     for (const candidate of ["aac", "opus"]) if (await canEncodeAudio(candidate, config)) {
@@ -33137,7 +32870,7 @@
     for (let c = 0; c < 2; c++) buffer.copyToChannel(mix.channels[c].subarray(from, to), c);
     return buffer;
   }
-  var defaults13 = () => ({
+  var defaults = () => ({
     source: new URL("raw.mp4", location.href).href,
     fonts: {
       regular: new URL("fonts/Inter-Regular.woff2", location.href).href,
@@ -33157,7 +32890,7 @@
       throw error;
     }
   }
-  window.probeRenderSource = async (url2 = defaults13().source) => {
+  window.probeRenderSource = async (url2 = defaults().source) => {
     const { input, track } = await openVideo(url2);
     try {
       return { width: await track.getDisplayWidth(), height: await track.getDisplayHeight(), duration: await track.computeDuration() };
@@ -33166,9 +32899,24 @@
     }
   };
   window.renderStill = async (plan, tOut, overrides = {}) => {
-    const options = { ...stillOptions ?? defaults13(), ...overrides };
+    const options = { ...stillOptions ?? defaults(), ...overrides };
     await loadFonts(options.fonts);
     await loadAssets(plan, options);
+    if (plan.scenes) {
+      const state = stateAt(plan, tOut), active = state.transition ? [state.transition.from, state.transition.to] : [state];
+      const frames = {}, opened = [];
+      try {
+        for (const st of active) {
+          const scene = plan.scenes.find((s) => s.id === st.sceneId), video = await openVideo(new URL(scene.sourceUrl, location.href).href);
+          opened.push(video);
+          frames[st.sceneId] = (await video.sink.getCanvas(st.sourceT))?.canvas;
+          if (!frames[st.sceneId]) throw new Error(`No frame for scene ${st.sceneId}`);
+        }
+        return drawFrame(canvasFor(plan), plan, tOut, frames).toDataURL("image/png");
+      } finally {
+        for (const video of opened) video.input.dispose();
+      }
+    }
     const { input, sink } = await openVideo(options.source);
     try {
       const frame = await sink.getCanvas(stateAt(plan, tOut).sourceT);
@@ -33177,8 +32925,56 @@
       input.dispose();
     }
   };
+  var activeStates = (plan, t) => {
+    const s = stateAt(plan, t);
+    return s.transition ? [s.transition.from, s.transition.to] : [s];
+  };
+  async function* sequenceFrames(plan, total) {
+    const opened = /* @__PURE__ */ new Map(), fps = plan.output.fps;
+    const release = async (id) => {
+      const video = opened.get(id);
+      opened.delete(id);
+      try {
+        await video.iterator.return?.();
+      } finally {
+        video.input.dispose();
+      }
+    };
+    try {
+      for (let k = 0; k < total; k++) {
+        const active = activeStates(plan, k / fps), ids = new Set(active.map((s) => s.sceneId));
+        for (const id of opened.keys()) if (!ids.has(id)) await release(id);
+        const frames = {};
+        for (const st of active) {
+          if (!opened.has(st.sceneId)) {
+            const scene = plan.scenes.find((s) => s.id === st.sceneId), video = await openVideo(new URL(scene.sourceUrl, location.href).href);
+            function* times() {
+              for (let n = k; n < total; n++) {
+                const state = activeStates(plan, n / fps).find((s) => s.sceneId === scene.id);
+                if (!state) break;
+                yield state.sourceT;
+              }
+            }
+            try {
+              video.iterator = video.sink.canvasesAtTimestamps(times())[Symbol.asyncIterator]();
+              opened.set(scene.id, video);
+            } catch (e) {
+              video.input.dispose();
+              throw e;
+            }
+          }
+          const next = await opened.get(st.sceneId).iterator.next();
+          if (!next.value) throw new Error(`No source frame for scene ${st.sceneId} at frame ${k}`);
+          frames[st.sceneId] = next.value.canvas;
+        }
+        yield { canvas: frames };
+      }
+    } finally {
+      for (const id of opened.keys()) await release(id);
+    }
+  }
   window.renderComposition = async (plan, options = {}) => {
-    options = { ...defaults13(), ...options };
+    options = { ...defaults(), ...options };
     stillOptions = options;
     await loadFonts(options.fonts);
     await loadAssets(plan, options);
@@ -33199,7 +32995,7 @@
       if (!response.ok) throw new Error(`Render transport failed: ${route} (${response.status})`);
     };
     try {
-      video = await openVideo(options.source);
+      if (!plan.scenes) video = await openVideo(options.source);
       const target = new StreamTarget(new WritableStream({ async write({ data, position }) {
         await post("chunk", data, { "x-pos": String(position) });
         bytes2 = Math.max(bytes2, position + data.byteLength);
@@ -33227,7 +33023,7 @@
         for (let k = 0; k < total; k++) yield stateAt(plan, k / fps).sourceT;
       }
       let frame = 0, lastProgress = -Infinity;
-      for await (const decoded of video.sink.canvasesAtTimestamps(timestamps())) {
+      for await (const decoded of plan.scenes ? sequenceFrames(plan, total) : video.sink.canvasesAtTimestamps(timestamps())) {
         if (window.__renderAbort || options.signal?.aborted) throw new Error("Render aborted");
         if (!decoded) throw new Error(`No source frame for output frame ${frame}`);
         if (mix) await feedAudio(frame / fps + 1);

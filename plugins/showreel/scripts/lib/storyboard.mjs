@@ -1,4 +1,3 @@
-import { validateOverlays } from './compose/overlays.mjs';
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v, max) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
 export function validateStoryboard(sb, { resolvedGuide = null, captionsEnabled = true } = {}) {
@@ -20,7 +19,6 @@ export function validateStoryboard(sb, { resolvedGuide = null, captionsEnabled =
   for (const [i, step] of (Array.isArray(sb.steps) ? sb.steps : []).entries()) {
     const key = `steps.${i}`;
     if (!object(step)) { fail(key, 'must be an object'); continue; }
-    if (step.overlays !== undefined) errors.push(...validateOverlays(step.overlays, { storyboard: true, path: `${key}.overlays` }));
     if (typeof step.id !== 'string' || !/^s[0-9]+$/.test(step.id)) fail(`${key}.id`, 'must match ^s[0-9]+$');
     if (ids.has(step.id)) fail(`${key}.id`, 'must be unique');
     ids.add(step.id);

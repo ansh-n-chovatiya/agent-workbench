@@ -49,7 +49,7 @@ export function renderMusic(music, length, durationSec, sampleRate) {
   return out;
 }
 
-export function mixAudio({ durationSec, sampleRate = SAMPLE_RATE, clips = [], music = null, duck = {}, loudness = {} }) {
+export function mixAudio({ durationSec, sampleRate = SAMPLE_RATE, clips = [], music = null, duck = {}, loudness = {}, mutes = [] }) {
   if (sampleRate !== SAMPLE_RATE) throw new Error('mixAudio supports 48 kHz only');
   if (!Number.isFinite(durationSec) || durationSec <= 0) throw new Error('durationSec must be positive');
   const length = Math.round(durationSec * sampleRate);
@@ -63,6 +63,13 @@ export function mixAudio({ durationSec, sampleRate = SAMPLE_RATE, clips = [], mu
     }
     mixed = bus.map((c, k) => { for (let i = 0; i < length; i++) c[i] += m[k][i]; return c; });
   }
+  const silence = channels => {
+    for (const r of mutes) {
+      if (!Number.isFinite(r.start+r.end) || r.start < 0 || r.end <= r.start) throw new Error('Invalid mute range');
+      for (const channel of channels) channel.fill(0,Math.min(length,Math.round(r.start*sampleRate)),Math.min(length,Math.round(r.end*sampleRate)));
+    }
+  };
+  silence(mixed);
   const ceilingDb = loudness.truePeakDb ?? -1, preGainLufs = integratedLufs(mixed);
   let gainDb = loudness.enabled ? gainToTarget(preGainLufs, loudness.targetLufs ?? -16) : 0;
   let result;
@@ -74,6 +81,7 @@ export function mixAudio({ durationSec, sampleRate = SAMPLE_RATE, clips = [], mu
     if (Math.abs(error) <= 0.05 || result.reductionDb === 0 && pass > 0) break;
     gainDb += error;
   }
+  silence(result.channels);
   return { channels: result.channels,
     measured: { integratedLufs: result.integrated, truePeakDb: toDb(truePeakLinear(result.channels)), preGainLufs },
     appliedGainDb: gainDb, limiterReductionDb: result.reductionDb };

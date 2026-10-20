@@ -1,3 +1,5 @@
+import { handleBrandApi } from './brand-api.mjs'; // Task E: brand UI API hook (existing auth and assets reused).
+import { readScenes, validateScenesInProject, writeScenesAtomic, validRunId } from '../scenes.mjs';
 import { loadBriefBrand, resolveBrandRoute } from '../brand/storage.mjs';
 import http from 'node:http';
 import path from 'node:path';
@@ -6,7 +8,7 @@ import { randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { loadRunComposition, renderRun, resolveImageAssets } from '../compose/render.mjs';
-import { validateComposition } from '../compose/composition.mjs';
+import { validateComposition, resolveComposition } from '../compose/composition.mjs';
 import { buildTimeMap } from '../compose/timemap.mjs';
 import { validateRegions } from '../compose/zoom.mjs';
 import { SETTINGS, SETTINGS_VERSION } from '../compose/settings-schema.mjs';
@@ -16,6 +18,7 @@ import { readBody } from './body.mjs';
 import { createExportJob } from './export-job.mjs';
 import { openDefault } from './opener.mjs';
 import { createVoiceApi } from './voice-api.mjs';
+import { handleUploadApi } from './upload-api.mjs';
 
 const root = fileURLToPath(new URL('../../../',import.meta.url));
 const types = { '.js':'text/javascript', '.css':'text/css', '.html':'text/html; charset=utf-8', '.woff2':'font/woff2', '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.svg':'image/svg+xml', '.gif':'image/gif', '.webp':'image/webp' };
@@ -84,14 +87,20 @@ export async function startEditorServer({ name, runId, port = 0, host = '127.0.0
         if (!['.png','.jpg','.jpeg','.svg','.gif','.webp'].includes(path.extname(file).toLowerCase())) return send(400,{error:'Unsupported image format'});
         return serve(file);
       }
-      if (['GET','HEAD'].includes(method) && route === '/media/raw.mp4') {
-        const {size} = await stat(rawFile), range = parseRange(request.headers.range,size);
+      if (['GET','HEAD'].includes(method) && (route === '/media/raw.mp4' || /^\/media\/run\/[^/]+\/raw\.mp4$/.test(route))) {
+        let mediaFile=rawFile;
+        if (route !== '/media/raw.mp4') {
+          const run=decodeURIComponent(route.split('/')[3]);
+          if (!validRunId(run)) return send(400,{error:'Invalid run id'});
+          mediaFile=await safeFile(project.dir,`runs/${encodeURIComponent(run)}/raw.mp4`);
+        }
+        const {size} = await stat(mediaFile), range = parseRange(request.headers.range,size);
         if (range === false) { response.writeHead(416,{'content-range':`bytes */${size}`}); response.end(); return; }
         const {start,end} = range ?? {start:0,end:size-1};
         response.writeHead(range ? 206 : 200,{'content-type':'video/mp4','accept-ranges':'bytes','content-length':end-start+1,
           ...(range ? {'content-range':`bytes ${start}-${end}/${size}`} : {})});
         if (method === 'HEAD' || size === 0) { response.end(); return; }
-        const stream = createReadStream(rawFile,{start,end});
+        const stream = createReadStream(mediaFile,{start,end});
         stream.on('error',error => response.destroy(error)); response.on('close',() => stream.destroy()); stream.pipe(response); return;
       }
       if (method === 'GET' && route === '/api/project') {
@@ -100,7 +109,16 @@ export async function startEditorServer({ name, runId, port = 0, host = '127.0.0
         // A damaged voice index must not stop the editor from opening; the Voice tab reports it instead.
         const {voice,clips} = await voiceApi.snapshot().catch(error => ({voice:{installed:false,error:error.message,voices:[],status:[],installCommand:'showreel voice install --yes'},clips:{version:1,clips:{},steps:{}}}));
         return send(200,{name,runId:project.runId,brief:current.brief,storyboard:current.storyboard,events:current.events,record:current.record,
-          composition:current.composition,brand:await loadBriefBrand(current.brief),runs,settings:SETTINGS,settingsSchemaVersion:SETTINGS_VERSION,voice,clips,lastExport});
+          scenes:await readScenes(project.dir),composition:current.composition,brand:await loadBriefBrand(current.brief),runs,settings:SETTINGS,settingsSchemaVersion:SETTINGS_VERSION,voice,clips,lastExport});
+      }
+      if (method === 'PUT' && route === '/api/scenes') {
+        let scenes;
+        try { scenes=JSON.parse((await readBody(request)).toString('utf8')); }
+        catch (error) { if (error.statusCode) throw error; return send(400,{errors:['Invalid JSON']}); }
+        const validation=await validateScenesInProject(project.dir,scenes);
+        if (!validation.ok) return send(400,validation);
+        await writeScenesAtomic(project.dir,scenes);
+        return send(200,{ok:true,warnings:validation.warnings});
       }
       if (method === 'PUT' && route === '/api/composition') {
         const body = await readBody(request);
@@ -113,11 +131,15 @@ export async function startEditorServer({ name, runId, port = 0, host = '127.0.0
         catch (error) { validation.errors.push(error.message); }
         validation.errors.push(...validateRegions(composition?.zoom?.regions,{duration:project.record.durationSec}).errors);
         if (validation.errors.length) return send(400,validation);
+        composition = resolveComposition(composition);
         await resolveImageAssets(composition,project.dir);
         await writeCompositionAtomic(project.dir,composition);
         return send(200,{ok:true});
       }
+      if (await handleBrandApi({request,route,method,send,name})) return; // Task E: brand list/apply
+      if (await handleUploadApi({request,route,method,send,dir:project.dir})) return; // Panel polish: image uploads into <project>/assets/
       if (await voiceApi.handle({request,response,route,url,method,send})) return;
+      if (await (await import('./export-api.mjs')).handleExportApi({request,response,route,method,send,exports,project,name,closing})) return; // Task EX: authenticated export API hook
       if (method === 'GET' && route === '/api/export/events') {
         response.writeHead(200,{'content-type':'text/event-stream','connection':'keep-alive'});
         response.write(formatSSE(lastEvent.event,lastEvent.data)); clients.add(response);

@@ -70,6 +70,7 @@ test('audio is muted at any playback rate other than one and the signature ignor
   const sig = audioSignature(audio);
   assert.equal(audioSignature({ ...audio, warnings: [{ stepId: 's1' }], captionSpans: [1] }), sig);
   assert.notEqual(audioSignature({ ...audio, narration: [{ ...audio.narration[0], outStart: 1.5 }] }), sig);
+  assert.notEqual(audioSignature({ ...audio, mutes: [{start:1,end:2}] }), sig);
   assert.notEqual(audioSignature({ ...audio, loudness: { enabled: false } }), sig);
   assert.equal(audioSignature({ enabled: false }), ''); assert.equal(audioSignature(undefined), '');
 });

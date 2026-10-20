@@ -29,7 +29,7 @@ test('friendly setting labels, help and units cover every entry', () => {
 });
 test('cuts snap, merge, subtract speed fragments, restore and protect the recording', () => {
   const original = base(), before = JSON.stringify(original);
-  assert.equal(op.splitAt(original,3),original);
+  assert.deepEqual(op.splitAt(original,3,context).edits.splits,[3]);
   let c = valid(op.setSpeed(original,0,9,2,context));
   c = valid(op.cutRange(c,2.001,4.001,context));
   assert.deepEqual(c.edits.speeds,[{start:0,end:2,rate:2},{start:4,end:9,rate:2}]);
@@ -48,7 +48,7 @@ test('speed replacement splits overlaps, merges neighbours and rejects trimmed r
   c = valid(op.setSpeed(c,3,5,2,context)); assert.deepEqual(c.edits.speeds,[{start:1,end:8,rate:2}]);
   c = valid(op.setSpeed(c,3,5,1,context)); assert.equal(c.edits.speeds.length,2);
   c = valid(op.clearSpeed(c,0,context));
-  assert.throws(() => op.setSpeed(c,1,3,9,context),/Speed/);
+  assert.throws(() => op.setSpeed(c,1,3,31,context),/Speed/);
   c = op.cutRange(c,1,2,context); assert.throws(() => op.setSpeed(c,1,3,2,context),/removed/);
 });
 test('zoom edits retain sorted regions, contained keyframes and manual provenance', () => {

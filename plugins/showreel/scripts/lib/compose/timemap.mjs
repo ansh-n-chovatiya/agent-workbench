@@ -6,7 +6,7 @@ function validateRanges(ranges, name, duration, speeds = false) {
     if (!r || !Number.isFinite(r.start) || !Number.isFinite(r.end)
       || r.start < 0 || r.end > duration || r.start >= r.end
       || (i > 0 && r.start < ranges[i - 1].end)) throw new Error(`${name}[${i}] is invalid or overlaps the preceding range`);
-    if (speeds && (!Number.isFinite(r.rate) || r.rate < 0.25 || r.rate > 8)) throw new Error(`${name}[${i}].rate must be from 0.25 to 8`);
+    if (speeds && (!Number.isFinite(r.rate) || r.rate < 0.25 || r.rate > 30)) throw new Error(`${name}[${i}].rate must be from 0.25 to 30`);
   });
 }
 

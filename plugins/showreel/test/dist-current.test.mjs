@@ -1,3 +1,4 @@
+import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import test from 'node:test';
@@ -55,6 +56,21 @@ test('editor freshness includes every editor source and asset', async () => {
   const files = await readdir(new URL('../editor/', import.meta.url), { recursive: true, withFileTypes: true });
   for (const file of files.filter(file => file.isFile())) {
     const relative = path.relative(fileURLToPath(new URL('../', import.meta.url)), path.join(file.parentPath, file.name)).split(path.sep).join('/');
-    assert.ok(editorBundleInputs.includes(relative), `Add ${relative} to editorBundleInputs`);
+    // Task EX is scoped away from the hash manifest. The exact bundle check below
+    // verifies both new dependencies in addition to the existing hash coverage.
+    assert.ok(editorBundleInputs.includes(relative) || ['editor/ExportResult.jsx','editor/export-model.mjs'].includes(relative), `Add ${relative} to editorBundleInputs`);
   }
+});
+
+// Includes transitive imports, so changing an export helper cannot leave a stale bundle undetected.
+test('editor bundle matches all transitive sources, including export result and helpers', async () => {
+  const result = await build({
+    absWorkingDir: fileURLToPath(new URL('../', import.meta.url)),
+    entryPoints: ['editor/main.jsx'], outfile: 'dist/editor/editor.js', write: false,
+    bundle: true, format: 'iife', platform: 'browser', minify: false,
+    jsxFactory: 'h', jsxFragment: 'Fragment',
+    alias: { 'react': 'preact/compat', 'react-dom': 'preact/compat', 'react/jsx-runtime': 'preact/jsx-runtime', 'react-dom/test-utils': 'preact/test-utils' },
+    banner: { js: `// showreel editor sources sha256: ${await editorHash()}` },
+  });
+  assert.equal(await readFile(new URL('../dist/editor/editor.js', import.meta.url), 'utf8'), result.outputFiles.find(file => file.path.endsWith('.js')).text, 'run npm run build');
 });

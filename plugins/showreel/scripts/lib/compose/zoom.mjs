@@ -39,7 +39,7 @@ export function validateRegions(regions, { duration = Infinity, maxSharp = Infin
     ids.add(r.id);
     if (!Number.isFinite(r.tStart) || !Number.isFinite(r.tEnd) || r.tStart < 0 || r.tStart >= r.tEnd || r.tEnd > duration) errors.push(`${prefix} has invalid times`);
     if (i && r.tStart < regions[i - 1]?.tEnd) errors.push(`${prefix} must be sorted and non-overlapping`);
-    if (!Number.isFinite(r.depth) || r.depth < 1.05 || r.depth > 4) errors.push(`${prefix}.depth must be from 1.05 to 4`);
+    if (!Number.isFinite(r.depth) || r.depth < 1.05 || r.depth > 5) errors.push(`${prefix}.depth must be from 1.05 to 5`);
     if (r.depth > maxSharp) warnings.push(`region ${r.id} depth ${r.depth} exceeds the sharp limit ${maxSharp}`);
     if (!['auto', 'manual'].includes(r.source)) errors.push(`${prefix}.source must be auto|manual`);
     if (!Array.isArray(r.stepIds) || r.stepIds.some((id) => typeof id !== 'string')) errors.push(`${prefix}.stepIds must be strings`);

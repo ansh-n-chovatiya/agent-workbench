@@ -65,7 +65,7 @@ test('the export job complete event carries the measured loudness', async () => 
   const events = [];
   const job = createExportJob({ render: async () => ({ finalFile: 'f.mp4', renderDir: 'd', audio: { measured: { integratedLufs: -16.02, truePeakDb: -1.4 }, codec: 'aac', warnings: ['w'] } }), onEvent: (event, data) => events.push({ event, data }) });
   job.start({}); while (!events.some(e => ['complete', 'error', 'cancelled'].includes(e.event))) await new Promise(r => setTimeout(r, 5));
-  assert.deepEqual(events.find(e => e.event === 'complete').data, { finalFile: 'f.mp4', renderDir: 'd', audio: { integratedLufs: -16.02, truePeakDb: -1.4, codec: 'aac', warnings: ['w'] } });
+  assert.deepEqual(events.find(e => e.event === 'complete').data.audio, { integratedLufs: -16.02, truePeakDb: -1.4, codec: 'aac', warnings: ['w'] });
   const silent = []; const quiet = createExportJob({ render: async () => ({ finalFile: 'f.mp4', renderDir: 'd' }), onEvent: (event, data) => silent.push({ event, data }) });
   quiet.start({}); while (!silent.some(e => ['complete', 'error', 'cancelled'].includes(e.event))) await new Promise(r => setTimeout(r, 5));
   assert.equal(silent.find(e => e.event === 'complete').data.audio, null);

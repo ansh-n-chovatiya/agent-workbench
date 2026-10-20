@@ -80,3 +80,28 @@ test('silence stays silent, results are deterministic and bad input is rejected'
   assert.throws(() => mixAudio({ durationSec: 1, sampleRate: 44100 }), /48 kHz/);
   assert.throws(() => mixAudio({ durationSec: 1, clips: [{ channels: [[0, 1]], start: 0 }] }), /Float32Array/);
 });
+
+import { mutedOutputRanges } from '../scripts/lib/audio/retime.mjs';
+import { buildTimeMap } from '../scripts/lib/compose/timemap.mjs';
+import { planAudio } from '../scripts/lib/compose/plan.mjs';
+import { resolveComposition } from '../scripts/lib/compose/composition.mjs';
+test('clip mutes map through title, cuts, speed and holds into plan.audio', () => {
+  const composition = resolveComposition({edits:{splits:[2,6],trims:[{start:3,end:4}],speeds:[{start:4,end:8,rate:2}],holds:[{t:5,duration:.5}],mutes:[{start:2,end:6}]}});
+  const map = buildTimeMap({duration:10,lead:2,...composition.edits});
+  const mutes = mutedOutputRanges(map,composition.edits.mutes);
+  assert.deepEqual(mutes,[{start:4,end:6.5}]);
+  const plan = planAudio({composition,events:{steps:[]},timemap:map,cues:[]});
+  assert.deepEqual(plan.mutes,mutes);
+});
+test('muted output samples are zero for narration, music and both, with loudness on and off', () => {
+  const durationSec = 1, signal = new Float32Array(SR).fill(.1), mutes = [{start:.25,end:.5}];
+  for (const input of [{clips:[{channels:[signal],start:0}]},{music:{channels:[signal]}},{clips:[{channels:[signal],start:0}],music:{channels:[signal]}}]) {
+    for (const enabled of [false,true]) {
+      const mixed = mixAudio({durationSec,...input,mutes,loudness:{enabled}});
+      for (const channel of mixed.channels) {
+        assert.ok(channel.subarray(SR/4,SR/2).every(v => v === 0));
+        assert.ok(channel[SR/8] > 0);assert.ok(channel[SR*3/4] > 0);
+      }
+    }
+  }
+});

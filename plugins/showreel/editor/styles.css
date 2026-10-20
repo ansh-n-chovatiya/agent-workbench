@@ -1,5 +1,6 @@
 @import 'tailwindcss' source('./');
 @import './editor.css';
+@import './timeline.css';
 @theme inline {
   --color-background: hsl(var(--background));
   --color-card: hsl(var(--card));

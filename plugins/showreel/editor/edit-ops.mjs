@@ -8,7 +8,7 @@ const clone = c => structuredClone(c);
 const overlap = (a, b) => a.start < b.end && b.start < a.end;
 // Recording duration and generated source-time cues live in the render plan, not composition.json.
 function range(start, end, { duration = Infinity } = {}) {
-  start = snapFrame(start); end = Math.min(duration, snapFrame(end));
+  start = snapFrame(start); end = end === duration ? duration : Math.min(duration, snapFrame(end));
   if (!Number.isFinite(start + end) || start < 0 || end > duration || end - start < 1 / 60 - 1e-9) throw new Error('Choose a valid range inside the recording.');
   return { start, end };
 }
@@ -29,13 +29,30 @@ const subtract = (ranges, cut) => ranges.flatMap(r => !overlap(r,cut) ? [r] : [
   ...(r.start < cut.start ? [{ ...r, end: cut.start }] : []),
   ...(r.end > cut.end ? [{ ...r, start: cut.end }] : []),
 ]);
-export const splitAt = c => c; // Boundaries are ephemeral UI state; splitting does not change media.
+// Persist a boundary and preserve each speed fragment on either side.
+export function splitAt(c, t, context = {}) {
+  t = snapFrame(t);
+  const duration = context.duration ?? Infinity, splits = c.edits.splits ?? [];
+  if (!Number.isFinite(t) || t < 0.1 - 1e-9 || duration-t < 0.1 - 1e-9) throw new Error('Split at least 0.1 seconds from a clip edge.');
+  if (splits.some(p => Math.abs(p-t) < 0.1 - 1e-9) || c.edits.trims.some(r => t >= r.start && t <= r.end)) return c;
+  const next = clone(c);
+  next.edits.splits = [...splits,t].sort((a,b) => a-b);
+  next.edits.speeds = next.edits.speeds.flatMap(r => r.start < t && r.end > t ? [{...r,end:t},{...r,start:t}] : [r]);
+  return finish(next,context);
+}
+function splitSpeeds(c) {
+  c.edits.speeds = c.edits.speeds.flatMap(r => {
+    const points = [r.start,...(c.edits.splits ?? []).filter(t => t > r.start && t < r.end),r.end];
+    return points.slice(0,-1).map((start,i) => ({start,end:points[i+1],rate:r.rate}));
+  });
+}
 export function cutRange(c, start, end, context = {}) {
   const r = range(start,end,context), next = clone(c);
   if (r.end - r.start < 0.1 - 1e-9) throw new Error('A cut must be at least 0.1 seconds.');
   next.edits.trims = merge([...next.edits.trims,r]);
   if (next.edits.trims.some(t => t.start === 0 && t.end >= context.duration)) throw new Error('Keep at least one frame of the recording.');
   next.edits.speeds = subtract(next.edits.speeds,r);
+  next.edits.splits = (next.edits.splits ?? []).filter(t => !next.edits.trims.some(cut => t > cut.start && t < cut.end));
   // A frozen frame inside a removed range goes with it.
   if (next.edits.holds) next.edits.holds = next.edits.holds.filter(h => !(h.t >= r.start && h.t < r.end));
   return finish(next,context);
@@ -46,10 +63,11 @@ export function restoreRange(c, index, context) {
 }
 export function setSpeed(c, start, end, rate, context = {}) {
   const r = range(start,end,context);
-  if (!Number.isFinite(rate) || rate < 0.25 || rate > 8) throw new Error('Speed must be between 0.25 and 8.');
+  if (!Number.isFinite(rate) || rate < 0.25 || rate > 30) throw new Error('Speed must be between 0.25 and 30.');
   if (c.edits.trims.some(t => overlap(t,r))) throw new Error('Restore the removed range before changing its speed.');
   const next = clone(c);
   next.edits.speeds = merge([...subtract(next.edits.speeds,r), ...(rate === 1 ? [] : [{ ...r,rate }])],true);
+  splitSpeeds(next);
   return finish(next,context);
 }
 export function clearSpeed(c,index,context) {
@@ -147,3 +165,4 @@ export function fixSlow(c, stepId, overrunSec, context = {}) {
   if (!(end > start) || rate < MIN_FIT_RATE) throw new Error(`Slowing this step enough would go below ${MIN_FIT_RATE}x. Freeze the last frame instead.`);
   return setSpeed(c,start,end,rate,context);
 }
+

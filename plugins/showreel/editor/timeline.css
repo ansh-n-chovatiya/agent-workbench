@@ -1,0 +1,143 @@
+/* Timeline (timeline-agent). Layer colours are tokens with light and dark values; pills use the 700 shade so white text keeps 4.5:1 in both themes. */
+.simple-timeline {
+  --tl-clip:#2563eb;--tl-zoom:#9333ea;--tl-caption:#16a34a;--tl-voice:#7c3aed;--tl-music:#d97706;
+  --tl-clip-pill:#1d4ed8;--tl-zoom-pill:#7e22ce;--tl-caption-pill:#15803d;--tl-voice-pill:#6d28d9;--tl-music-pill:#b45309;
+  --tl-row-line:color-mix(in srgb,var(--line) 70%,transparent);
+  --tl-motion:150ms ease;
+}
+:root[data-theme=dark] .simple-timeline {--tl-clip:#60a5fa;--tl-zoom:#c084fc;--tl-caption:#4ade80;--tl-voice:#a78bfa;--tl-music:#fbbf24;}
+@media (prefers-color-scheme:dark) {:root:not([data-theme=light]) .simple-timeline {--tl-clip:#60a5fa;--tl-zoom:#c084fc;--tl-caption:#4ade80;--tl-voice:#a78bfa;--tl-music:#fbbf24;}}
+
+/* Toolbar */
+.simple-timeline .timeline-toolbar {height:36px;min-height:36px;gap:2px;padding:0 8px;overflow:visible;}
+.simple-timeline .timeline-toolbar .ui-button {height:28px;gap:6px;}
+.simple-timeline .toolbar-divider {width:1px;height:20px;background:var(--line);margin:0 4px;flex-shrink:0;}
+.simple-timeline .timeline-notice {flex:1;min-width:0;display:flex;align-items:center;gap:6px;margin:0 8px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;}
+.simple-timeline .timeline-notice>span {overflow:hidden;text-overflow:ellipsis;}
+.simple-timeline .timeline-notice.error {color:var(--error);}
+.simple-timeline .timeline-notice.success {color:var(--accent);}
+.simple-timeline .result-chip {font-size:11px;white-space:nowrap;border:1px solid var(--line);border-radius:6px;padding:3px 8px;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0;}
+.simple-timeline .time-mode {margin-left:0;}
+.simple-timeline .zoom-control {display:flex;align-items:center;gap:2px;flex-shrink:0;margin-left:4px;padding-left:8px;border-left:1px solid var(--line);}
+.simple-timeline .zoom-control .ui-slider {width:84px;flex:0 0 84px;height:28px;}
+.simple-timeline .zoom-control .ui-button {width:28px;}
+.layer-menu {display:flex;flex-direction:column;gap:2px;min-width:160px;}
+.layer-menu .ui-button {justify-content:flex-start;font-weight:400;height:32px;}
+.simple-timeline .hint-card {height:26px;gap:8px;padding:0 8px 0 12px;}
+.simple-timeline .hint-card svg {color:var(--accent);}
+.simple-timeline .hint-card .ui-button {height:22px;width:22px;}
+
+/* Grid: fixed label column, sticky ruler, tracks fill the height and scroll internally when it is small. */
+.simple-timeline .timeline-grid {display:flex;align-items:flex-start;overflow:auto;border-top:1px solid var(--line);scrollbar-gutter:stable;}
+.simple-timeline .track-labels {flex:0 0 132px;width:132px;position:sticky;left:0;z-index:7;background:var(--panel);box-shadow:1px 0 0 var(--line);align-self:stretch;}
+.simple-timeline .track-label {display:flex;align-items:center;gap:8px;padding:0 10px;font-size:12px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--tl-row-line);white-space:nowrap;overflow:hidden;}
+.simple-timeline .track-label.corner {position:sticky;top:0;z-index:8;background:var(--panel);font-weight:400;font-size:11px;color:var(--muted);}
+.simple-timeline .track-label svg {flex-shrink:0;}
+.simple-timeline .track-label.clip svg {color:var(--tl-clip);}.simple-timeline .track-label.zoom svg {color:var(--tl-zoom);}.simple-timeline .track-label.captions svg {color:var(--tl-caption);}.simple-timeline .track-label.voice svg {color:var(--tl-voice);}.simple-timeline .track-label.music svg {color:var(--tl-music);}
+.simple-timeline .timeline-lanes {position:relative;flex:1 0 auto;min-width:0;touch-action:none;user-select:none;}
+.simple-timeline .timeline-ruler {position:sticky;top:0;z-index:5;height:26px;border-bottom:1px solid var(--line);background:var(--panel);cursor:crosshair;overflow:hidden;}
+.simple-timeline .timeline-ruler .tick {position:absolute;bottom:0;width:1px;height:4px;background:var(--line);pointer-events:none;}
+.simple-timeline .timeline-ruler .tick.major {height:8px;background:var(--muted);}
+/* `top:auto`, no border and no padding override the older generic `.timeline-ruler span` rule in editor.css. */
+.simple-timeline .timeline-ruler .tick span {position:absolute;left:4px;top:auto;bottom:10px;border:0;padding:0;font-size:10px;line-height:12px;font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap;}
+.simple-timeline .playhead-handle {position:absolute;top:0;width:12px;height:12px;transform:translateX(-6px);padding:0;border:0;background:var(--accent);clip-path:polygon(0 0,100% 0,100% 50%,50% 100%,0 50%);cursor:ew-resize;z-index:6;opacity:.95;}
+.simple-timeline .playhead-handle:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+.simple-timeline .timeline-tracks {position:relative;}
+.simple-timeline .timeline-track {position:relative;border-bottom:1px solid var(--tl-row-line);cursor:default;}
+.simple-timeline .zoom-track,.simple-timeline .caption-track {cursor:crosshair;}
+.simple-timeline .timeline-playhead {position:absolute;top:0;bottom:0;width:1px;background:var(--accent);pointer-events:none;z-index:2;}
+.simple-timeline .timeline-playhead:before {content:none;}
+.simple-timeline .snap-guide {position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--tl-zoom);pointer-events:none;z-index:5;}
+.simple-timeline .track-placeholder {position:sticky;left:12px;top:0;display:inline-flex;align-items:center;height:100%;padding:0 12px;font-size:11px;color:var(--muted);white-space:nowrap;pointer-events:none;}
+
+/* Blocks: 8 px radius, a pill at the left, details on hover or selection only. */
+.simple-timeline .timeline-block,.simple-timeline .clip-block {position:absolute;top:3px;bottom:3px;height:auto;border-radius:8px;overflow:visible;padding:0;font-size:11px;color:var(--ink);transition:box-shadow var(--tl-motion),filter var(--tl-motion),background-color var(--tl-motion);}
+.simple-timeline .timeline-block {cursor:grab;border:1px solid color-mix(in srgb,var(--tl-zoom) 55%,transparent);background:color-mix(in srgb,var(--tl-zoom) 22%,var(--panel));min-width:4px;}
+.simple-timeline .timeline-block:active {cursor:grabbing;}
+.simple-timeline .timeline-block.zoom {--tl-colour:var(--tl-zoom);--tl-pill:var(--tl-zoom-pill);}
+.simple-timeline .timeline-block.caption {--tl-colour:var(--tl-caption);--tl-pill:var(--tl-caption-pill);border-color:color-mix(in srgb,var(--tl-caption) 55%,transparent);background:color-mix(in srgb,var(--tl-caption) 22%,var(--panel));}
+.simple-timeline .timeline-block:hover {filter:brightness(1.06);}
+.simple-timeline .timeline-block.selected,.simple-timeline .clip-block.selected {box-shadow:0 0 0 1px var(--panel),0 0 0 3px hsl(var(--selection));z-index:5;}
+/* Pills and labels paint above the playhead line (z 2) so the line never cuts through text. */
+.simple-timeline .pill,.simple-timeline .block-text,.simple-timeline .block-detail,.simple-timeline .restore-clip {position:relative;z-index:3;}
+.simple-timeline .block-body {z-index:3;}
+.simple-timeline .timeline-block:focus-visible,.simple-timeline .clip-hit:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+.simple-timeline .block-body {position:absolute;inset:0;display:flex;align-items:center;gap:6px;padding:0 8px;overflow:hidden;border-radius:8px;pointer-events:none;}
+.simple-timeline .pill {display:inline-flex;align-items:center;gap:4px;height:17px;padding:0 6px;border-radius:9px;background:var(--tl-pill,var(--tl-clip-pill));color:#fff;font-size:10px;font-weight:600;line-height:1;white-space:nowrap;flex-shrink:0;font-variant-numeric:tabular-nums;}
+.simple-timeline .pill b {font-weight:600;}
+.simple-timeline .block-text {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--ink);}
+.simple-timeline .block-detail {display:none;flex:0 4 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums;}
+.simple-timeline .timeline-block:hover .block-detail,.simple-timeline .timeline-block.selected .block-detail,.simple-timeline .clip-block:hover .block-detail,.simple-timeline .clip-block.selected .block-detail {display:inline;}
+.simple-timeline .clip-block .block-detail {padding:2px 6px;border-radius:9px;background:color-mix(in srgb,var(--panel) 85%,transparent);color:var(--ink);overflow:visible;}
+.simple-timeline .timeline-block .edge {position:absolute;top:0;bottom:0;height:auto;width:8px;padding:0;border:0;border-radius:0;background:var(--tl-colour,var(--tl-zoom));opacity:0;cursor:ew-resize;z-index:2;transition:opacity var(--tl-motion);}
+.simple-timeline .timeline-block .edge:before {content:'';position:absolute;left:3px;top:50%;width:2px;height:10px;margin-top:-5px;border-radius:1px;background:#fff;}
+.simple-timeline .edge.start {left:0;border-radius:8px 0 0 8px;}.simple-timeline .edge.end {right:0;border-radius:0 8px 8px 0;}
+.simple-timeline .timeline-block:hover .edge,.simple-timeline .timeline-block.selected .edge,.simple-timeline .timeline-block .edge:focus-visible {opacity:1;}
+.simple-timeline .timeline-block.narrow .edge {width:5px;}
+
+/* Clip track: filmstrip under a pill; deleted clips are a dashed gap with a Restore pill. */
+.simple-timeline .clip-block {--tl-pill:var(--tl-clip-pill);border:1px solid color-mix(in srgb,var(--tl-clip) 60%,transparent);background:linear-gradient(180deg,color-mix(in srgb,var(--tl-clip) 32%,var(--panel)),color-mix(in srgb,var(--tl-clip) 18%,var(--panel)));}
+.simple-timeline .clip-block.loading {background:linear-gradient(90deg,color-mix(in srgb,var(--tl-clip) 18%,var(--panel)) 25%,color-mix(in srgb,var(--tl-clip) 30%,var(--panel)) 50%,color-mix(in srgb,var(--tl-clip) 18%,var(--panel)) 75%);background-size:200% 100%;animation:tl-shimmer 1.4s linear infinite;}
+@keyframes tl-shimmer {to {background-position:-200% 0;}}
+.simple-timeline .filmstrip {position:absolute;left:0;top:0;height:100%;border-radius:7px;pointer-events:none;opacity:.92;z-index:0;}
+.simple-timeline .clip-hit {z-index:3;}
+.simple-timeline .timeline-block .edge {z-index:4;}
+.simple-timeline .clip-block:after {content:'';position:absolute;inset:0;border-radius:7px;background:linear-gradient(90deg,color-mix(in srgb,var(--panel) 55%,transparent),transparent 120px);pointer-events:none;}
+.simple-timeline .clip-hit {position:absolute;inset:0;z-index:1;display:flex;align-items:center;gap:8px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:var(--ink);text-align:left;overflow:hidden;cursor:pointer;}
+.simple-timeline .clip-block:hover {filter:brightness(1.05);}
+.simple-timeline .clip-block.deleted {background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--muted) 22%,transparent) 0 4px,transparent 4px 10px);border:1px dashed color-mix(in srgb,var(--muted) 70%,transparent);}
+.simple-timeline .clip-block.deleted:after {content:none;}
+.simple-timeline .restore-clip {position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;height:22px;padding:0 10px;border-radius:11px;background:var(--panel);border:1px solid var(--line);color:var(--ink);font-size:11px;font-weight:600;box-shadow:0 1px 2px #0002;}
+.simple-timeline .clip-block.deleted.narrow .restore-clip {padding:0 6px;}
+.simple-timeline .clip-block.deleted .clip-hit {cursor:default;}
+
+/* Ghost blocks: the empty Zoom row and the drag-to-create preview. */
+.simple-timeline .ghost-block {position:absolute;top:3px;bottom:3px;display:flex;align-items:center;gap:6px;padding:0 10px;border:1px dashed color-mix(in srgb,var(--tl-zoom) 70%,transparent);border-radius:8px;color:var(--muted);font-size:11px;white-space:nowrap;pointer-events:none;background:color-mix(in srgb,var(--tl-zoom) 8%,transparent);}
+.simple-timeline .ghost-block svg {color:var(--tl-zoom);}
+.simple-timeline .ghost-block.create {background:color-mix(in srgb,var(--tl-zoom) 24%,var(--panel));border-style:solid;justify-content:center;color:var(--ink);font-weight:600;z-index:3;}
+.simple-timeline .ghost-block.create.invalid {border-style:dashed;background:color-mix(in srgb,var(--tl-zoom) 10%,transparent);}
+
+/* Floating mini toolbar on a selected block (hover or focus). */
+.simple-timeline .mini-toolbar {position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;background:hsl(var(--popover));box-shadow:0 4px 12px #0003;z-index:4;opacity:0;pointer-events:none;transition:opacity var(--tl-motion);}
+.simple-timeline .narrow .mini-toolbar {right:auto;left:0;top:calc(100% + 6px);transform:none;}
+.simple-timeline .selected:hover .mini-toolbar,.simple-timeline .selected:focus-within .mini-toolbar {opacity:1;pointer-events:auto;}
+.simple-timeline .mini-toolbar .ui-button {width:24px;height:24px;}
+.simple-timeline .mini-toolbar .ui-button.danger {color:var(--error);}
+
+/* Context menu */
+.context-menu {position:fixed;z-index:70;min-width:184px;padding:4px;border:1px solid var(--line);border-radius:8px;background:hsl(var(--popover));color:var(--ink);box-shadow:0 8px 24px #0004;font-size:12px;}
+.context-menu .menu-item {display:flex;align-items:center;gap:8px;width:100%;height:30px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:inherit;text-align:left;cursor:pointer;transition:background-color var(--tl-motion);}
+.context-menu .menu-item span {flex:1;}
+.context-menu .menu-item kbd {font:10px ui-monospace,Menlo,monospace;color:var(--muted);}
+.context-menu .menu-item:hover:not(:disabled),.context-menu .menu-item:focus-visible {background:hsl(var(--muted-token));outline:none;}
+.context-menu .menu-item:disabled {opacity:.45;cursor:default;}
+.context-menu .menu-item.danger {color:var(--error);}
+.context-menu .menu-group {padding:4px 8px 6px;}
+.context-menu .menu-group-label {display:flex;align-items:center;gap:8px;height:22px;color:var(--muted);}
+.context-menu .menu-picks {display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:2px;}
+.context-menu .menu-picks button {height:26px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font-size:11px;font-variant-numeric:tabular-nums;cursor:pointer;}
+.context-menu .menu-picks button[aria-checked=true] {border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--panel));}
+.context-menu .menu-picks button:hover:not(:disabled),.context-menu .menu-picks button:focus-visible {background:hsl(var(--muted-token));outline:none;}
+.context-menu .menu-picks button:disabled {opacity:.45;cursor:default;}
+
+/* Voice and Music blocks follow the same shape. */
+.simple-timeline .voice-block,.simple-timeline .music-bar {top:3px;bottom:3px;height:auto;border-radius:8px;display:flex;align-items:center;gap:6px;padding:0 8px;font-weight:600;}
+.simple-timeline .voice-block {--tl-pill:var(--tl-voice-pill);border:1px solid color-mix(in srgb,var(--tl-voice) 55%,transparent);background:color-mix(in srgb,var(--tl-voice) 22%,var(--panel));}
+.simple-timeline .voice-block.own,.simple-timeline .voice-block.file {--tl-pill:var(--tl-music-pill);border-color:color-mix(in srgb,var(--tl-music) 55%,transparent);background:color-mix(in srgb,var(--tl-music) 22%,var(--panel));}
+.simple-timeline .voice-block.warn {border-color:var(--warning);}
+.simple-timeline .voice-block .pill b {color:#fff;}
+.simple-timeline .music-bar {--tl-pill:var(--tl-music-pill);border:1px solid color-mix(in srgb,var(--tl-music) 55%,transparent);background:color-mix(in srgb,var(--tl-music) 22%,var(--panel));}
+.simple-timeline .music-bar .pill,.simple-timeline .music-bar .block-text {position:relative;}
+.simple-timeline .voice-block:focus-visible,.simple-timeline .music-bar:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+
+/* Narrow layouts: icons only in the label column and the toolbar. */
+@media (max-width:1099px) {
+  .simple-timeline .track-labels {flex-basis:44px;width:44px;}
+  .simple-timeline .track-label {padding:0;justify-content:center;}
+  .simple-timeline .track-label span {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+  .simple-timeline .timeline-toolbar .label-text {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+  .simple-timeline .timeline-toolbar .ui-button {gap:0;}
+  .simple-timeline .zoom-control .ui-slider {width:60px;flex-basis:60px;}
+}
+@media (max-width:899px) {.simple-timeline .zoom-control .ui-slider {display:none;}}
+@media (prefers-reduced-motion:reduce) {.simple-timeline .clip-block.loading {animation:none;}}

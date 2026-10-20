@@ -1,10 +1,18 @@
 import { wrapLines } from './captions.mjs';
 export const OUTPUT_PRESETS = Object.freeze({ landscape: [1920, 1080], vertical: [1080, 1920], square: [1080, 1080] });
+// Output sizes are named by their short side; each scales the 1080 base of a format.
+export const OUTPUT_SIZES = Object.freeze({ '720': 2 / 3, '1080': 1, '1440': 4 / 3, '4k': 2 });
 export function presetOutput(preset = 'landscape', size = '1080') {
   if (!Object.hasOwn(OUTPUT_PRESETS, preset)) throw new Error('format must be landscape, vertical or square');
-  if (!['1080', '4k'].includes(size)) throw new Error('size must be 1080 or 4k');
-  const [width, height] = OUTPUT_PRESETS[preset], scale = size === '4k' ? 2 : 1;
-  return { preset, width: width * scale, height: height * scale };
+  if (!Object.hasOwn(OUTPUT_SIZES, String(size))) throw new Error('size must be 720, 1080, 1440 or 4k');
+  const [width, height] = OUTPUT_PRESETS[preset], scale = OUTPUT_SIZES[String(size)];
+  return { preset, width: Math.round(width * scale), height: Math.round(height * scale) };
+}
+// The size key a width and height belong to (by their short side); missing sizes mean the 1080 default.
+export function sizeKeyFor(width, height) {
+  const short = Math.min(Number(width) || 0, Number(height) || 0);
+  if (!short) return '1080';
+  return short >= 2160 ? '4k' : short >= 1440 ? '1440' : short >= 1080 ? '1080' : '720';
 }
 export const isVertical = (output) => output.preset === 'vertical' || output.height > output.width;
 export function safeArea(output, enabled = isVertical(output)) {

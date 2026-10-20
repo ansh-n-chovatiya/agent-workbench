@@ -32,5 +32,5 @@ export function audioSignature(audio) {
   return JSON.stringify({ d: audio.durationSec, r: audio.sampleRate,
     n: audio.narration.map(n => [n.clipUrl, n.outStart, n.durationSec, n.gainDb]),
     m: audio.music && [audio.music.url, audio.music.gainDb, audio.music.loop, audio.music.fadeInSec, audio.music.fadeOutSec, audio.music.startSec, audio.music.endSec],
-    k: audio.duck, l: audio.loudness });
+    u: audio.mutes, k: audio.duck, l: audio.loudness });
 }
