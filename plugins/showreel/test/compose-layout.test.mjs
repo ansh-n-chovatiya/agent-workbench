@@ -35,3 +35,20 @@ test('square frames preserve source shape and keep the caption band outside the 
     assert.ok(l.caption.y+l.caption.h<=1080-Math.ceil(1080*.14));
   }
 });
+
+test('vertical captions leave a 2% gap and stay above the bottom platform safe zone', () => {
+  for (const height of [1280, 1920, 2560, 3840]) for (const source of [
+    { width: 390, height: 844 }, { width: 1920, height: 1080 }, { width: 1080, height: 1080 },
+  ]) for (const mode of ['band', 'overlay']) {
+    const output = { preset: 'vertical', width: height * 9 / 16, height };
+    const { frame, caption, safe } = layoutFor({ output, source,
+      composition: { captions: { enabled: true, mode } },
+      captionTexts: ['Create and share a polished demo with your team in just a few clicks'],
+    });
+    assert.ok(Math.abs(frame.w / frame.h - source.width / source.height) / (source.width / source.height) < .005);
+    assert.ok(caption.y - (frame.y + frame.h) >= height * .02);
+    assert.equal(caption.w, Math.round(output.width * .88));
+    assert.ok(caption.y + caption.h <= safe.y + safe.h);
+    assert.ok(caption.y + caption.h <= height - Math.ceil(height * .14));
+  }
+});

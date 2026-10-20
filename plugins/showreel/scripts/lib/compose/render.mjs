@@ -383,14 +383,13 @@ export function compositionForFormat(input, format, size, fps) {
       if (c.frame.paddingXPct === 8) c.frame.paddingXPct = 4;
       if (c.frame.paddingYPct === 5) c.frame.paddingYPct = 0;
       if (c.captions.bandHeightPct === 13) c.captions.bandHeightPct = 16;
-      if (c.captions.fontSizePct === 3.4*THEMES[c.theme].typography.captionSizeMultiplier) c.captions.fontSizePct=3.9;
-      if (c.captions.maxLines === 2) c.captions.maxLines=3;
+      if (c.captions.fontSizePct === 3.4*THEMES[c.theme].typography.captionSizeMultiplier) c.captions.fontSizePct=3.0;
       if (c.zoom.depth === resolveComposition({ theme: c.theme }).zoom.depth) c.zoom.depth = 1.5;
     } else if (previous === 'vertical') {
       if (c.frame.paddingXPct === 4) c.frame.paddingXPct = 8;
       if (c.frame.paddingYPct === 0) c.frame.paddingYPct = 5;
       if (c.captions.bandHeightPct === 16) c.captions.bandHeightPct = 13;
-      if (c.captions.fontSizePct === 3.9) c.captions.fontSizePct=3.4*THEMES[c.theme].typography.captionSizeMultiplier;
+      if (c.captions.fontSizePct === 3.0) c.captions.fontSizePct=3.4*THEMES[c.theme].typography.captionSizeMultiplier;
       if (c.captions.maxLines === 3) c.captions.maxLines=2;
       if (c.zoom.depth === 1.5) c.zoom.depth = resolveComposition({ theme: c.theme }).zoom.depth;
       if (c.layout?.safeZones === true) c.layout.safeZones = null;

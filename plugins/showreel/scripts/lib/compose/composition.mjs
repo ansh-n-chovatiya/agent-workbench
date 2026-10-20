@@ -97,7 +97,7 @@ export function resolveComposition(input) {
     cards: Object.fromEntries(['title', 'outro'].map((key) => [key, { titleColor: theme.card.titleColor,
       subtitleColor: theme.card.subtitleColor, background: { colors: theme.card.background.colors, angle: theme.card.background.angle ?? 135 }, accent: { color: theme.card.accent } }])) });
   if (input.output?.preset === 'vertical') themed = merge(themed, {
-    frame: { paddingXPct: 4, paddingYPct: 0 }, captions: { bandHeightPct: 16, fontSizePct: 3.9, maxLines: 3 }, zoom: { depth: 1.5 }, layout: { safeZones: true },
+    frame: { paddingXPct: 4, paddingYPct: 0 }, captions: { bandHeightPct: 16, fontSizePct: 3.0, maxLines: 2 }, zoom: { depth: 1.5 }, layout: { safeZones: true },
   });
   delete themed.frame.shadow.color;
   themed.cards.transition = theme.transition;

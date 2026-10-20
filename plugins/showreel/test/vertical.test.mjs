@@ -63,11 +63,10 @@ test('portrait frame and bottom caption band fit safe zones for phone and deskto
     const { frame: f, content: c, caption: b, safe } = layoutFor(input);
     assert.ok(f.w <= 994); assert.ok(b.h < 307); assert.ok(b.y + b.h <= safe.y + safe.h);
     assert.equal(b.w,Math.round(1080*.88));
-    if(source.width<source.height){assert.deepEqual(f,c);assert.ok(Math.abs(f.w/f.h-source.width/source.height)/(source.width/source.height)<.005);}
-    assert.ok(f.y >= 1920 * .07 && f.y + f.h <= b.y); assert.ok(b.y + b.h <= 1920 * .86);
+    assert.deepEqual(f,c); assert.ok(Math.abs(f.w/f.h-source.width/source.height)/(source.width/source.height)<.005);
+    assert.ok(f.y >= 1920 * .07 && b.y - (f.y + f.h) >= Math.ceil(1920 * .02)); assert.ok(b.y + b.h <= 1920 * .86);
     assert.ok(c.x >= f.x && c.y >= f.y && c.x + c.w <= f.x + f.w && c.y + c.h <= f.y + f.h);
     assert.ok(Math.abs(c.h - c.w * source.height / source.width) < 2);
-    if (source.width > source.height) assert.ok(c.h < f.h);
     const unsafe = layoutFor({ ...input, composition: { ...input.composition, layout: { safeZones: false } } });
     assert.equal(unsafe.frame.y, 0); assert.ok(unsafe.caption.y + unsafe.caption.h <= 1920);
   }
@@ -79,7 +78,9 @@ test('square safe zones, preset-only dimensions, and portrait 4k', () => {
   assert.ok(l.frame.y >= 1080 * .07); assert.ok(l.caption.y + l.caption.h <= 1080 * .86);
   assert.equal(validateComposition({ ...run().composition, output: { preset: 'vertical', fps: 30 } }).ok, true);
   const invalid = run().composition; invalid.output.preset = 'invalid'; assert.equal(validateComposition(invalid).ok, false);
-  assert.equal(resolveComposition({ output: { preset: 'vertical' } }).zoom.depth, 1.5);
+  const defaults = resolveComposition({ output: { preset: 'vertical' } });
+  assert.equal(defaults.zoom.depth, 1.5);
+  assert.equal(defaults.captions.fontSizePct, 3.0); assert.equal(defaults.captions.maxLines, 2);
 });
 test('vertical plans warn for desktop sources, size cursors by width and share storyboard captions', () => {
   const desktop = planRender(run('desktop')), mobile = planRender(run());
@@ -88,6 +89,8 @@ test('vertical plans warn for desktop sources, size cursors by width and share s
   const landscape = compositionForFormat(run('desktop').composition, 'landscape', '1080', 30);
   const vertical = compositionForFormat(landscape, 'vertical', '4k', 30);
   assert.equal(vertical.output.height, 3840); assert.equal(vertical.captions.bandHeightPct, 16); assert.equal(vertical.zoom.depth, 1.5);
+  assert.equal(vertical.captions.fontSizePct, 3.0); assert.equal(vertical.captions.maxLines, 2);
+  assert.equal(compositionForFormat(vertical, 'landscape').captions.fontSizePct, landscape.captions.fontSizePct);
 });
 test('all outputs choose the newest completed run of each profile independently', () => {
   assert.deepEqual(selectRenderRuns([{ id: 'a' }, { id: 'b', profile: 'phone' }, { id: 'c', profile: 'desktop' }, { id: 'd', profile: 'phone' }]), [{ runId: 'c', format: 'landscape' }, { runId: 'd', format: 'vertical' }]);
@@ -104,4 +107,30 @@ test('shared step narration is placed against each run timing independently', ()
   assert.equal(mobile.audio.narration[0].clipUrl, desktop.audio.narration[0].clipUrl);
   assert.equal(mobile.cues[0].text, desktop.cues[0].text);
   assert.notEqual(mobile.audio.narration[0].outStart, desktop.audio.narration[0].outStart);
+});
+
+test('vertical drawing restores plain theme background below the caption block', async () => {
+  const { drawFrame } = await import('../scripts/lib/compose/draw.js');
+  const data = run();
+  data.composition.cards.title.enabled = false; data.composition.cards.outro.enabled = false;
+  data.composition.frame.background = { type: 'solid', colors: ['#ff0000'] };
+  const plan = planRender(data), calls = [], gradients = [];
+  const ctx = new Proxy({
+    measureText: text => ({ width: text.length * plan.output.height * .03 * .55 }),
+    rect: (...rect) => calls.push(['rect', ...rect]),
+    fillRect: (...rect) => calls.push(['fill', ctx.fillStyle, ...rect]),
+    createLinearGradient: () => {
+      const colors = [];
+      const gradient = { addColorStop: (_, color) => colors.push(color) };
+      gradients.push(colors); return gradient;
+    },
+  }, { get: (target, key) => target[key] ?? (() => {}) });
+  drawFrame({ getContext: () => ctx }, plan, .5, { width: 390, height: 844 });
+  const bottom = plan.layout.caption.y + plan.layout.caption.h;
+  const clip = calls.findIndex(call => call[0] === 'rect' && call[1] === 0 && call[2] === bottom);
+  assert.ok(clip >= 0);
+  assert.deepEqual(calls[clip], ['rect', 0, bottom, 1080, 1920 - bottom]);
+  assert.equal(calls.at(-1)[0], 'fill');
+  assert.notEqual(calls.at(-1)[1], '#ff0000');
+  assert.deepEqual(gradients.at(-1), plan.theme.background.colors);
 });

@@ -1,4 +1,4 @@
-// showreel editor sources sha256: 86f09704943950aca12d6bd994eb9ab0c144fa21b4460288bf4ee307f0d0c654
+// showreel editor sources sha256: 090a765d3f52c6d0a250e4d546fac1cdd5f17bbc143d322c333dc4a5bbe6a03a
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -741,8 +741,8 @@
     return { x: bounds.x + Math.round((bounds.w - w4) / 2), y: bounds.y + Math.round((bounds.h - h3) / 2), w: w4, h: h3 };
   }
   function verticalCaptionMetrics(output, captions, texts = [], measureText) {
-    const size5 = output.height * (captions?.fontSizePct ?? 3.9) / 100, padding = size5 * 0.6;
-    const w4 = Math.round(output.width * 0.88), maxLines = Math.min(3, captions?.maxLines ?? 3);
+    const size5 = output.height * (captions?.fontSizePct ?? 3) / 100, padding = size5 * 0.6;
+    const w4 = Math.round(output.width * 0.88), maxLines = Math.min(2, captions?.maxLines ?? 2);
     const measure = measureText ?? ((text) => Array.from(text).length * size5 * 0.55);
     const lines = Math.max(1, ...texts.map((text) => wrapLines(text, w4 - padding * 2, measure, { maxLines }).lines.length));
     return { size: size5, w: w4, lines, h: Math.ceil(lines * size5 * 1.25 + padding) };
@@ -751,14 +751,14 @@
     const { width, height } = output, captions = composition.captions;
     const safe = safeArea(output, composition.layout?.safeZones ?? true);
     const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 4;
-    const pad = Math.round(width * px / 100), gap = captions?.enabled && captions.mode !== "band" ? Math.round(height * 0.012) : 0;
+    const pad = Math.round(width * px / 100), gap = captions?.enabled ? Math.ceil(height * 0.02) : 0;
     const py = Math.round(height * (composition.frame?.paddingYPct ?? 0) / 100);
     const metrics = verticalCaptionMetrics(output, captions, captionTexts, measureCaption);
     const captionH = captions?.enabled ? metrics.h : 0;
     const available = { x: pad, y: safe.y + py, w: width - 2 * pad, h: Math.max(1, safe.h - 2 * py - captionH - gap) };
-    const frame2 = source.width > source.height ? available : containRect(source, available);
+    const frame2 = containRect(source, available);
     frame2.y = available.y;
-    const content = source.width > source.height ? containRect(source, frame2) : { ...frame2 };
+    const content = { ...frame2 };
     const caption = !captions?.enabled ? null : { x: Math.round((width - metrics.w) / 2), y: frame2.y + frame2.h + gap, w: metrics.w, h: captionH };
     return { canvas: { width, height }, safe, frame: frame2, content, caption, scaleFramePx: content.w / source.width };
   }
@@ -1090,7 +1090,7 @@
     });
     if (input.output?.preset === "vertical") themed = merge(themed, {
       frame: { paddingXPct: 4, paddingYPct: 0 },
-      captions: { bandHeightPct: 16, fontSizePct: 3.9, maxLines: 3 },
+      captions: { bandHeightPct: 16, fontSizePct: 3, maxLines: 2 },
       zoom: { depth: 1.5 },
       layout: { safeZones: true }
     });
@@ -21032,7 +21032,7 @@
     ctx.clip();
     ctx.globalAlpha = caption.alpha;
     ctx.font = `${spec.fontWeight} ${size5}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
-    const wrapped = wrapLines(caption.text, r4.w - padding * 2, (text) => ctx.measureText(text).width, { maxLines: spec.maxLines });
+    const wrapped = wrapLines(caption.text, r4.w - padding * 2, (text) => ctx.measureText(text).width, { maxLines: isVertical(plan.output) ? Math.min(2, spec.maxLines) : spec.maxLines });
     const scale = Math.min(wrapped.scale, (r4.h - padding) / (size5 * 1.25 * wrapped.lines.length));
     ctx.font = `${spec.fontWeight} ${size5 * scale}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
     const lineH = size5 * scale * 1.25;
@@ -21355,6 +21355,15 @@
         ctx.restore();
       }
       drawCaption(ctx, plan, state.caption);
+    }
+    if (isVertical(plan.output) && plan.layout.caption) {
+      const bottom = plan.layout.caption.y + plan.layout.caption.h;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, bottom, width, height - bottom);
+      ctx.clip();
+      background2(ctx, plan.theme.background, width, height, plan.theme.background);
+      ctx.restore();
     }
     card(ctx, plan, state.alphaTitle, plan.cards.title, plan.cards.title.title);
     card(ctx, plan, state.alphaOutro, plan.cards.outro, plan.cards.outro.text);
@@ -33119,6 +33128,16 @@
     const suffix = ` ${stamp}${format === "vertical" ? " (vertical)" : ""}${String(size5).toLowerCase() === "4k" ? " 4K" : ""}`;
     return `${name.slice(0, 80 - suffix.length - 4).trimEnd().replace(/[. ]+$/g, "")}${suffix}.mp4`;
   }
+  async function loadExportSettings(request2, platform2 = globalThis.navigator?.platform ?? "") {
+    try {
+      return await request2("/api/export/settings");
+    } catch {
+      return { exportDir: `~/${/mac/i.test(platform2) ? "Movies" : "Videos"}/Showreel`, canChoose: false, fallback: true };
+    }
+  }
+  function exportRequestBody(settings) {
+    return settings.fallback ? {} : { dir: settings.exportDir };
+  }
 
   // editor/ExportResult.jsx
   function ExportResult({ result, homeDir, onAgain, onError }) {
@@ -33450,14 +33469,9 @@
       return () => stream.current?.abort();
     }, []);
     async function loadSettings() {
-      try {
-        const data = await request("/api/export/settings");
-        setSettings(data);
-        setFolderInput(data.exportDir);
-        setError("");
-      } catch (e3) {
-        setError(e3.message);
-      }
+      const data = await loadExportSettings(request);
+      setSettings(data);
+      setFolderInput(data.exportDir);
     }
     async function watch(ignorePrevious = false) {
       let firstMessage = true;
@@ -33510,7 +33524,7 @@
         for (const [path, value] of changes) composition = changeComposition(composition, path, value);
         store.setComposition(composition, "output");
         await store.save();
-        await request("/api/export", { method: "POST", body: JSON.stringify({ dir: settings.exportDir }) });
+        await request("/api/export", { method: "POST", body: JSON.stringify(exportRequestBody(settings)) });
         started.current = performance.now();
         setJob({ event: "started", data: {} });
         watch();
@@ -33572,13 +33586,13 @@
       setDate(/* @__PURE__ */ new Date());
       setJob({ event: "idle", data: {} });
       setError("");
-    } }) : /* @__PURE__ */ k(S, null, /* @__PURE__ */ k("div", { class: "export-options" }, /* @__PURE__ */ k(Label3, null, "Size ", /* @__PURE__ */ k(Select2, { "aria-label": "Size", disabled: running || choosing, value: size5, onValueChange: setSize, options: sizeOptions })), /* @__PURE__ */ k(Label3, null, "Frame rate ", /* @__PURE__ */ k(Select2, { "aria-label": "Frame rate", disabled: running || choosing, value: fps, onValueChange: (next) => setFps(+next), options: [{ value: 30, label: "30 fps" }, { value: 60, label: "60 fps" }] }))), /* @__PURE__ */ k("div", { class: "export-destination" }, /* @__PURE__ */ k("span", { class: "export-save-label" }, "Save to"), /* @__PURE__ */ k("div", { class: "export-folder-row" }, /* @__PURE__ */ k(Folder, { size: 18, "aria-hidden": "true" }), /* @__PURE__ */ k("span", { title: settings?.exportDir, class: "export-folder" }, settings ? shortPath(settings.exportDir, settings.homeDir) : "Loading folder\u2026"), /* @__PURE__ */ k(Button, { variant: "outline", disabled: !settings || running || choosing, onClick: choose }, "Change\u2026")), choosing && /* @__PURE__ */ k("p", { role: "status", class: "export-wait" }, /* @__PURE__ */ k(LoaderCircle, { size: 14, "aria-hidden": "true" }), "Waiting for the folder window\u2026"), manual && /* @__PURE__ */ k("form", { class: "export-manual", onSubmit: (e3) => {
+    } }) : /* @__PURE__ */ k(S, null, /* @__PURE__ */ k("div", { class: "export-options" }, /* @__PURE__ */ k(Label3, null, "Size ", /* @__PURE__ */ k(Select2, { "aria-label": "Size", disabled: running || choosing, value: size5, onValueChange: setSize, options: sizeOptions })), /* @__PURE__ */ k(Label3, null, "Frame rate ", /* @__PURE__ */ k(Select2, { "aria-label": "Frame rate", disabled: running || choosing, value: fps, onValueChange: (next) => setFps(+next), options: [{ value: 30, label: "30 fps" }, { value: 60, label: "60 fps" }] }))), /* @__PURE__ */ k("div", { class: "export-destination" }, /* @__PURE__ */ k("span", { class: "export-save-label" }, "Save to"), /* @__PURE__ */ k("div", { class: "export-folder-row" }, /* @__PURE__ */ k(Folder, { size: 18, "aria-hidden": "true" }), /* @__PURE__ */ k("span", { title: settings?.exportDir, class: "export-folder" }, settings ? shortPath(settings.exportDir, settings.homeDir) : "Loading folder\u2026"), /* @__PURE__ */ k(Button, { variant: "outline", disabled: !settings || settings.fallback || running || choosing, onClick: choose }, "Change\u2026")), settings?.fallback && /* @__PURE__ */ k("p", { class: "setting-help" }, "Could not load export settings. Restart the editor if this keeps happening."), choosing && /* @__PURE__ */ k("p", { role: "status", class: "export-wait" }, /* @__PURE__ */ k(LoaderCircle, { size: 14, "aria-hidden": "true" }), "Waiting for the folder window\u2026"), manual && /* @__PURE__ */ k("form", { class: "export-manual", onSubmit: (e3) => {
       e3.preventDefault();
       saveFolder();
     } }, /* @__PURE__ */ k(Label3, { htmlFor: "export-folder-input" }, "Folder path"), /* @__PURE__ */ k("input", { id: "export-folder-input", value: folderInput, onInput: (e3) => setFolderInput(e3.currentTarget.value), placeholder: "Absolute folder path" }), /* @__PURE__ */ k(Button, { variant: "outline", onClick: saveFolder }, "Save")), /* @__PURE__ */ k("p", { class: "export-preview" }, "Will be saved as: ", /* @__PURE__ */ k("strong", null, preview))), !running && /* @__PURE__ */ k(VoiceChecklist, { state, controller: voice }), /* @__PURE__ */ k("div", { "aria-live": "polite" }, running && /* @__PURE__ */ k("div", { class: "export-progress", role: "progressbar", "aria-label": "Export progress", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": percent }, /* @__PURE__ */ k("div", { class: "progress-head" }, /* @__PURE__ */ k("span", null, /* @__PURE__ */ k(LoaderCircle, { size: 14, class: "spin", "aria-hidden": "true" }), " Rendering your video"), /* @__PURE__ */ k("strong", null, percent, "%")), /* @__PURE__ */ k("div", { class: "progress-track" }, /* @__PURE__ */ k("div", { class: "progress-fill", style: { width: `${Math.max(2, Math.min(100, percent))}%` } })), /* @__PURE__ */ k("p", { class: "progress-eta" }, eta !== null ? `About ${eta < 60 ? `${eta} s` : `${Math.floor(eta / 60)} min ${eta % 60} s`} left` : "Estimating time left\u2026")), job.event === "cancelled" && /* @__PURE__ */ k("p", null, "Export cancelled. You can try again."), job.event === "error" && job.data.message && /* @__PURE__ */ k("p", { role: "alert", class: "error" }, job.data.message)), /* @__PURE__ */ k("div", { class: "dialog-actions" }, running ? /* @__PURE__ */ k(S, null, /* @__PURE__ */ k(Button, { variant: "outline", onClick: cancel }, "Cancel"), error && /* @__PURE__ */ k(Button, { onClick: () => {
       setError("");
       watch();
-    } }, "Reconnect progress")) : /* @__PURE__ */ k(Tooltip2, { text: voiceJob.running ? "Wait for the voice-over to finish" : "Render the video" }, /* @__PURE__ */ k(Button, { variant: "default", disabled: voiceJob.running || !settings && !error || choosing || manual, onClick: settings ? start : loadSettings }, job.event === "error" || error ? "Retry" : "Export")))), error && /* @__PURE__ */ k("p", { role: "alert", class: "error" }, error));
+    } }, "Reconnect progress")) : /* @__PURE__ */ k(Tooltip2, { text: voiceJob.running ? "Wait for the voice-over to finish" : "Render the video" }, /* @__PURE__ */ k(Button, { variant: "default", disabled: voiceJob.running || !settings || choosing || manual, onClick: start }, job.event === "error" || error ? "Retry" : "Export")))), error && /* @__PURE__ */ k("p", { role: "alert", class: "error" }, error));
   }
 
   // editor/TopBar.jsx

@@ -1,7 +1,7 @@
 import { h, Fragment } from 'preact';
 import { Folder, LoaderCircle, CircleCheck, Clock } from 'lucide-preact';
 import { ExportResult } from './ExportResult.jsx';
-import { shortPath, exportFileName } from './export-model.mjs';
+import { shortPath, exportFileName, loadExportSettings, exportRequestBody } from './export-model.mjs';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Dialog } from './ui/dialog.jsx';
 import { Select } from './ui/select.jsx';
@@ -52,8 +52,8 @@ export function ExportDialog({ store, voice, onClose }) {
     return () => stream.current?.abort();
   }, []);
   async function loadSettings() {
-    try { const data = await request('/api/export/settings'); setSettings(data); setFolderInput(data.exportDir); setError(''); }
-    catch (e) { setError(e.message); }
+    const data = await loadExportSettings(request);
+    setSettings(data); setFolderInput(data.exportDir);
   }
   async function watch(ignorePrevious = false) {
     let firstMessage = true;
@@ -85,7 +85,7 @@ export function ExportDialog({ store, voice, onClose }) {
       if (size !== 'custom') { const { width, height } = sizeForPreset(size, composition.output); changes.unshift(['output.width', width], ['output.height', height]); }
       for (const [path, value] of changes) composition = changeComposition(composition, path, value);
       store.setComposition(composition, 'output'); await store.save();
-      await request('/api/export', { method: 'POST', body: JSON.stringify({ dir: settings.exportDir }) });
+      await request('/api/export', { method: 'POST', body: JSON.stringify(exportRequestBody(settings)) });
       started.current = performance.now(); setJob({ event: 'started', data: {} }); watch();
     } catch (e) { setError(e.message); setJob({ event: 'error', data: {} }); }
     finally { setBusy(false); }
@@ -117,7 +117,8 @@ export function ExportDialog({ store, voice, onClose }) {
     {result ? <ExportResult result={result} homeDir={settings?.homeDir} onError={setError} onAgain={() => { setShowResult(false); setDate(new Date()); setJob({ event: 'idle', data: {} }); setError(''); }} /> : <>
       <div class="export-options"><Label>Size <Select aria-label="Size" disabled={running || choosing} value={size} onValueChange={setSize} options={sizeOptions} /></Label>
         <Label>Frame rate <Select aria-label="Frame rate" disabled={running || choosing} value={fps} onValueChange={next => setFps(+next)} options={[{value:30,label:'30 fps'},{value:60,label:'60 fps'}]} /></Label></div>
-      <div class="export-destination"><span class="export-save-label">Save to</span><div class="export-folder-row"><Folder size={18} aria-hidden="true" /><span title={settings?.exportDir} class="export-folder">{settings ? shortPath(settings.exportDir, settings.homeDir) : 'Loading folder…'}</span><Button variant="outline" disabled={!settings || running || choosing} onClick={choose}>Change…</Button></div>
+      <div class="export-destination"><span class="export-save-label">Save to</span><div class="export-folder-row"><Folder size={18} aria-hidden="true" /><span title={settings?.exportDir} class="export-folder">{settings ? shortPath(settings.exportDir, settings.homeDir) : 'Loading folder…'}</span><Button variant="outline" disabled={!settings || settings.fallback || running || choosing} onClick={choose}>Change…</Button></div>
+        {settings?.fallback && <p class="setting-help">Could not load export settings. Restart the editor if this keeps happening.</p>}
         {choosing && <p role="status" class="export-wait"><LoaderCircle size={14} aria-hidden="true" />Waiting for the folder window…</p>}
         {manual && <form class="export-manual" onSubmit={e => { e.preventDefault(); saveFolder(); }}><Label htmlFor="export-folder-input">Folder path</Label><input id="export-folder-input" value={folderInput} onInput={e => setFolderInput(e.currentTarget.value)} placeholder="Absolute folder path" /><Button variant="outline" onClick={saveFolder}>Save</Button></form>}
         <p class="export-preview">Will be saved as: <strong>{preview}</strong></p>
@@ -130,7 +131,7 @@ export function ExportDialog({ store, voice, onClose }) {
         {job.event === 'cancelled' && <p>Export cancelled. You can try again.</p>}
         {job.event === 'error' && job.data.message && <p role="alert" class="error">{job.data.message}</p>}
       </div>
-      <div class="dialog-actions">{running ? <><Button variant="outline" onClick={cancel}>Cancel</Button>{error && <Button onClick={() => { setError(''); watch(); }}>Reconnect progress</Button>}</> : <Tooltip text={voiceJob.running ? 'Wait for the voice-over to finish' : 'Render the video'}><Button variant="default" disabled={voiceJob.running || (!settings && !error) || choosing || manual} onClick={settings ? start : loadSettings}>{job.event === 'error' || error ? 'Retry' : 'Export'}</Button></Tooltip>}</div>
+      <div class="dialog-actions">{running ? <><Button variant="outline" onClick={cancel}>Cancel</Button>{error && <Button onClick={() => { setError(''); watch(); }}>Reconnect progress</Button>}</> : <Tooltip text={voiceJob.running ? 'Wait for the voice-over to finish' : 'Render the video'}><Button variant="default" disabled={voiceJob.running || !settings || choosing || manual} onClick={start}>{job.event === 'error' || error ? 'Retry' : 'Export'}</Button></Tooltip>}</div>
     </>}
     {error && <p role="alert" class="error">{error}</p>}
   </Dialog>;

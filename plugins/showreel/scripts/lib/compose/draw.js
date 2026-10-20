@@ -94,7 +94,7 @@ function drawCaption(ctx, plan, caption) {
   const size = plan.output.height * spec.fontSizePct / 100, padding = size * 0.6;
   ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip(); ctx.globalAlpha = caption.alpha;
   ctx.font = `${spec.fontWeight} ${size}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
-  const wrapped = wrapLines(caption.text, r.w - padding * 2, (text) => ctx.measureText(text).width, { maxLines: spec.maxLines });
+  const wrapped = wrapLines(caption.text, r.w - padding * 2, (text) => ctx.measureText(text).width, { maxLines: isVertical(plan.output) ? Math.min(2, spec.maxLines) : spec.maxLines });
   const scale = Math.min(wrapped.scale, (r.h - padding) / (size * 1.25 * wrapped.lines.length));
   ctx.font = `${spec.fontWeight} ${size * scale}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
   const lineH = size * scale * 1.25;
@@ -309,6 +309,12 @@ export function drawFrame(canvas, plan, tOut, decoded, assets) {
       ctx.lineWidth = plan.frame.border.widthPx * unit; ctx.stroke(); ctx.restore();
     }
     drawCaption(ctx, plan, state.caption);
+  }
+  if (isVertical(plan.output) && plan.layout.caption) {
+    const bottom = plan.layout.caption.y + plan.layout.caption.h;
+    ctx.save(); ctx.beginPath(); ctx.rect(0, bottom, width, height - bottom); ctx.clip();
+    background(ctx, plan.theme.background, width, height, plan.theme.background);
+    ctx.restore();
   }
   card(ctx, plan, state.alphaTitle, plan.cards.title, plan.cards.title.title);
   card(ctx, plan, state.alphaOutro, plan.cards.outro, plan.cards.outro.text);

@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, writeFile, readFile, symlink, rm } from 'node:fs/promis
 const temp = await mkdtemp(path.join(os.tmpdir(), 'showreel-export-dir-'));
 process.env.SHOWREEL_HOME = path.join(temp, 'home');
 const { defaultExportDir, validateExportDir, getExportDir, setExportDir, exportFileName, uniqueName } = await import('../scripts/lib/export-dir.mjs');
-const { shortPath, formatSize, formatDuration } = await import('../editor/export-model.mjs');
+const { shortPath, formatSize, formatDuration, loadExportSettings, exportRequestBody } = await import('../editor/export-model.mjs');
 test.after(() => rm(temp, { recursive: true, force: true }));
 test('default export folders use the user home and OS media folder', () => {
   assert.equal(defaultExportDir('darwin', temp), path.join(temp, 'Movies', 'Showreel'));
@@ -51,4 +51,19 @@ test('display helpers abbreviate only home boundaries and format export metadata
   assert.equal(shortPath('C:\\Users\\Me\\Videos', 'c:\\users\\me'), '~\\Videos');
   assert.equal(formatSize(1250000), '1.3 MB'); assert.equal(formatSize(0), '0.0 MB');
   assert.equal(formatSize(null), 'Size unavailable'); assert.equal(formatDuration(65), '1:05');
+});
+
+test('settings failures show a platform default and leave export destination to the server', async () => {
+  for (const error of [new Error('Not found'), new TypeError('Failed to fetch')]) {
+    for (const [platform, folder] of [['MacIntel', 'Movies'], ['Win32', 'Videos'], ['Linux x86_64', 'Videos'], ['', 'Videos']]) {
+      const settings = await loadExportSettings(async url => {
+        assert.equal(url, '/api/export/settings'); throw error;
+      }, platform);
+      assert.deepEqual(settings, { exportDir: `~/${folder}/Showreel`, canChoose: false, fallback: true });
+      assert.deepEqual(exportRequestBody(settings), {});
+    }
+  }
+  const actual = { exportDir: '/chosen/folder', homeDir: '/home/user', canChoose: true };
+  assert.equal(await loadExportSettings(async () => actual, 'MacIntel'), actual);
+  assert.deepEqual(exportRequestBody(actual), { dir: '/chosen/folder' });
 });

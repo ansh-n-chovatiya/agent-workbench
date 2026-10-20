@@ -1,4 +1,4 @@
-// showreel render sources sha256: ea36d43a998a854e20b6511eaed207b9522de3bcfa67e07de5ac602ebb896b0c
+// showreel render sources sha256: fb35b16b7fba21aa15baaa55be6500d4ea00e9e923d90286b7699180cea5d50a
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -31703,8 +31703,8 @@
     return { x: bounds.x + Math.round((bounds.w - w) / 2), y: bounds.y + Math.round((bounds.h - h) / 2), w, h };
   }
   function verticalCaptionMetrics(output, captions, texts = [], measureText) {
-    const size = output.height * (captions?.fontSizePct ?? 3.9) / 100, padding = size * 0.6;
-    const w = Math.round(output.width * 0.88), maxLines = Math.min(3, captions?.maxLines ?? 3);
+    const size = output.height * (captions?.fontSizePct ?? 3) / 100, padding = size * 0.6;
+    const w = Math.round(output.width * 0.88), maxLines = Math.min(2, captions?.maxLines ?? 2);
     const measure = measureText ?? ((text) => Array.from(text).length * size * 0.55);
     const lines = Math.max(1, ...texts.map((text) => wrapLines(text, w - padding * 2, measure, { maxLines }).lines.length));
     return { size, w, lines, h: Math.ceil(lines * size * 1.25 + padding) };
@@ -31713,14 +31713,14 @@
     const { width, height } = output, captions = composition.captions;
     const safe = safeArea(output, composition.layout?.safeZones ?? true);
     const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 4;
-    const pad = Math.round(width * px / 100), gap = captions?.enabled && captions.mode !== "band" ? Math.round(height * 0.012) : 0;
+    const pad = Math.round(width * px / 100), gap = captions?.enabled ? Math.ceil(height * 0.02) : 0;
     const py = Math.round(height * (composition.frame?.paddingYPct ?? 0) / 100);
     const metrics = verticalCaptionMetrics(output, captions, captionTexts, measureCaption);
     const captionH = captions?.enabled ? metrics.h : 0;
     const available = { x: pad, y: safe.y + py, w: width - 2 * pad, h: Math.max(1, safe.h - 2 * py - captionH - gap) };
-    const frame = source.width > source.height ? available : containRect(source, available);
+    const frame = containRect(source, available);
     frame.y = available.y;
-    const content = source.width > source.height ? containRect(source, frame) : { ...frame };
+    const content = { ...frame };
     const caption = !captions?.enabled ? null : { x: Math.round((width - metrics.w) / 2), y: frame.y + frame.h + gap, w: metrics.w, h: captionH };
     return { canvas: { width, height }, safe, frame, content, caption, scaleFramePx: content.w / source.width };
   }
@@ -32218,7 +32218,7 @@
     ctx.clip();
     ctx.globalAlpha = caption.alpha;
     ctx.font = `${spec.fontWeight} ${size}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
-    const wrapped = wrapLines(caption.text, r.w - padding * 2, (text) => ctx.measureText(text).width, { maxLines: spec.maxLines });
+    const wrapped = wrapLines(caption.text, r.w - padding * 2, (text) => ctx.measureText(text).width, { maxLines: isVertical(plan.output) ? Math.min(2, spec.maxLines) : spec.maxLines });
     const scale = Math.min(wrapped.scale, (r.h - padding) / (size * 1.25 * wrapped.lines.length));
     ctx.font = `${spec.fontWeight} ${size * scale}px "${plan.brand?.body?.family ?? plan.theme.typography.bodyFamily ?? plan.theme.typography.family}"`;
     const lineH = size * scale * 1.25;
@@ -32541,6 +32541,15 @@
         ctx.restore();
       }
       drawCaption(ctx, plan, state.caption);
+    }
+    if (isVertical(plan.output) && plan.layout.caption) {
+      const bottom = plan.layout.caption.y + plan.layout.caption.h;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, bottom, width, height - bottom);
+      ctx.clip();
+      background2(ctx, plan.theme.background, width, height, plan.theme.background);
+      ctx.restore();
     }
     card(ctx, plan, state.alphaTitle, plan.cards.title, plan.cards.title.title);
     card(ctx, plan, state.alphaOutro, plan.cards.outro, plan.cards.outro.text);

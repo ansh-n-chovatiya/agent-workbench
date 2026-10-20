@@ -24,3 +24,14 @@ export function exportFileName({ projectName, date = new Date(), format, size })
   const suffix = ` ${stamp}${format === 'vertical' ? ' (vertical)' : ''}${String(size).toLowerCase() === '4k' ? ' 4K' : ''}`;
   return `${name.slice(0, 80 - suffix.length - 4).trimEnd().replace(/[. ]+$/g, '')}${suffix}.mp4`;
 }
+
+// The guessed destination is display-only; an older server still chooses the real folder.
+export async function loadExportSettings(request, platform = globalThis.navigator?.platform ?? '') {
+  try { return await request('/api/export/settings'); }
+  catch {
+    return { exportDir: `~/${/mac/i.test(platform) ? 'Movies' : 'Videos'}/Showreel`, canChoose: false, fallback: true };
+  }
+}
+export function exportRequestBody(settings) {
+  return settings.fallback ? {} : { dir: settings.exportDir };
+}
