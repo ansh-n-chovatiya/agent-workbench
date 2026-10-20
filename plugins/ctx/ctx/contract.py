@@ -434,7 +434,8 @@ def _plan_lock(layout, slug):
         yield taken
 
 
-def seal_findings(layout, slug, unit_name, ledger, authoritative=False):
+def seal_findings(layout, slug, unit_name, ledger, authoritative=False,
+                  only=None):
     """Record the findings against a unit as ctx currently sees them.
 
     `authoritative=True` is for the two commands that *are* the legitimate way
@@ -442,6 +443,12 @@ def seal_findings(layout, slug, unit_name, ledger, authoritative=False):
     observes: it may add an entry or strengthen one, never drop or soften one,
     so a hand-edit of the findings file cannot launder itself by running a
     read-only ctx command afterwards.
+
+    `only` narrows what `authoritative` covers to the finding ids a command
+    actually touched; every other finding gets the observing rule. Without it,
+    `--add` or `--set` on one finding would re-seal a hand-edited sibling
+    verbatim and erase its drift. `None` keeps the old behaviour (all
+    authoritative).
 
     **Locked across the read and the write**, for the reason `findings.Ledger`
     is: this is a read-modify-write of one file, and all six call sites were
@@ -460,10 +467,11 @@ def seal_findings(layout, slug, unit_name, ledger, authoritative=False):
     """
     with _plan_lock(layout, slug):
         return _seal_findings_locked(layout, slug, unit_name, ledger,
-                                     authoritative)
+                                     authoritative, only)
 
 
-def _seal_findings_locked(layout, slug, unit_name, ledger, authoritative=False):
+def _seal_findings_locked(layout, slug, unit_name, ledger, authoritative=False,
+                          only=None):
     """`seal_findings` with the plan lock already held — the read, the merge and
     the write, in one acquisition.
 
@@ -478,10 +486,19 @@ def _seal_findings_locked(layout, slug, unit_name, ledger, authoritative=False):
         # and inventing one here would refuse work for a change nobody can see.
         return None
     sealed = dict(data.get("findings") or {})
+    touched = None if only is None else {str(i) for i in only}
     for finding in ledger.findings:
         key = str(finding.id)
         fresh = _as_seal(finding)
-        if authoritative or key not in sealed:
+        verbatim = authoritative and (touched is None or key in touched)
+        if verbatim and touched is not None and key in sealed:
+            # `--set` changes neither severity nor lowers confidence, so a lower value here is a hand-edit of the
+            # touched finding itself and must stay visible as drift.
+            if _rank(sealed[key].get("severity")) > _rank(fresh["severity"]):
+                fresh["severity"] = sealed[key]["severity"]
+            if sealed[key].get("confidence", "high") == "high":
+                fresh["confidence"] = "high"
+        if verbatim or key not in sealed:
             sealed[key] = fresh
         else:
             sealed[key] = _stronger(sealed[key], fresh)

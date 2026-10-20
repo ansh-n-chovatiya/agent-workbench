@@ -21,7 +21,7 @@ async function diagnose(what) {
       url: location.pathname, scroll: [document.scrollingElement.scrollWidth, document.scrollingElement.scrollHeight],
       clips: [...document.querySelectorAll('.clip-track .clip-block')].map(c => ({ cls: c.className.replace(/\s+/g, ' '), box: (r => [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)])(c.getBoundingClientRect()) })),
       zooms: document.querySelectorAll('.timeline-block.zoom').length, menus: document.querySelectorAll('[role=menu]').length,
-      status: document.querySelector('.save-status')?.textContent, notice: document.querySelector('[role=status].timeline-notice, .timeline-message')?.textContent ?? null }));
+      status: document.querySelector('.save-status')?.textContent, statusTitle: document.querySelector('.save-status')?.title ?? null, alerts: [...document.querySelectorAll('[role=alert]')].map(a => a.textContent.trim().slice(0, 200)), notice: document.querySelector('[role=status].timeline-notice, .timeline-message')?.textContent ?? null }));
     return ` | DIAG(${what}) ${JSON.stringify(info)}`;
   } catch (e) { return ` | DIAG failed: ${e.message}`; }
 }
