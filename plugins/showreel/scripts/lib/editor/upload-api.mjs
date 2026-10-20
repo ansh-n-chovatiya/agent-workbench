@@ -6,6 +6,7 @@ import { mkdir, realpath, open, rename, rm } from 'node:fs/promises';
 import { readBody } from './body.mjs';
 import { contained } from './files.mjs';
 import { safeImagePath } from '../compose/composition.mjs';
+import { renameRetry } from '../fs-retry.mjs';
 
 export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -50,7 +51,7 @@ export async function handleUploadApi({ request, route, method, send, dir, limit
     file = await open(temp, 'wx', 0o644);
     await file.writeFile(bytes); await file.sync();
     await file.close(); file = null;
-    await rename(temp, target);
+    await renameRetry(temp, target);
   } finally { await file?.close(); await rm(temp, { force: true }); }
   const relative = `${UPLOAD_DIR}/${name}`;
   if (!safeImagePath(relative)) throw fail(500, 'Stored image path is not usable.');

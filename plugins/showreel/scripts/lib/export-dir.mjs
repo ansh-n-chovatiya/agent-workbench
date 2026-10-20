@@ -3,6 +3,7 @@ import path from 'node:path';
 import { mkdir, readFile, writeFile, rename, rm, stat, realpath, lstat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { HOME_DIR } from './paths.mjs';
+import { renameRetry } from './fs-retry.mjs';
 
 export function defaultExportDir(platform = process.platform, home = os.homedir()) {
   // When SHOWREEL_HOME is overridden (tests, CI, sandboxes) exports stay inside it and never touch the person's real folders.
@@ -41,7 +42,7 @@ export async function setExportDir(dir) {
   let preferences = {};
   try { preferences = JSON.parse(await readFile(file, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   const temp = `${file}.${randomUUID()}.tmp`;
-  try { await writeFile(temp, JSON.stringify({ ...preferences, exportDir }, null, 2) + '\n', { flag: 'wx', mode: 0o600 }); await rename(temp, file); }
+  try { await writeFile(temp, JSON.stringify({ ...preferences, exportDir }, null, 2) + '\n', { flag: 'wx', mode: 0o600 }); await renameRetry(temp, file); }
   finally { await rm(temp, { force: true }); }
   return exportDir;
 }

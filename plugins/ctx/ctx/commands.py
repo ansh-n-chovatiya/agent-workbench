@@ -27,12 +27,13 @@ import os
 import re
 import subprocess
 import sys
+import time
 import webbrowser
 
 from . import (
     advice, atomic, briefing, bundle, complexity as complexity_mod,
     config as config_mod, contract as contract_mod, detect, dispatch,
-    frontmatter, journal, lock, migrate as migrate_mod, paths,
+    frontmatter, improve as improve_mod, journal, lock, log, migrate as migrate_mod, paths,
     phases as phases_mod, plain as plain_mod, plan as plan_mod,
     preview, preview_page, spec as spec_mod,
     findings as findings_mod, review as review_mod, snapshot as snapshot_mod,
@@ -2619,6 +2620,12 @@ def cmd_findings(args):
         _emit(dict(shape, ok=False, problem=problem), [problem])
         return 2
 
+    if args.add or args.set is not None:
+        # The first record for a project backfills every ledger finding, raw
+        # summary included. Do that *before* this change lands so the finding
+        # about to be written is recorded by the severity-only call below.
+        improve_mod.backfill(layout, config)
+
     if args.add:
         finding = ledger.add(args.add, args.summary or "(no summary given)",
                              where=args.where or "", evidence=args.evidence or "",
@@ -2632,6 +2639,11 @@ def cmd_findings(args):
         )
         journal.append(layout, config, "finding", unit.name,
                        f"{finding.severity} #{finding.id}")
+        # Severity only: the finding text may name a path or quote code.
+        improve_mod.record(
+            layout, config, improve_mod.KIND_FINDING, unit=unit.name, plan=slug,
+            summary=f"{finding.severity} finding recorded", confidence=finding.confidence,
+            key=f"backfill:{slug}/{unit.name}/{finding.id}")
         _emit(dict(shape, mode="add", findings=[finding.as_dict()],
                    summary=ledger.summary(), blocking=len(ledger.blocking())),
               [f"recorded [{finding.id}] {finding.severity}: {finding.summary}"])
@@ -2653,6 +2665,11 @@ def cmd_findings(args):
         )
         journal.append(layout, config, "finding", unit.name,
                        f"#{args.set} -> {args.status or conf}")
+        if args.status in improve_mod.FALSE_ALARM_STATUSES:
+            improve_mod.record(
+                layout, config, improve_mod.KIND_FALSE_ALARM, unit=unit.name, plan=slug,
+                summary=f"finding {args.status} by the builder",
+                key=f"set:{slug}/{unit.name}/{args.set}:{args.status}")
         moved = ledger.get(args.set)
         _emit(dict(shape, mode="set", summary=ledger.summary(),
                    findings=[moved.as_dict()] if moved else [],
@@ -2956,6 +2973,25 @@ def cmd_worktree(args):
     return 0
 
 
+def _record_unit_outcome(layout, config, slug, unit, args, note):
+    """Feed the improve log from a unit's outcome. Fail-open: `record` never raises."""
+    try:
+        if not improve_mod.enabled(config):
+            return
+        if args.status == "done":
+            if args.force:
+                improve_mod.record(layout, config, "forced-done", unit=unit.name,
+                                   plan=slug, summary=note)
+            rounds = findings_mod.load(layout, slug, unit.name).round
+            improve_mod.record(layout, config, "rounds", unit=unit.name, plan=slug,
+                               summary=f"{rounds} review round(s)")
+        elif args.status in ("blocked", "verify_failed"):
+            improve_mod.record(layout, config, "blocked", unit=unit.name, plan=slug,
+                               summary=f"unit marked {args.status}")
+    except Exception as exc:  # the log must never fail a command
+        log.failure("commands.improve", exc)
+
+
 def cmd_unit(args):
     """Focus a unit so the done-gate applies to it, or record its outcome."""
     layout, config = _loaded(args)
@@ -3014,11 +3050,15 @@ def cmd_unit(args):
     # as it is now rather than as it was before the checks started.
     _set_unit_status(layout, slug, [unit], args.status)
     if args.status == "done":
-        state.update(layout, unit=None)
+        if improve_mod.enabled(config):
+            state.update(layout, unit=None, last_done={"name": unit.name, "ts": time.time()})
+        else:
+            state.update(layout, unit=None)
         state.clear_attempts(layout, unit.name)
     else:
         state.update(layout, level="2", plan=slug, unit=unit.name)
     journal.append(layout, config, "unit", unit.name, note)
+    _record_unit_outcome(layout, config, slug, unit, args, note)
 
     _echo(f"{unit.name}: {args.status}")
     if args.status == "running":

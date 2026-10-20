@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { HOME_DIR } from '../paths.mjs';
 import { safeFile, contained } from '../editor/files.mjs';
 import { BRAND_NAME, IMAGE_EXT, FONT_EXT, IMAGE_LIMIT, FONT_LIMIT, validateBrand } from './schema.mjs';
+import { renameRetry } from '../fs-retry.mjs';
 export function brandDir(name) {
   if (typeof name !== 'string' || !BRAND_NAME.test(name)) throw new Error('Invalid brand name: expected [a-z0-9][a-z0-9-]{0,40}');
   return path.join(HOME_DIR,'brands',name);
@@ -47,7 +48,7 @@ export async function saveBrand(b) {
   const dir=await confinedBrandDir(b.name), temp=path.join(dir,`.brand-${randomUUID()}.tmp`);
   try {
     await writeFile(temp,JSON.stringify(b,null,2)+'\n',{flag:'wx'});
-    await rename(temp,path.join(dir,'brand.json'));
+    await renameRetry(temp,path.join(dir,'brand.json'));
   } finally { await rm(temp,{force:true}); }
 }
 export async function loadBriefBrand(brief, warn = console.warn) {

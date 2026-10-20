@@ -51,7 +51,7 @@ SENTINEL_KIND = "backfill-done"
 KIND_FINDING = "review-finding"
 KIND_FALSE_ALARM = "reviewer-false-alarm"
 
-_FALSE_ALARM_STATUSES = ("disputed", "parked")
+FALSE_ALARM_STATUSES = ("disputed", "parked")
 
 _EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+")
 # Windows drive paths, UNC paths, then any absolute POSIX path of two or more
@@ -211,7 +211,7 @@ def _finding_entries(layout):
             plan_slug, unit = path.parent.parent.name, path.stem
             ledger = findings.load(layout, plan_slug, unit)
             for item in ledger.findings:
-                kind = (KIND_FALSE_ALARM if item.status in _FALSE_ALARM_STATUSES
+                kind = (KIND_FALSE_ALARM if item.status in FALSE_ALARM_STATUSES
                         else KIND_FINDING)
                 entries.append(_build(
                     kind, unit, plan_slug, item.summary, item.confidence,

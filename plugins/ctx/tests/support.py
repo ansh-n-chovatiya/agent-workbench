@@ -266,6 +266,9 @@ class Fixture(unittest.TestCase):
         # up in `git status` and could not be told apart from the user's work.
         os.environ["CTX_GLOBAL_ROOT"] = str(self.untracked / "global")
         os.environ.pop("CLAUDE_PROJECT_DIR", None)
+        # Hooks and commands write a private log under `~/.agent-workbench/improve`. A fixture is a throwaway
+        # project and must never add to the real one, whichever test file is run on its own.
+        os.environ["HOME"] = os.environ["USERPROFILE"] = str(self.untracked / "home")
         self.assertEqual(self.cli("init")[0], 0)
         self.layout = paths.Layout(self.root / ".ctx")
         self.config = config_mod.load(self.layout)
