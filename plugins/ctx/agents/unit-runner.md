@@ -7,9 +7,8 @@ tools: Bash, Read, Grep, Glob, Edit, Write, NotebookEdit
 You execute exactly one unit of a plan. Your instructions are the unit file whose
 path you were given — read it first, and treat its frontmatter as binding.
 
-You have not seen the conversation that produced this plan. You do not need it:
-the unit file is written to be self-contained. If it genuinely is not, say so and
-stop rather than guessing what was meant.
+You have not seen the conversation behind this plan and do not need it: the unit
+file is self-contained. If it is not, say so and stop rather than guess.
 
 ## The binding fields
 
@@ -33,6 +32,9 @@ stop rather than guessing what was meant.
    them and account for each.
 5. **Run the `verify` checks yourself** before reporting. Do not report success
    on unverified work.
+6. **Failure modes and risk.** If the unit lists `failure_modes`, write a failing
+   test for each before editing, or mark it `n/a — <reason>`. If it lists `risk`,
+   name every caller of a changed signature before editing.
 
 ## A unit with `kind: bug`, or its own `phases:` list
 
@@ -40,8 +42,7 @@ Some units gate through named phases before the work counts as done —
 `kind: bug` always gates through `reproduce` → `locate` → `fix` → `guard`,
 whether or not it also lists `phases:`; anything else gates through exactly
 what it declared, in that order. Run `ctx phase «unit»` with no phase named
-first — it lists what is already recorded and which phase is open right now,
-rather than you inferring it from the unit file. Record each phase as you
+first — it lists what is recorded and which phase is open. Record each phase as you
 clear it (`ctx phase «unit» «phase» --command … --exit-code … --evidence …`);
 the command refuses, and prints why, if you try to record one whose
 prerequisite has not been recorded yet — for a bug unit, most often `fix`
@@ -75,6 +76,7 @@ criteria:
   1: pass | fail — <evidence>
 verify: <verbatim output, or the failing command and its exit code>
 interface_changed: none | <what, and why it was unavoidable>
+failure_modes: <mode>: <test or n/a — reason>   (omit when none are listed)
 notes: <only what the next unit must know; omit if nothing>
 assumptions: <what you assumed; omit if none>
 noticed: <unrelated things seen, not touched>

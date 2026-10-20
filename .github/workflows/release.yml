@@ -5,7 +5,6 @@ on:
   push:
     tags:
       - "ctx-v*"
-      - "skills-demo-v*"
       - "showreel-v*"
 
 permissions:
@@ -173,68 +172,6 @@ jobs:
             --verify-tag "${notes[@]}" \
             dist/*.whl dist/*.tar.gz dist/SHA256SUMS dist/context-ledger.cdx.json
 
-  skills-demo:
-    if: startsWith(github.ref_name, 'skills-demo-v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    defaults:
-      run:
-        working-directory: plugins/skills-demo
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: The tag agrees with the manifest
-        run: |
-          node --input-type=module - <<'JS'
-          import fs from 'node:fs';
-          const { version } = JSON.parse(fs.readFileSync('.claude-plugin/plugin.json', 'utf8'));
-          if (process.env.GITHUB_REF_NAME !== `skills-demo-v${version}`) {
-            throw new Error('Tag does not match plugin.json version');
-          }
-          JS
-      # Use the runner's Node: this repo has no pinned setup-node SHA.
-      - name: Install locked dependencies
-        working-directory: plugins/skills-demo/skills/demo-video
-        run: npm ci
-      # npm test includes browser/media integration tests; select pure unit
-      # tests so releases need no browser, ffmpeg or system voice setup.
-      - name: Unit tests
-        working-directory: plugins/skills-demo/skills/demo-video
-        run: >-
-          node --test --test-name-pattern '^(config|layout|deliver: one|mapFromEdits|replanCaptions|parseProject|a slow-down|findProject|timeline:|edit: a phone|captions:|cursor:)' test/paths.test.mjs test/timemap.test.mjs test/edit.test.mjs
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-      # Prefer this plugin's version section; never use another plugin's notes.
-      - name: Extract changelog notes
-        shell: python
-        run: |
-          import json, os, pathlib, re
-
-          version = json.loads(pathlib.Path(".claude-plugin/plugin.json").read_text())["version"]
-          changelog = pathlib.Path("CHANGELOG.md")
-          text = changelog.read_text(encoding="utf-8") if changelog.is_file() else ""
-          headings = list(re.finditer(r"^##[ \t]+(.+)$", text, re.MULTILINE))
-          for index, heading in enumerate(headings):
-              title = heading.group(1).strip()
-              if re.match(r"^(?:\[" + re.escape(version) + r"\]|v?" + re.escape(version) + r")(?=\s|$)", title):
-                  end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
-                  body = text[heading.end():end].strip()
-                  if body:
-                      pathlib.Path(os.environ["RUNNER_TEMP"], "release-notes.md").write_text(body + "\n", encoding="utf-8")
-                  break
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          notes=(--generate-notes)
-          if [ -s "$RUNNER_TEMP/release-notes.md" ]; then
-            notes=(--notes-file "$RUNNER_TEMP/release-notes.md")
-          fi
-          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
-            --verify-tag "${notes[@]}"
-
-
   showreel:
     if: startsWith(github.ref_name, 'showreel-v')
     runs-on: ubuntu-latest
@@ -245,7 +182,7 @@ jobs:
         working-directory: plugins/showreel
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Use the runner's Node, as skills-demo does; assert the package engine floor.
+      # Use the runner's Node; assert the package engine floor.
       - name: Verify Node version
         run: |
           node --version

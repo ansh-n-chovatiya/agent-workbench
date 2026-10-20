@@ -25,7 +25,7 @@ settled before any code is written.
 | 23 | [design-scope-discipline](23-design-scope-discipline.md) | Design | proposed |
 | 30 | [build-plan](30-build-plan.md) | Plan | proposed |
 | 31 | [risks-and-open-questions](31-risks-and-open-questions.md) | Plan | living list |
-| 40 | [showreel-design](40-showreel-design.md) | Design | approved; Phase 0 done (replaces the `demo-video` skill) |
+| 40 | [showreel-design](40-showreel-design.md) | Design | approved; replaces the earlier demo-video skill (removed in 0.1.0); history in the design notes |
 | 41 | [showreel-phase0-plan](41-showreel-phase0-plan.md) | Plan | executed 2026-10-18 |
 | 42 | [showreel-spike-findings](42-showreel-spike-findings.md) | Research | complete; go for Phase 1 |
 | 43 | [openscreen-extraction-report](43-openscreen-extraction-report.md) | Research | file:line map of borrowable code |

@@ -1,9 +1,0 @@
-{
-  "name": "skills-demo",
-  "displayName": "Demo skills",
-  "version": "0.1.0",
-  "description": "Skills for producing client-ready demo videos from a single Playwright test.",
-  "author": { "name": "Ansh Chovatiya" },
-  "keywords": ["video", "playwright", "demo"],
-  "license": "MIT"
-}

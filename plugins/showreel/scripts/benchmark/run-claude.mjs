@@ -15,12 +15,22 @@ export function parseArgs(args) {
   const options = { runs: 3, skill: 'showreel', model: 'sonnet' };
   for (let i = 0; i < args.length; i++) {
     const key = args[i].slice(2);
-    if (!args[i].startsWith('--') || !['scenario', 'runs', 'skill', 'model', 'out'].includes(key) || !args[i + 1] || args[i + 1].startsWith('--')) throw new Error('Usage: --scenario simple|hard [--runs 3] [--skill showreel|demo-video] [--model M] [--out report.json]');
-    options[key] = args[++i];
+    if (!args[i].startsWith('--') || !['scenario', 'runs', 'skill', 'model', 'out', 'old-plugin-dir'].includes(key) || !args[i + 1] || args[i + 1].startsWith('--')) throw new Error('Usage: --scenario simple|hard [--runs 3] [--skill showreel|demo-video] [--model M] [--out report.json] [--old-plugin-dir PATH]');
+    options[key === 'old-plugin-dir' ? 'oldPluginDir' : key] = args[++i];
   }
   options.runs = Number(options.runs);
   if (!['simple', 'hard'].includes(options.scenario) || !['showreel', 'demo-video'].includes(options.skill) || !Number.isSafeInteger(options.runs) || options.runs < 1) throw new Error('Invalid scenario, skill, or run count');
   return options;
+}
+
+// Historical comparisons use a separately restored checkout of the retired plugin.
+export async function benchmarkPlugin(options, environment) {
+  if (options.skill === 'showreel') return PLUGIN_ROOT;
+  const directory = options.oldPluginDir || environment.BENCH_OLD_PLUGIN_DIR;
+  if (!directory) throw new Error('The old demo-video skill was retired. Supply --old-plugin-dir PATH or BENCH_OLD_PLUGIN_DIR pointing to a plugin restored from git history (tag or commit) for a new comparison.');
+  const plugin = path.resolve(directory);
+  if (!await stat(plugin).then((info) => info.isDirectory(), () => false)) throw new Error('Old plugin path is not a directory; restore the retired plugin from git history (tag or commit) and supply its plugin root.');
+  return plugin;
 }
 
 // Async child execution keeps the in-process fixture HTTP server responsive.
@@ -119,6 +129,7 @@ export async function runBenchmark(options, {
   createTemp = () => mkdtemp(path.join(tmpdir(), 'showreel-bench-')),
   environment = process.env, log = console.log, warn = console.error,
 } = {}) {
+  const plugin = await benchmarkPlugin(options, environment);
   const scenario = await loadScenario(options.scenario);
   const root = await createTemp();
   // Preserve Claude's real auth location; isolate only video state, not OS HOME.
@@ -129,7 +140,6 @@ export async function runBenchmark(options, {
     if (help.code !== 0 || help.failure) throw new Error('Claude Code is unavailable. Install/sign in to Claude and enable network access before running this manual benchmark.');
     const permissions = await permissionArgs(help.stdout, { cwd: root, tempRoot: root, env, warn });
     await preflight({ cwd: root, env, model: options.model, exec });
-    const plugin = options.skill === 'showreel' ? PLUGIN_ROOT : path.resolve(PLUGIN_ROOT, '../skills-demo');
     const claudeArgs = (prompt) => ['-p', prompt, '--output-format', 'json', '--plugin-dir', plugin, '--model', options.model, ...permissions];
     const floorStart = Date.now();
     const floorResult = await exec('claude', claudeArgs(makeFloorPrompt(options.skill)), { cwd: root, env });

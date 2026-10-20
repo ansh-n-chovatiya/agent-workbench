@@ -14,5 +14,5 @@
     "durationMs": 61000,
     "cacheReadTokens": 281835
   },
-  "prompt": "Use the {{skill}} skill to make a 5-step demo video of {{url}}: scroll the home page and open two sections, exactly 5 steps, headless recording, captions only, no voice, no Recordly. Do not ask me questions; choose sensible defaults and use auto mode and CLI export. Use project name {{project}} and {{exports}} as the deliverables folder. Do not open the editor, Finder, or a video player. Do not install dependencies or modify plugin sources. When the render finishes, reply with the single line it prints beginning Final video:."
+  "prompt": "Use the {{skill}} skill to make a 5-step demo video of {{url}}: scroll the home page and open two sections, exactly 5 steps, headless recording, captions only, no voice. Do not ask me questions; choose sensible defaults and use auto mode and CLI export. Use project name {{project}} and {{exports}} as the deliverables folder. Do not open the editor, Finder, or a video player. Do not install dependencies or modify plugin sources. When the render finishes, reply with the single line it prints beginning Final video:."
 }

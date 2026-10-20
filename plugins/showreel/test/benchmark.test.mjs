@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { median, freshTokens, parseUsage, summarize, redact, validateScenario, marginalFreshTokens } from '../scripts/benchmark/metrics.mjs';
-import { parseArgs, permissionArgs, preflight, loadScenario, makePrompt, makeFloorPrompt, hasExport, surfaceMeter, execute } from '../scripts/benchmark/run-claude.mjs';
+import { parseArgs, permissionArgs, preflight, loadScenario, makePrompt, makeFloorPrompt, hasExport, surfaceMeter, execute, benchmarkPlugin } from '../scripts/benchmark/run-claude.mjs';
 import { budgetPass, delta, renderReport, main as reportMain } from '../scripts/benchmark/report.mjs';
 import { startFixtureServer } from '../scripts/lib/fixture-server.mjs';
 const sample = await readFile(new URL('./fixtures/claude-benchmark-result.json', import.meta.url), 'utf8');
@@ -67,7 +67,27 @@ test('scenarios have exact budgets, steps, baselines and safe prompt substitutio
 test('CLI rejects invalid options and defaults to median-of-three with sonnet', () => {
   assert.deepEqual(parseArgs(['--scenario', 'simple']), { scenario: 'simple', runs: 3, skill: 'showreel', model: 'sonnet' });
   assert.equal(parseArgs(['--scenario', 'hard', '--skill', 'demo-video', '--runs', '2']).runs, 2);
+  assert.equal(parseArgs(['--scenario', 'simple', '--old-plugin-dir', '/tmp/archived-plugin']).oldPluginDir, '/tmp/archived-plugin');
   for (const args of [[], ['--scenario', 'unknown'], ['--scenario', 'hard', '--runs', '0'], ['--scenario', 'simple', '--runs', '1.5'], ['--scenario', 'simple', '--skip']]) assert.throws(() => parseArgs(args));
+});
+
+test('old comparison requires an explicitly restored plugin before any external work', async (t) => {
+  const { runBenchmark } = await import('../scripts/benchmark/run-claude.mjs');
+  const root = await temporary(t), restored = path.join(root, 'archived-plugin');
+  await mkdir(restored);
+  const options = { scenario: 'simple', skill: 'demo-video' };
+  assert.equal(await benchmarkPlugin({ ...options, oldPluginDir: restored }, {}), restored);
+  assert.equal(await benchmarkPlugin(options, { BENCH_OLD_PLUGIN_DIR: restored }), restored);
+  assert.equal(await benchmarkPlugin({ ...options, oldPluginDir: restored }, { BENCH_OLD_PLUGIN_DIR: '/missing' }), restored);
+  await assert.rejects(benchmarkPlugin({ ...options, oldPluginDir: path.join(root, 'missing') }, {}), /not a directory/);
+  await assert.rejects(runBenchmark(options, {
+    environment: {},
+    createTemp: () => assert.fail('must fail before creating benchmark state'),
+    exec: () => assert.fail('must fail before invoking Claude'),
+    startServer: () => assert.fail('must fail before starting the fixture'),
+  }), /retired.*--old-plugin-dir.*BENCH_OLD_PLUGIN_DIR.*git history.*tag or commit/);
+  const current = await benchmarkPlugin({ skill: 'showreel' }, { BENCH_OLD_PLUGIN_DIR: '/missing' });
+  assert.equal(JSON.parse(await readFile(path.join(current, '.claude-plugin/plugin.json'), 'utf8')).name, 'showreel');
 });
 
 test('headless permission discovery refuses implicit bypass and restricts explicit fallback to temp cwd', async (t) => {
@@ -196,9 +216,11 @@ test('async child execution handles failures and timeouts without invoking Claud
 test('runner integrates preflight, isolated runs, successful-only medians, export fallback and old plugin without Claude', async (t) => {
   const { runBenchmark } = await import('../scripts/benchmark/run-claude.mjs');
   const root = await temporary(t), out = path.join(root, 'report.json');
+  const oldPluginDir = path.join(root, 'archived-plugin');
+  await mkdir(oldPluginDir);
   let videoCalls = 0, closed = false;
   const calls = [], logs = [];
-  const report = await runBenchmark({ scenario: 'simple', skill: 'demo-video', model: 'sonnet', runs: 3, out }, {
+  const report = await runBenchmark({ scenario: 'simple', skill: 'demo-video', model: 'sonnet', runs: 3, out, oldPluginDir }, {
     createTemp: async () => root,
     environment: { SHOWREEL_SECRET_S2: 'private-bench-secret' },
     log: (s) => logs.push(s),
@@ -237,7 +259,7 @@ test('runner integrates preflight, isolated runs, successful-only medians, expor
   assert.equal(new Set(runs.map((call) => call.opts.env.SHOWREEL_HOME)).size, 3);
   for (const call of runs) {
     assert.ok(call.opts.cwd.startsWith(root));
-    assert.match(call.args[call.args.indexOf('--plugin-dir') + 1], /plugins[\\/]skills-demo$/);
+    assert.equal(call.args[call.args.indexOf('--plugin-dir') + 1], oldPluginDir);
     assert.doesNotMatch(call.args[1], /private-bench-secret/);
     assert.ok(call.args.includes('dontAsk'));
     assert.ok(!call.args.includes('--dangerously-skip-permissions'));

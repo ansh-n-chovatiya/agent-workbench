@@ -13,7 +13,3 @@ updates:
     labels: ["dependencies"]
     commit-message:
       prefix: "ci"
-  - package-ecosystem: "npm"
-    directory: "/plugins/skills-demo/skills/demo-video"
-    schedule:
-      interval: "monthly"

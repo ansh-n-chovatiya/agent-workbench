@@ -1,5 +1,7 @@
 ## 0.1.0
 
+- Replaces the earlier demo-video skill (plugins/skills-demo), which was removed from this repository; it remains in git history.
+
 First Showreel release: turn a web flow into a locally edited demo video.
 
 ### Capture and production

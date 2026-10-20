@@ -7,7 +7,7 @@ Rules for any coding agent (Claude Code, Codex, Gemini) working in this repo.
 
 - `plugins/ctx`: Context Ledger (Python, stdlib only).
 - `plugins/ctx-optimize`: usage reports, status line, optional router mod.
-- `plugins/skills-demo`, `plugins/showreel`: video tooling (Node).
+- `plugins/showreel`: video tooling (Node).
 - `scripts/`: root checks and `bootstrap.sh`. `docs/`: design notes and the build plan (`docs/30-build-plan.md`).
 
 ## Before you push
