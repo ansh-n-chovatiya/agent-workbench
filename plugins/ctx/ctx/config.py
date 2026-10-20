@@ -45,6 +45,10 @@ DEFAULTS = {
     # Hook timings and briefing sizes, written to gitignored `.ctx/runtime/`.
     # Local-only, and switchable because a policy review will ask.
     "telemetry": {"enabled": True},
+    # A private log of ctx's own mistakes (review findings, forced overrides,
+    # blocked units), scrubbed and written to ~/.agent-workbench/improve/,
+    # outside any repo. Passive and local-only; nothing is sent anywhere.
+    "improve": {"enabled": True},
     "gate": {
         "enabled": True,
         "max_attempts": 3,
@@ -869,5 +873,9 @@ def render(config):
         "# states, cleanup) that must be answered before `ctx plan` will run.\n"
         "# Ships false for the same reason; it is recorded in each spec when\n"
         "# the spec is created.\n"
+        "#\n"
+        "# improve.enabled keeps a private, scrubbed log of ctx's own mistakes\n"
+        "# in ~/.agent-workbench/improve/, outside any repo. Local-only, nothing\n"
+        "# is sent anywhere; set false to stop recording.\n"
     )
     return header + body + "\n"
