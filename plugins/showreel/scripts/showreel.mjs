@@ -19,6 +19,7 @@ import { addGuideStep } from './lib/guide/commands.mjs';
 const help = `Usage: showreel <command>
 
 Commands:
+  make --name N --plan plan.json [--record] [--render] [--to FOLDER]    Build a video from a plan
   brand <init|show|set|list|remove|apply|clear>    Manage reusable brand kits
   doctor [--name <name>] [--json] [--benchmark]    Check the environment and optional capture performance
   init --name <name> --url <URL>    Create a project configuration
@@ -98,14 +99,18 @@ async function projectCommand(command, flags) {
     }
     if (subcommand === 'questions') {
       const result = questions(brief);
-      if (brief.outputs?.vertical && !options['--json']) console.log(`Vertical output: record a phone run with showreel record --name ${name} --profile phone, then render --all.`);
-      console.log(options['--json'] ? JSON.stringify(result, null, 2) : result.length ? result.map((q, i) => `${i + 1}. ${q.question}`).join('\n') : 'intake complete');
+      if (result.length && brief.outputs?.vertical && !options['--json']) console.log(`Vertical output: record a phone run with showreel record --name ${name} --profile phone, then render --all.`);
+      console.log(options['--json'] ? JSON.stringify(result, null, 2) : result.length ? result.map((q, i) => `${i + 1}. ${q.question}`).join('\n') : 'all answered');
     }
     return;
   }
   if (command === 'storyboard') {
     const resolvedGuide = await readProjectFile(name, 'resolved');
     if (subcommand === 'draft') {
+      if (!options['--force']) {
+        try { await readProjectFile(name, 'storyboard'); console.log('unchanged'); return; }
+        catch (e) { if (!e.message.includes('not found')) throw e; }
+      }
       const storyboard = draftFromGuide(resolvedGuide);
       const result = validateStoryboard(storyboard, { resolvedGuide });
       if (!result.ok) throw new Error(result.errors.join('; '));
@@ -180,6 +185,7 @@ async function snapshotCommand(flags) {
 
 async function main(args) {
   const [command, ...flags] = args;
+  if (command === 'make') { const { makeCommand } = await import('./lib/make.mjs'); return makeCommand(flags); }
   if (command === 'tokens') return tokensCommand(flags);
   if (command === 'scenes') { const { scenesCommand } = await import('./lib/scene-commands.mjs'); return scenesCommand(flags); }
   if (command === 'brand') { const { brandCommand } = await import('./lib/brand/commands.mjs'); return brandCommand(flags); }

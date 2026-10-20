@@ -31,6 +31,7 @@ export function validateScenario(sc, { secrets = {} } = {}) {
         if (Object.hasOwn(action, 'sensitive') && typeof action.sensitive !== 'boolean') fail(`${key}.sensitive`, 'must be true or false');
         if (action.sensitive === true) {
           if (action.value !== null) fail(`${key}.value`, 'must be null for a sensitive field');
+          if (action.secretEnv !== undefined && (typeof action.secretEnv !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(action.secretEnv))) fail(`${key}.secretEnv`, 'must be an environment variable name');
           if (secrets[step.id] === undefined) pending.push(`step ${step.id} needs a secret at run time`);
         } else if (typeof action.value !== 'string') fail(`${key}.value`, 'must be a string');
       }
@@ -53,10 +54,18 @@ export function buildScenario({ brief, storyboard, resolvedGuide }) {
       if (!previous && !guide.url) throw new Error(`step ${step.id}: the first guide step needs a url to open`);
       // A null url continues on the current page; a click that navigates needs no goto of its own.
       if (guide.url && (!previous || (!sameDocument(guide.url, previous.url ?? guide.url) && previous.action !== 'click'))) actions.push({ type: 'goto', url: guide.url });
+      if (['goto','scroll','wait'].includes(guide.action)) {
+        if (guide.action === 'goto') {
+          if (actions.at(-1)?.type !== 'goto' || actions.at(-1).url !== guide.url) actions.push({ type: 'goto', url: guide.url });
+        } else actions.push(guide.action === 'scroll' ? { type: 'scroll', deltaY: guide.deltaY } : { type: 'wait', ms: guide.ms });
+        previous = guide;
+        continue;
+      }
       if (!['click', 'fill', 'press'].includes(guide.action)) throw new Error(`resolvedGuide.steps.${index}.action must be click|fill|press`);
       const action = { type: guide.action, selector: guide.selector };
       if (guide.action === 'fill') {
         action.value = guide.sensitive ? null : guide.value;
+        if (guide.secretEnv) action.secretEnv = guide.secretEnv;
         if (Object.hasOwn(guide, 'sensitive')) action.sensitive = guide.sensitive;
       }
       if (guide.action === 'press') action.key = guide.key;

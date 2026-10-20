@@ -96,7 +96,7 @@ before adding more checks.
 
 ## Phase 5: one repository, profile and bootstrap
 
-**Status 2026-10-19: `scripts/bootstrap.sh` built** (dry run by default, `--yes` applies; marketplace, `ctx` and `ctx-optimize`, status line only if none is set, settings backed up, second run a no-op; 5 hermetic tests against a fake `claude`, mutation-checked). Not yet run on a clean macOS account or VM, which is the acceptance test. The AGENTS.md and GEMINI.md stubs and the per-project settings file are not built.
+**Status 2026-10-19: `scripts/bootstrap.sh` built** (dry run by default, `--yes` applies; marketplace, `ctx` and `ctx-optimize`, status line only if none is set, settings backed up, second run a no-op; 5 hermetic tests against a fake `claude`, mutation-checked). Not yet run on a clean macOS account or VM, which is the acceptance test. `AGENTS.md` and `GEMINI.md` stubs are built (2026-10-20). The per-project settings file is not.
 
 **Update 2026-10-18:** the `ai-skills` part is finished and superseded. Its content lives at `plugins/skills-demo` (MIT added, so the licence gap in Q21 is closed for it), the local folder was deleted after a file-by-file check (47 of 47 tracked files identical) and a verified backup of its git-ignored `.ctx/` ledger outside any repo, and the GitHub repo was deleted by the owner. `context-ledger` is still in place, untouched. The archive-with-pointer step below no longer applies to `ai-skills`.
 

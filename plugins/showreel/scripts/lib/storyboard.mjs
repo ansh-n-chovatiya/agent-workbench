@@ -23,7 +23,7 @@ export function validateStoryboard(sb, { resolvedGuide = null, captionsEnabled =
     if (ids.has(step.id)) fail(`${key}.id`, 'must be unique');
     ids.add(step.id);
     if ((captionsEnabled || step.caption != null) && (!text(step.caption, 70) || /`|>>|role=|#|\[data-/.test(step.caption))) fail(`${key}.caption`, 'must be 1 to 70 characters without selectors, ids or backticks');
-    if (step.narration !== null && (!text(step.narration, 280) || step.narration.trim().split(/\s+/).length > 45)) fail(`${key}.narration`, 'must be null or 1 to 280 characters and at most 45 words');
+    if (step.narration !== null && (!text(step.narration, Infinity) || step.narration.trim().split(/\s+/).length > 45)) fail(`${key}.narration`, 'must be null or a non-empty string of at most 45 words');
     if (!['auto', 'none'].includes(step.zoom)) fail(`${key}.zoom`, 'must be auto|none');
     if (typeof step.highlight !== 'boolean') fail(`${key}.highlight`, 'must be true or false');
     if (step.holdMs !== null && (!Number.isFinite(step.holdMs) || step.holdMs < 0 || step.holdMs > 10000)) fail(`${key}.holdMs`, 'must be null or a number from 0 to 10000');

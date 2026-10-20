@@ -1,7 +1,18 @@
 {
   "id": "simple",
   "expectedSteps": 5,
-  "budget": { "freshTokens": 25000, "costUsd": 0.12 },
-  "baseline": { "freshTokens": 42380, "costUsd": 0.21, "durationMs": 61000 },
+  "budget": {
+    "marginalFreshTokens": 4000,
+    "costUsd": 0.15,
+    "cacheReadTokens": 250000,
+    "turns": 5,
+    "durationMs": 90000
+  },
+  "baseline": {
+    "freshTokens": 42380,
+    "costUsd": 0.21,
+    "durationMs": 61000,
+    "cacheReadTokens": 281835
+  },
   "prompt": "Use the {{skill}} skill to make a 5-step demo video of {{url}}: scroll the home page and open two sections, exactly 5 steps, headless recording, captions only, no voice, no Recordly. Do not ask me questions; choose sensible defaults and use auto mode and CLI export. Use project name {{project}} and {{exports}} as the deliverables folder. Do not open the editor, Finder, or a video player. Do not install dependencies or modify plugin sources. When the render finishes, reply with the single line it prints beginning Final video:."
 }

@@ -6,7 +6,7 @@ import { OUTPUT_CAP_TOKENS } from './meter.mjs';
 export async function withShortOutput(args, run) {
   if (args.some(a => ['--json', '--verbose', '--paths'].includes(a))) return run();
   const originals = { log: console.log, error: console.error, warn: console.warn };
-  let remaining = OUTPUT_CAP_TOKENS * 4 - 100, shortened = false;
+  let remaining = (args[0] === 'make' ? 600 : OUTPUT_CAP_TOKENS) * 4 - 100, shortened = false;
   for (const method of Object.keys(originals)) console[method] = (...values) => {
     const text = format(...values), bytes = Buffer.byteLength(text + '\n');
     if (bytes <= remaining) { remaining -= bytes; originals[method](text); return; }

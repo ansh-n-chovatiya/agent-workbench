@@ -5,59 +5,76 @@ description: Create demo videos from web flows with Showreel: capture or automat
 
 # Showreel
 
-Showreel turns a web flow into a demo video with cursor motion, zooms, captions,
-optional local voice-over, themes and branding. The local editor handles finishing.
-Overlays and templates do not exist.
+Commands use `showreel` as shorthand for `node <plugin>/scripts/showreel.mjs`.
+`N` is the project slug. Ask for the app URL, topic and desired flow if missing.
+Auto mode is the default for a described flow; use Guide mode for a person-led walkthrough.
 
-Commands below use `showreel` as shorthand for
-`node <plugin>/scripts/showreel.mjs`. `N` is the project slug.
+## Auto mode (default)
 
-## Flow (in order)
+1. Write `plan.json` with a single Bash heredoc or the Write tool. Run make in
+   the SAME tool call when possible, so the whole job takes about 2 tool calls.
+2. One-command flow: `showreel make --name N --plan plan.json --record --render --to FOLDER`.
+   Use the user's export folder, or omit `--to` to use the saved/platform default
+   (Movies/Showreel or Videos/Showreel). For vertical add `--format vertical --profile phone`.
+3. If a stage fails, follow its exact step/fix and rerun the same command.
+   Completed stages are reused when the plan is unchanged.
+4. Report the `Final video:` path. Use `showreel edit --name N` for tweaks:
+   cuts, speed, zooms, captions, theme, branding and export.
 
-1. Run `showreel doctor`. Resolve required environment failures before recording.
-2. Intake: `brief init --name N --url URL --topic "TOPIC"` unless it exists.
-   Run `brief questions --name N --json`; ask only unanswered questions.
-   Save with `brief set --name N key=value` (dotted keys supported); repeat until `[]`.
-3. Choose the intake's flow mode:
-   - Guide: explain that the user clicks through once and closes the window;
-     run `guide --name N`, then `guide resolve --name N`.
-   - Auto: `snapshot --url URL` lists controls with selectors. Use those selectors
-     in `guide add --name N --action click --selector 'SELECTOR' --label 'LABEL' --url URL`;
-     then `guide resolve --name N`. Resolve failures before proceeding.
-4. Run `storyboard draft --name N`; edit only captions and narration in
-   `storyboard.json`. Run `storyboard validate --name N`; fix errors.
-5. Run `scenario build --name N`, then `scenario validate --name N`.
-6. Run `record --name N`; use `record --name N --profile phone` for vertical.
-7. Only if the user wants voice-over: `voice install --yes` (if missing), then
-   `voice generate --name N`. Otherwise skip voice installation and generation.
-8. Run `edit --name N` to open the local editor. The user does cuts, speed,
-   zooms, captions, theme, brand and export there.
-9. For CLI export: `render --name N --to FOLDER`.
-   Add `--format vertical` for 9:16; `--size 720|1080|1440|4k` selects resolution.
-   Record with the phone profile before exporting vertical.
+Worked five-step `plan.json` (local demo-app fixture):
+```json
+{
+  "url": "http://localhost:3000",
+  "topic": "Explore Fieldnotes",
+  "audience": "New teammates",
+  "theme": "clean",
+  "steps": [
+    {"caption":"Welcome to Fieldnotes","do":[{"goto":"/"}]},
+    {"caption":"Share your plan","do":[{"click":{"role":"tab","name":"Share"}}]},
+    {"caption":"Review the work","do":[{"click":{"role":"tab","name":"Review"}}]},
+    {"caption":"Explore the features","do":[{"click":"Features"}]},
+    {"caption":"Compare the plans","do":[{"click":"Pricing"}]}
+  ]
+}
+```
 
-For multi-video sequences, add completed runs with
-`scenes add --name N --run RUN_ID` in playback order; edit or render the sequence.
-For reusable branding: `brand init --brand BRAND`, then
-`brand apply --name N --brand BRAND` before recording; also available in the editor.
+Actions: `goto` URL/path, `click` visible text or `{role,name}`,
+`fill: {label,value}`, `scroll` pixels, `wait` milliseconds, `press` key.
+Plan keys: `url`, `topic`, `audience?`, `theme?`, `profile?`,
+`steps[{caption, narration?, do[...]}]`. Captions default on; voice defaults off.
+Optional step `narration`: only when requested.
+Enabled voice needs locally generated clips
+(`voice install --yes` then `voice generate --name N`) before the final export.
+Theme is clean|dark|bold; profile is desktop|phone.
+For a secret fill use `{"fill":{"label":"Password","value":{"secret":"MY_PASSWORD"}}}`;
+the person supplies that environment variable before running the command.
 
-## Claude rules
+## Guide mode
 
-- Write only captions and narration; let commands generate actions and other files.
-- Caption: plain language, at most 70 characters per step.
-- Narration: only when requested, at most 45 words per step.
-- Never invent selectors; use resolver results. Re-capture or resolve failed steps.
-- Never put secrets in files. Use `SHOWREEL_SECRET_<STEPID>` environment variables
-  (uppercase step ID); let the user supply them or log in separately with `login`.
-- Keep tokens minimal: use command summaries; do not read video frames or logs
-  unless a run fails. Do not read generated guide/scenario files in full.
+1. `brief init --name N --url URL --topic "TOPIC"`.
+   `brief set --name N flowMode=guide voice.enabled=false` for captions only.
+   Use `brief questions --name N` only for unanswered intake.
+2. Explain that the person clicks through once and closes the window.
+   Run `guide --name N`, then `guide resolve --name N`.
+3. `storyboard draft --name N`; edit only captions/narration in storyboard.json.
+   Draft is idempotent; `--force` explicitly replaces an existing storyboard.
+4. `storyboard validate --name N`, `scenario build --name N`,
+   `scenario validate --name N`, `record --name N`.
+5. `edit --name N` for finishing, or `render --name N --to FOLDER`.
 
-- Prefer default short command outputs; use `--verbose` or `--json` only for details.
-- Run `showreel tokens --name N` at the end only if the user asks about cost.
+For existing selector-based guides, batch additions in one call:
+`guide add --name N --file steps.json` or `--json '[...]'`.
+Each item uses action, selector, label, and optional url/value/key/role/tab.
 
-## Files
+## Rules
 
-`SHOWREEL_HOME` defaults to `~/.showreel`; projects live in `projects/<name>/`.
-Each project holds brief, guide, storyboard, scenario, recordings and composition.
-Exports go to the user's chosen folder; default `~/Movies/Showreel` on macOS,
-`~/Videos/Showreel` on Windows/Linux. Keep exports outside project state.
+- Captions: plain language, at most 70 characters per step.
+- Narration: at most 45 words per step, only when requested.
+- Never invent selectors: click by visible text or an ARIA role/name.
+  The resolver supplies unique selectors; use its closest candidates on failure.
+- Never store secrets. Use environment references in plans, or `login --name N`.
+  Guide recordings use `SHOWREEL_SECRET_<STEPID>` (uppercase) at runtime.
+- Prefer summaries; use `--json` only for machine output or detailed failures.
+  Do not read frames, logs or generated files in full unless a run fails.
+- Projects live in `SHOWREEL_HOME/projects/N` (default `~/.showreel`).
+  Exports belong in the user's chosen folder outside project state.

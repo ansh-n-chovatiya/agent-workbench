@@ -3,7 +3,7 @@ import { validateScenario } from '../scenario.mjs';
 export function pendingSecrets(scenario, env) {
   return scenario.steps.filter((step) => step.actions.some((action) =>
     action.type === 'fill' && action.sensitive === true
-    && !env['SHOWREEL_SECRET_' + step.id.toUpperCase()]));
+    && !env[action.secretEnv ?? ('SHOWREEL_SECRET_' + step.id.toUpperCase())]));
 }
 
 export function checkDisk(freeBytes, expectedMinutes, scale) {

@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadScenario } from './run-claude.mjs';
-import { redact, summarize } from './metrics.mjs';
+import { redact, summarize, marginalFreshTokens } from './metrics.mjs';
 
 const number = (n, digits = 0) => typeof n === 'number' && Number.isFinite(n) ? n.toFixed(digits) : '—';
 const dollars = (n) => typeof n === 'number' ? `$${number(n, 4)}` : '—';
@@ -11,42 +11,63 @@ const seconds = (n) => typeof n === 'number' ? `${number(n / 1000, 1)} s` : '—
 const cell = (s) => String(s).replaceAll('|', '\\|').replace(/[\r\n]/g, ' ');
 export const delta = (value, baseline) => typeof value === 'number' && typeof baseline === 'number' && baseline > 0
   ? `${number((value - baseline) / baseline * 100, 1)}%` : '—';
+const metrics = [
+  ['floorFreshTokens', 'Floor fresh tokens', number],
+  ['freshTokens', 'Fresh tokens (total)', number],
+  ['marginalFreshTokens', 'Marginal fresh tokens', number],
+  ['costUsd', 'Cost', dollars],
+  ['cacheReadTokens', 'Cache-read tokens', number],
+  ['turns', 'Turns', number],
+  ['durationMs', 'Wall time', seconds],
+];
+const known = (n) => typeof n === 'number' && Number.isFinite(n) && n >= 0;
 export function budgetPass(median, budget) {
-  return Boolean(median && median.freshTokens <= budget.freshTokens && median.costUsd <= budget.costUsd);
+  return Boolean(median && Object.entries(budget).every(([key, limit]) => known(median[key]) && median[key] <= limit));
+}
+// Older report files lack marginal usage. Never borrow a different skill's floor.
+function measuredRuns(report) {
+  return report.runs.map((run) => {
+    const floorFreshTokens = run.floorFreshTokens ?? report.floor?.freshTokens ?? null;
+    return { ...run, floorFreshTokens, cacheReadTokens: run.cacheReadTokens ?? run.cacheRead,
+      marginalFreshTokens: run.marginalFreshTokens ?? marginalFreshTokens(run.freshTokens, floorFreshTokens) };
+  });
 }
 export function renderReport(reports, scenarios) {
-  const lines = ['# Showreel benchmark', '', 'Manual Claude Code measurements. Fresh tokens = input + output + cache creation; cache reads are reported separately. Medians use passing videos only (exit success, valid usage, and `Final video:` or a nonempty exported MP4). Even-sized samples use the mean of the two central values. Step counts are requested, not independently verified.', ''];
+  const lines = ['# Showreel benchmark', '',
+    'How to read this: each headless Claude session carries an environment floor for the system prompt, plugins and skill list. Skill activation also re-injects the full user skill list (about 9.7k cache-creation tokens in the observed trace); both skills pay this overhead. Fresh tokens = input + output + cache creation. The runner measures “Invoke the {{skill}} skill, do nothing else, then reply with the single word OK.” once per invocation with the same model, plugin and permission flags, using showreel or the old skill name demo-video, and stores that skill-activation floor in the JSON report. An empty-session floor omits activation overhead; rerun older measurements for comparison. Marginal fresh tokens = max(0, run fresh − floor fresh); only marginal tokens have a token budget. Cost, cache reads, turns and wall time are whole-run measurements. Cache reads are a proxy for conversation repetition. Turns use Claude num_turns when available; surface-command fallback is partial and excludes the harness query. Missing measurements stay unknown.', '',
+    'Medians include successful videos only (exit success, valid usage, and `Final video:` or a nonempty exported MP4). Even samples average the two central values. Each metric uses available successful measurements; unavailable metrics remain PENDING. Step counts are requested, not independently verified. Baseline deltas are (measured − baseline) / baseline; negative is better. Baseline verdicts require a strict reduction. Historical marginal usage is unknown without its own same-environment floor.', ''];
   for (const scenario of scenarios) {
-    lines.push(`## ${scenario.id} (${scenario.expectedSteps} steps)`, '');
     const matching = reports.filter((r) => r.scenario === scenario.id);
-    const oldRuns = matching.filter((r) => r.skill === 'demo-video').flatMap((r) => r.runs);
-    const measuredBaseline = summarize(oldRuns);
-    const baseline = measuredBaseline ?? scenario.baseline;
-    lines.push(`Baseline: ${measuredBaseline ? 'old skill measured from supplied files' : baseline ? 'historical B0 (different target URL; fixture comparison still needed)' : 'unmeasured; run the old skill on this fixture'}.`, '',
-      '| Skill / model | Passing | Fresh tokens | Budget | Baseline | Delta | Cost | Budget | Baseline | Delta | Wall median | Wall baseline | Budget result | Below baseline |',
-      '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|');
-    if (!matching.length) lines.push(`| Unmeasured | 0 | — | ${scenario.budget.freshTokens} | ${number(baseline?.freshTokens)} | — | — | ${dollars(scenario.budget.costUsd)} | ${dollars(baseline?.costUsd)} | — | — | ${seconds(baseline?.durationMs)} | PENDING | PENDING |`);
-    for (const report of matching) {
-      const med = summarize(report.runs), pass = budgetPass(med, scenario.budget);
-      const baseline = summarize(matching.filter((r) => r.skill === 'demo-video' && r.model === report.model).flatMap((r) => r.runs)) ?? scenario.baseline;
-      const below = !med || !baseline ? 'PENDING' : med.freshTokens < baseline.freshTokens && med.costUsd < baseline.costUsd ? 'PASS' : 'FAIL';
-      lines.push(`| ${cell(report.skill)} / ${cell(report.model)} | ${report.runs.filter((r) => r.ok).length}/${report.runs.length} | ${number(med?.freshTokens)} | ${scenario.budget.freshTokens} | ${number(baseline?.freshTokens)} | ${delta(med?.freshTokens, baseline?.freshTokens)} | ${dollars(med?.costUsd)} | ${dollars(scenario.budget.costUsd)} | ${dollars(baseline?.costUsd)} | ${delta(med?.costUsd, baseline?.costUsd)} | ${seconds(med?.durationMs)} | ${seconds(baseline?.durationMs)} | ${pass ? 'PASS' : 'FAIL'} | ${below} |`);
-    }
-    for (const report of matching) {
-      const med = summarize(report.runs);
-      lines.push('', `### ${cell(report.skill)} / ${cell(report.model)}: per-run results`, '', `Batch wall time: ${seconds(report.wallTimeMs)}. Auth preflight is excluded.`, '',
-        '| Run | Result | Input | Output | Cache creation | Cache read | Fresh | Cost | Wall | Claude duration | API duration | Failure |',
-        '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|');
-      for (const r of report.runs) lines.push(`| ${r.index} | ${r.ok ? 'PASS' : 'FAIL'} | ${number(r.input)} | ${number(r.output)} | ${number(r.cacheCreate)} | ${number(r.cacheRead)} | ${number(r.freshTokens)} | ${dollars(r.costUsd)} | ${seconds(r.durationMs)} | ${seconds(r.claudeDurationMs)} | ${seconds(r.apiDurationMs)} | ${cell(r.failure ?? '')} |`);
-      lines.push(`| Median (passing) | | ${number(med?.input)} | ${number(med?.output)} | ${number(med?.cacheCreate)} | ${number(med?.cacheRead)} | ${number(med?.freshTokens)} | ${dollars(med?.costUsd)} | ${seconds(med?.durationMs)} | ${seconds(med?.claudeDurationMs)} | ${seconds(med?.apiDurationMs)} | |`, '',
-        'Surface meter totals (raw `showreel tokens --json`, per project; unavailable values are never treated as zero):', '', '| Run | Status | Project | Totals |', '|---|---|---|---|');
-      for (const r of report.runs) {
+    lines.push(`## ${scenario.id} (${scenario.expectedSteps} steps)`, '');
+    for (const report of matching.length ? matching : [null]) {
+      const runs = report ? measuredRuns(report) : [];
+      const med = summarize(runs);
+      const old = report ? matching.filter((r) => r.skill === 'demo-video' && r.model === report.model).flatMap(measuredRuns) : [];
+      const measuredBaseline = summarize(old);
+      const baseline = measuredBaseline ?? scenario.baseline;
+      lines.push(`### ${report ? `${cell(report.skill)} / ${cell(report.model)}` : 'Unmeasured'}`, '',
+        `Passing videos: ${runs.filter((r) => r.ok).length}/${runs.length}. Budget result: ${!med ? 'PENDING' : budgetPass(med, scenario.budget) ? 'PASS' : 'FAIL'}.`, '',
+        `Baseline: ${measuredBaseline ? 'old skill measured from supplied files (same model)' : baseline ? 'historical B0 (different target URL; fixture comparison still needed)' : 'unmeasured; run the old skill on this fixture'}.`, '',
+        '| Metric | Median (passing) | Budget | vs budget | Baseline | Delta | vs baseline |',
+        '|---|---:|---:|---|---:|---:|---|');
+      for (const [key, label, format] of metrics) {
+        const value = med?.[key], limit = scenario.budget[key], base = baseline?.[key];
+        const verdict = !known(limit) ? '—' : !known(value) ? 'PENDING' : value <= limit ? 'PASS' : 'FAIL';
+        const below = !known(value) || !known(base) ? 'PENDING' : value < base ? 'PASS' : 'FAIL';
+        lines.push(`| ${label} | ${format(value)} | ${format(limit)} | ${verdict} | ${format(base)} | ${delta(value, base)} | ${below} |`);
+      }
+      if (!report) { lines.push(''); continue; }
+      lines.push('', `Batch wall time: ${seconds(report.wallTimeMs)}. Auth preflight and floor are excluded.`, '',
+        '| Run | Result | Input | Output | Cache creation | Cache read | Fresh | Floor fresh | Marginal fresh | Cost | Turns | Turns source | Wall | Claude duration | API duration | Failure |',
+        '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---|');
+      for (const r of runs) lines.push(`| ${r.index} | ${r.ok ? 'PASS' : 'FAIL'} | ${number(r.input)} | ${number(r.output)} | ${number(r.cacheCreate)} | ${number(r.cacheReadTokens)} | ${number(r.freshTokens)} | ${number(r.floorFreshTokens)} | ${number(r.marginalFreshTokens)} | ${dollars(r.costUsd)} | ${number(r.turns)} | ${cell(r.turnsSource ?? 'unavailable')} | ${seconds(r.durationMs)} | ${seconds(r.claudeDurationMs)} | ${seconds(r.apiDurationMs)} | ${cell(r.failure ?? '')} |`);
+      lines.push('', 'Surface meter totals (raw `showreel tokens --json`, per project; unavailable values are never treated as zero):', '', '| Run | Status | Project | Totals |', '|---|---|---|---|');
+      for (const r of runs) {
         if (!r.surface?.projects?.length) lines.push(`| ${r.index} | ${cell(r.surface?.status ?? 'unavailable')} | — | — |`);
         for (const p of r.surface?.projects ?? []) lines.push(`| ${r.index} | ${cell(p.status)} | ${cell(p.name)} | ${cell(p.totals ? JSON.stringify(p.totals) : p.reason)} |`);
       }
       lines.push('');
     }
-    lines.push('');
   }
   lines.push('## How to reproduce', '', 'From `plugins/showreel`, with dependencies already installed, network access and a logged-in Claude Code:', '', '```sh',
     'node scripts/benchmark/run-claude.mjs --scenario simple --runs 3 --model sonnet --out simple.json',

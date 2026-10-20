@@ -18,11 +18,11 @@ test('CLI runs the intake to scenario chain, reports the secret error, and prese
   assert.equal(cli('brief', 'init', '--name', name).status, 1);
   assert.equal(succeeds('brief', 'set', '--name', name, 'flowMode=guide', 'voice.enabled=false', 'targetSeconds=30').stdout.trim(), 'ok');
   assert.deepEqual(JSON.parse(succeeds('brief', 'questions', '--name', name, '--json').stdout), []);
-  assert.equal(succeeds('brief', 'questions', '--name', name).stdout.trim(), 'intake complete');
+  assert.equal(succeeds('brief', 'questions', '--name', name).stdout.trim(), 'all answered');
   assert.equal(JSON.parse(succeeds('brief', 'show', '--name', name).stdout).targetSeconds, 30);
   await writeFile(project(name, 'guide.resolved.json'), sample);
   assert.equal(succeeds('storyboard', 'draft', '--name', name).stdout.trim(), '6 steps');
-  assert.equal(cli('storyboard', 'draft', '--name', name).status, 1);
+  assert.equal(succeeds('storyboard', 'draft', '--name', name).stdout.trim(), 'unchanged');
   succeeds('storyboard', 'draft', '--name', name, '--force');
   succeeds('storyboard', 'validate', '--name', name);
   const built = cli('scenario', 'build', '--name', name);

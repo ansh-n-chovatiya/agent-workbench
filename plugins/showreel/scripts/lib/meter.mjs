@@ -33,6 +33,11 @@ export function readSurface(dir) {
 function authoredFiles(dir, args, exitCode) {
   const command = args.slice(0, 2).join(' ');
   try {
+    if (args[0] === 'make' && !exitCode) {
+      // Claude authors the plan; brief/storyboard/scenario are generated from it.
+      const at = args.indexOf('--plan');
+      return at < 0 ? [] : [{ path: 'plan.json', bytes: statSync(args[at + 1]).size }];
+    }
     if (command === 'brief set') {
       if (exitCode) return [];
       const brief = JSON.parse(readFileSync(path.join(dir, 'brief.json'), 'utf8'));
@@ -72,7 +77,7 @@ export async function meteredRun(args, run) {
     for (const stream of ['stdout', 'stderr']) process[stream].write = originals[stream];
     if (!(args[0] === 'tokens' && args.includes('--reset'))) {
       const exitCode = Number(process.exitCode ?? 0);
-      const commands = ['tokens', 'doctor', 'init', 'brief', 'storyboard', 'scenario', 'guide', 'snapshot', 'record', 'login', 'runs', 'render', 'edit', 'composition', 'voice', 'scenes', 'brand', 'cursor-demo', '--help'];
+      const commands = ['make', 'tokens', 'doctor', 'init', 'brief', 'storyboard', 'scenario', 'guide', 'snapshot', 'record', 'login', 'runs', 'render', 'edit', 'composition', 'voice', 'scenes', 'brand', 'cursor-demo', '--help'];
       const subs = ['init', 'show', 'set', 'questions', 'draft', 'validate', 'build', 'resolve', 'add', 'list', 'remove', 'move', 'reset', 'install', 'samples', 'generate', 'status', 'import', 'clean', 'apply', 'clear'];
       const command = (commands.includes(args[0]) ? args[0] : 'unknown') + (subs.includes(args[1]) ? ` ${args[1]}` : '');
       const files = authoredFiles(dir, args, exitCode);
