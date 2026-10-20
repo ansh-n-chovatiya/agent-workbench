@@ -6,8 +6,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startFixtureServer } from '../lib/fixture-server.mjs';
+import { readSurface } from '../lib/meter.mjs';
 import { PLUGIN_ROOT } from '../lib/env.mjs';
-import { parseUsage, redact, summarize, validateScenario } from './metrics.mjs';
+import { parseUsage, redact, summarize, validateScenario, marginalFreshTokens } from './metrics.mjs';
 
 const script = fileURLToPath(import.meta.url);
 export function parseArgs(args) {
@@ -78,6 +79,9 @@ export function makePrompt(scenario, { skill, url, project, exports }) {
     : 'the demo-video login command with the login URL in its config' };
   return scenario.prompt.replace(/\{\{(\w+)\}\}/g, (_, key) => values[key]);
 }
+export function makeFloorPrompt(skill) {
+  return `Invoke the ${skill} skill, do nothing else, then reply with the single word OK.`;
+}
 export async function hasExport(dir) {
   for (const entry of await readdir(dir, { withFileTypes: true }).catch((err) => { if (err.code === 'ENOENT') return []; throw err; })) {
     const file = path.join(dir, entry.name);
@@ -93,14 +97,19 @@ export async function surfaceMeter(home, skill, env, cwd, exec = execute) {
   const projects = [];
   const entries = await readdir(path.join(home, 'projects'), { withFileTypes: true }).catch((err) => { if (err.code === 'ENOENT') return []; throw err; });
   for (const entry of entries.filter((item) => item.isDirectory())) {
+    // Count before the harness's tokens query appends its own surface entry.
+    const surfaceFile = path.join(home, 'projects', entry.name);
+    const entries = readSurface(surfaceFile);
+    const recorded = await stat(path.join(surfaceFile, 'surface.jsonl')).then(() => true, () => false);
+    const commandCount = recorded ? entries.filter((row) => typeof row.command === 'string').length : null;
     const result = await exec(process.execPath, [path.join(PLUGIN_ROOT, 'scripts/showreel.mjs'), 'tokens', '--name', entry.name, '--json'], { cwd, env, timeoutMs: 30_000 });
     try {
       // A valid meter can exit 1 when its surface budget fails. Keep those totals.
       if (![0, 1].includes(result.code) || result.failure) throw new Error();
       const totals = JSON.parse(result.stdout);
       if (!totals || typeof totals !== 'object' || Array.isArray(totals)) throw new Error();
-      projects.push({ name: entry.name, status: 'ok', totals });
-    } catch { projects.push({ name: entry.name, status: 'unavailable', reason: 'showreel tokens --json failed or is not installed (Phase 8 T1)' }); }
+      projects.push({ name: entry.name, status: 'ok', totals, commandCount });
+    } catch { projects.push({ name: entry.name, status: 'unavailable', commandCount, reason: 'showreel tokens --json failed or is not installed (Phase 8 T1)' }); }
   }
   return { status: projects.length ? (projects.every((p) => p.status === 'ok') ? 'ok' : 'unavailable') : 'no-project', projects };
 }
@@ -120,6 +129,16 @@ export async function runBenchmark(options, {
     if (help.code !== 0 || help.failure) throw new Error('Claude Code is unavailable. Install/sign in to Claude and enable network access before running this manual benchmark.');
     const permissions = await permissionArgs(help.stdout, { cwd: root, tempRoot: root, env, warn });
     await preflight({ cwd: root, env, model: options.model, exec });
+    const plugin = options.skill === 'showreel' ? PLUGIN_ROOT : path.resolve(PLUGIN_ROOT, '../skills-demo');
+    const claudeArgs = (prompt) => ['-p', prompt, '--output-format', 'json', '--plugin-dir', plugin, '--model', options.model, ...permissions];
+    const floorStart = Date.now();
+    const floorResult = await exec('claude', claudeArgs(makeFloorPrompt(options.skill)), { cwd: root, env });
+    let floor;
+    try {
+      const { transcript, ...usage } = parseUsage(floorResult.stdout);
+      if (floorResult.code !== 0 || floorResult.failure || usage.isError) throw new Error();
+      floor = { ...usage, kind: 'skill-activation', skill: options.skill, durationMs: Date.now() - floorStart };
+    } catch { throw new Error('Benchmark floor measurement failed; no scenario runs started.'); }
     server = await startServer();
     const runs = [], started = Date.now();
     for (let i = 0; i < options.runs; i++) {
@@ -128,10 +147,9 @@ export async function runBenchmark(options, {
       const runEnv = { ...env, SHOWREEL_HOME: home, DEMO_VIDEO_HOME: path.join(home, 'demo-video'), DEMO_VIDEO_DELIVER: exports,
         SHOWREEL_SECRET_S2: env.SHOWREEL_SECRET_S2 || randomBytes(24).toString('hex') };
       const project = `bench-${scenario.id}-${i + 1}`;
-      const plugin = options.skill === 'showreel' ? PLUGIN_ROOT : path.resolve(PLUGIN_ROOT, '../skills-demo');
       const prompt = makePrompt(scenario, { skill: options.skill, url: server.url, project, exports });
       const t0 = Date.now();
-      const result = await exec('claude', ['-p', prompt, '--output-format', 'json', '--plugin-dir', plugin, '--model', options.model, ...permissions], { cwd, env: runEnv });
+      const result = await exec('claude', claudeArgs(prompt), { cwd, env: runEnv });
       const durationMs = Date.now() - t0;
       let run;
       try {
@@ -142,15 +160,22 @@ export async function runBenchmark(options, {
           failure: ok ? null : (result.failure ?? (result.code !== 0 ? 'Claude exited unsuccessfully' : 'Claude error or no final video')) };
       } catch { run = { ok: false, failure: result.failure ?? 'Claude returned invalid JSON usage' }; }
       run = { index: i + 1, ...run, durationMs, surface: await surfaceMeter(home, options.skill, runEnv, cwd, exec) };
+      const counts = run.surface.projects.map((project) => project.commandCount);
+      const fallback = counts.length && counts.every((count) => Number.isSafeInteger(count)) ? counts.reduce((a, b) => a + b, 0) : null;
+      run.floorFreshTokens = floor.freshTokens;
+      run.marginalFreshTokens = marginalFreshTokens(run.freshTokens, floor.freshTokens);
+      run.turnsSource = run.turns !== null && run.turns !== undefined ? 'num_turns' : fallback !== null ? 'surface-commands (partial)' : 'unavailable';
+      run.turns ??= fallback;
       // Never persist the transcript, raw stderr, or prompt (which contains paths).
       runs.push(JSON.parse(redact(run, runEnv)));
       log(`Run ${i + 1}/${options.runs}: ${run.ok ? 'PASS' : 'FAIL'} (${(durationMs / 1000).toFixed(1)} s)`);
     }
-    const report = { version: 1, scenario: scenario.id, skill: options.skill, model: options.model, expectedSteps: scenario.expectedSteps,
+    const report = { version: 2, floor, scenario: scenario.id, skill: options.skill, model: options.model, expectedSteps: scenario.expectedSteps,
       budget: scenario.budget, baseline: scenario.baseline, createdAt: new Date().toISOString(),
       wallTimeMs: Date.now() - started, okRuns: runs.filter((r) => r.ok).length, runs, median: summarize(runs),
       notes: ['Medians include successful videos only; step counts are prompt requirements, not independently verified.',
-        'Preflight usage is excluded from video usage and wall time. Temporary video state is retained for inspection.',
+        'Floor activates the selected skill once with the same model/plugin/flags; marginal fresh = max(0, fresh - floor fresh). Surface fallback counts only recorded commands, not all tools.',
+        'Preflight and floor usage are excluded from video usage and batch wall time. Temporary video state is retained for inspection.',
         'Hard scenario login currently requires an operator in the login window.'] };
     const out = path.resolve(options.out ?? `benchmark-${scenario.id}-${options.skill}.json`);
     await writeFile(out, redact(report, env) + '\n', { mode: 0o600 });

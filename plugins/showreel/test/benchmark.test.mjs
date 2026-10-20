@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { median, freshTokens, parseUsage, summarize, redact, validateScenario } from '../scripts/benchmark/metrics.mjs';
-import { parseArgs, permissionArgs, preflight, loadScenario, makePrompt, hasExport, surfaceMeter, execute } from '../scripts/benchmark/run-claude.mjs';
+import { median, freshTokens, parseUsage, summarize, redact, validateScenario, marginalFreshTokens } from '../scripts/benchmark/metrics.mjs';
+import { parseArgs, permissionArgs, preflight, loadScenario, makePrompt, makeFloorPrompt, hasExport, surfaceMeter, execute } from '../scripts/benchmark/run-claude.mjs';
 import { budgetPass, delta, renderReport, main as reportMain } from '../scripts/benchmark/report.mjs';
 import { startFixtureServer } from '../scripts/lib/fixture-server.mjs';
 const sample = await readFile(new URL('./fixtures/claude-benchmark-result.json', import.meta.url), 'utf8');
+const floorSample = await readFile(new URL('./fixtures/claude-benchmark-floor.json', import.meta.url), 'utf8');
 const metrics = parseUsage(sample);
-const good = { index: 1, ...metrics, ok: true, durationMs: 62000,
+const good = { index: 1, ...metrics, ok: true, durationMs: 62000, floorFreshTokens: 39000, marginalFreshTokens: 3380, turnsSource: 'num_turns',
   surface: { status: 'ok', projects: [{ name: 'bench', status: 'ok', totals: { totalEstTokens: 4321, claudeWrittenBytes: 123 } }] } };
 const temporary = async (t) => {
   const dir = await mkdtemp(path.join(tmpdir(), 'showreel-bench-'));
@@ -34,6 +35,7 @@ test('median and fresh-token math match B0; failed runs never influence medians'
 test('parse realistic JSON result and result event array without double-counting modelUsage', () => {
   assert.equal(metrics.input, 14); assert.equal(metrics.output, 1929);
   assert.equal(metrics.cacheCreate, 40437); assert.equal(metrics.cacheRead, 281835);
+  assert.equal(metrics.turns, 18); assert.equal(metrics.cacheReadTokens, 281835);
   assert.equal(metrics.costUsd, 0.21); assert.equal(metrics.claudeDurationMs, 61234);
   assert.equal(metrics.apiDurationMs, 48123); assert.match(metrics.transcript, /^Final video:/);
   assert.equal(parseUsage(JSON.stringify([{ type: 'system' }, JSON.parse(sample)])).freshTokens, 42380);
@@ -41,13 +43,16 @@ test('parse realistic JSON result and result event array without double-counting
   const missingCache = JSON.parse(sample);
   delete missingCache.usage.cache_creation_input_tokens; delete missingCache.usage.cache_read_input_tokens;
   assert.equal(parseUsage(JSON.stringify(missingCache)).cacheRead, 0);
+  for (const turns of [undefined, -1, 1.5, '8']) {
+    assert.equal(parseUsage(JSON.stringify({ ...missingCache, num_turns: turns })).turns, null);
+  }
 });
 
 test('scenarios have exact budgets, steps, baselines and safe prompt substitutions', async () => {
   const simple = await loadScenario('simple'), hard = await loadScenario('hard');
-  assert.deepEqual(simple.budget, { freshTokens: 25000, costUsd: 0.12 });
-  assert.deepEqual(simple.baseline, { freshTokens: 42380, costUsd: 0.21, durationMs: 61000 });
-  assert.deepEqual(hard.budget, { freshTokens: 45000, costUsd: 0.25 });
+  assert.deepEqual(simple.budget, { marginalFreshTokens: 4000, costUsd: 0.15, cacheReadTokens: 250000, turns: 5, durationMs: 90000 });
+  assert.deepEqual(simple.baseline, { freshTokens: 42380, costUsd: 0.21, durationMs: 61000, cacheReadTokens: 281835 });
+  assert.deepEqual(hard.budget, { marginalFreshTokens: 12000, costUsd: 0.30, cacheReadTokens: 600000, turns: 14, durationMs: 150000 });
   assert.equal(hard.baseline, null); assert.equal(hard.expectedSteps, 12);
   const prompt = makePrompt(hard, { skill: 'showreel', url: 'http://fixture', project: 'bench', exports: '/tmp/exports' });
   assert.match(prompt, /showreel login --name bench --url http:\/\/fixture\/login/);
@@ -134,8 +139,11 @@ test('Markdown reports include budget verdicts, medians, deltas, failed runs and
   const md = renderReport([report], scenarios);
   for (const pattern of [/42380/, /281835/, /0\.2100/, /FAIL/, /No final video/, /4321/, /90\.0 s/, /hard \(12 steps\)/, /PENDING/, /How to reproduce/]) assert.match(md, pattern);
   assert.equal(delta(25000, 42380), '-41.0%'); assert.equal(delta(1, null), '—');
-  assert.equal(budgetPass({ freshTokens: 25000, costUsd: 0.12 }, scenarios[0].budget), true);
-  assert.equal(budgetPass({ freshTokens: 25001, costUsd: 0.12 }, scenarios[0].budget), false);
+  assert.equal(budgetPass({ ...scenarios[0].budget }, scenarios[0].budget), true);
+  for (const key of Object.keys(scenarios[0].budget)) {
+    assert.equal(budgetPass({ ...scenarios[0].budget, [key]: scenarios[0].budget[key] + 1 }, scenarios[0].budget), false);
+    assert.equal(budgetPass({ ...scenarios[0].budget, [key]: null }, scenarios[0].budget), false);
+  }
   assert.equal(budgetPass(null, scenarios[0].budget), false);
   const hard = { ...report, scenario: 'hard' };
   const withBaseline = renderReport([hard, { ...hard, skill: 'demo-video' }], scenarios);
@@ -199,6 +207,9 @@ test('runner integrates preflight, isolated runs, successful-only medians, expor
       calls.push({ cmd, args, opts });
       if (args[0] === '--help') return { code: 0, stdout: '--permission-mode <mode> choices: "dontAsk"\n  --allowedTools <tools>' };
       if (args[1] === 'ok') return { code: 0, stdout: sample };
+      if (args[1] === makeFloorPrompt('demo-video')) {
+        return { code: 0, stdout: floorSample };
+      }
       videoCalls++;
       const result = JSON.parse(sample);
       if (videoCalls === 2) result.result = 'Render failed';
@@ -210,12 +221,19 @@ test('runner integrates preflight, isolated runs, successful-only medians, expor
     },
   });
   assert.equal(closed, true); assert.equal(videoCalls, 3);
+  assert.equal(report.floor.freshTokens, 48700);
+  assert.equal(report.median.marginalFreshTokens, 0);
+  assert.equal(report.runs[0].turns, 18);
+  assert.equal(report.runs[0].turnsSource, 'num_turns');
+  assert.equal(calls.filter((call) => call.args[1] === makeFloorPrompt('demo-video')).length, 1);
   assert.equal(report.okRuns, 2); assert.equal(report.median.freshTokens, 42380);
   assert.equal(report.runs[0].evidence.finalVideoMarker, true);
   assert.equal(report.runs[1].ok, false);
   assert.equal(report.runs[2].evidence.exportedMp4, true);
   assert.equal(report.runs[0].surface.status, 'not-applicable');
-  const runs = calls.filter((call) => call.args.includes('--plugin-dir'));
+  const runs = calls.filter((call) => call.args.includes('--plugin-dir') && call.args[1] !== makeFloorPrompt('demo-video'));
+  const floorCall = calls.find((call) => call.args[1] === makeFloorPrompt('demo-video'));
+  assert.deepEqual(floorCall.args.slice(2), runs[0].args.slice(2));
   assert.equal(new Set(runs.map((call) => call.opts.env.SHOWREEL_HOME)).size, 3);
   for (const call of runs) {
     assert.ok(call.opts.cwd.startsWith(root));
@@ -249,4 +267,78 @@ test('surface meter retains totals on budget-failure exit status', async (t) => 
   assert.equal(surface.status, 'ok');
   assert.equal(surface.projects[0].totals.totalTokens, 7000);
   assert.equal(surface.projects[0].totals.pass, false);
+});
+
+
+test('runner clamps marginal tokens and falls back to recorded surface commands without counting its query', async (t) => {
+  const { runBenchmark } = await import('../scripts/benchmark/run-claude.mjs');
+  const root = await temporary(t);
+  const report = await runBenchmark({ scenario: 'simple', skill: 'showreel', model: 'sonnet', runs: 1, out: path.join(root, 'report.json') }, {
+    createTemp: async () => root, environment: {}, log: () => {},
+    startServer: async () => ({ url: 'http://fixture.invalid', close: async () => {} }),
+    exec: async (cmd, args, opts) => {
+      if (args[0] === '--help') return { code: 0, stdout: '--permission-mode <mode> choices: "dontAsk"\n  --allowedTools <tools>' };
+      if (args[1] === 'ok') return { code: 0, stdout: sample };
+      if (args[1] === makeFloorPrompt('showreel')) return { code: 0, stdout: floorSample };
+      if (cmd === process.execPath) {
+        // A query adds a meter entry after reading the totals. It is not a Claude turn.
+        await writeFile(path.join(opts.env.SHOWREEL_HOME, 'projects', 'bench', 'surface.jsonl'), '{"command":"tokens"}\n', { flag: 'a' });
+        return { code: 0, stdout: '{"totalTokens":50}' };
+      }
+      const dir = path.join(opts.env.SHOWREEL_HOME, 'projects', 'bench');
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, 'surface.jsonl.1'), '{"command":"init"}\n');
+      await writeFile(path.join(dir, 'surface.jsonl'), '{"command":"render"}\n');
+      const result = JSON.parse(sample);
+      delete result.num_turns;
+      result.usage = { input_tokens: 1, output_tokens: 2 };
+      return { code: 0, stdout: JSON.stringify(result) };
+    },
+  });
+  assert.equal(report.runs[0].marginalFreshTokens, 0);
+  assert.equal(report.runs[0].turns, 2);
+  assert.equal(report.runs[0].turnsSource, 'surface-commands (partial)');
+  assert.equal(report.median.turns, 2);
+});
+
+test('floor failures abort before scenarios and never persist provider output', async (t) => {
+  const { runBenchmark } = await import('../scripts/benchmark/run-claude.mjs');
+  for (const response of [{ code: 1, stdout: floorSample }, { code: 0, stdout: 'private floor output' },
+    { code: 0, stdout: JSON.stringify({ ...JSON.parse(floorSample), is_error: true }) }]) {
+    const root = await temporary(t);
+    await assert.rejects(runBenchmark({ scenario: 'simple', skill: 'showreel', model: 'sonnet', runs: 1 }, {
+      createTemp: async () => root, environment: {},
+      startServer: async () => { assert.fail('floor failure must not start fixture'); },
+      exec: async (_, args) => args[0] === '--help'
+        ? { code: 0, stdout: '--permission-mode <mode> choices: "dontAsk"\n  --allowedTools <tools>' }
+        : args[1] === 'ok' ? { code: 0, stdout: sample } : response,
+    }), /^Error: Benchmark floor measurement failed; no scenario runs started\.$/);
+  }
+});
+
+test('reports never infer historical marginal tokens from the new skill floor', async () => {
+  const scenarios = [await loadScenario('simple')];
+  const report = { scenario: 'simple', skill: 'showreel', model: 'sonnet', runs: [good] };
+  const md = renderReport([report], scenarios);
+  assert.match(md, /Marginal fresh tokens \| 3380 \| 4000 \| PASS \| — \| — \| PENDING/);
+  const legacy = { ...good };
+  delete legacy.floorFreshTokens; delete legacy.marginalFreshTokens;
+  const old = { ...report, skill: 'demo-video', runs: [legacy] };
+  assert.match(renderReport([report, old], scenarios), /Marginal fresh tokens \| 3380 \| 4000 \| PASS \| — \| — \| PENDING/);
+  old.floor = { freshTokens: 40000 };
+  assert.match(renderReport([report, old], scenarios), /Marginal fresh tokens \| 3380 \| 4000 \| PASS \| 2380 \| 42.0% \| FAIL/);
+  assert.equal(summarize([{ ...good, ok: false, marginalFreshTokens: 999999, turns: 999 }, good]).marginalFreshTokens, 3380);
+});
+
+test('skill floor prompts select the correct skill and model activation overhead', () => {
+  for (const skill of ['showreel', 'demo-video']) {
+    assert.equal(makeFloorPrompt(skill), `Invoke the ${skill} skill, do nothing else, then reply with the single word OK.`);
+  }
+  const floor = parseUsage(floorSample);
+  assert.equal(floor.turns, 2);
+  assert.equal(floor.cacheCreate, 38988 + 9700);
+  assert.equal(marginalFreshTokens(floor.freshTokens + 3200, floor.freshTokens), 3200);
+  assert.equal(marginalFreshTokens(1, floor.freshTokens), 0);
+  assert.equal(marginalFreshTokens(null, floor.freshTokens), null);
+  assert.equal(marginalFreshTokens(50000, undefined), null);
 });

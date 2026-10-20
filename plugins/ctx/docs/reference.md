@@ -114,6 +114,8 @@ review:
                               # reviewer one tier *cheaper* than models.reviewer
   callers: false              # opt in after the D18/D20 quality gate: add a
                               # `## Callers` section to each review package
+  tests_table: false          # opt in likewise: add a `## Tests by criterion`
+                              # section (which criterion has a test, which none)
 
 spec:
   failure_modes: false        # opt in after the D18/D20 quality gate: new specs
@@ -152,6 +154,12 @@ in code (no model): functions and classes in Python, JavaScript and TypeScript f
 or changed, and the files outside the change that still mention the name as a whole word, with line numbers (a name in
 more than twelve files is summarised). It is a lead for the reviewer to read, not proof of a call; a removed name that is
 still mentioned is the likeliest breakage. Ledger files are never searched. With the key off the package is unchanged.
+
+`review.tests_table` is a boolean, default `false`. When enabled, each review package gains a `## Tests by criterion`
+section computed in code (no model) from the test files the change added or modified (`test_*.py`, `*_test.py`,
+`*.test.*`, `*.spec.*`). A test counts for criterion N when its name or body says `AC<N>`, `criterion <N>` or `c<N>`;
+a test with no such tag is matched, marked *guess*, when its name shares two or more significant words with the
+criterion. A criterion with no test reads **NONE**. A test that already existed and was not touched is not shown.
 
 `spec.failure_modes` is a boolean, default `false`. When enabled, `ctx spec` adds a `## Failure modes` checklist
 (input boundaries, error and timeout paths, permissions and ownership, concurrency and repeated calls, existing data and

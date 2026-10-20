@@ -1,6 +1,6 @@
 # Showreel Phase 8 plan: token meter and benchmark
 
-Status: planned 2026-10-20, execution waits for a session with network and a browser. Spec: `docs/40-showreel-design.md` section 16. Baseline: `docs/42` B0 (old `demo-video` skill, simple 5-step flow: median 42,380 fresh tokens, $0.21, 61 s; the harder multi-page login flow is unmeasured).
+Status: COMPLETE 2026-10-20 (outcome in docs/40 section 28 and docs/54). Spec: `docs/40-showreel-design.md` section 16. Baseline: `docs/42` B0 (old `demo-video` skill, simple 5-step flow: median 42,380 fresh tokens, $0.21, 61 s; the harder multi-page login flow is unmeasured).
 Acceptance (spec table): per-video tokens at or under the budget and below the baseline.
 
 ## What "tokens" means here

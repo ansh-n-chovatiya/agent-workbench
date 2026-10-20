@@ -52,8 +52,8 @@ export async function recordScenario({ name, headless = true, scale, fps = 60,
   const scenario = await readProjectFile(name, 'scenario');
   const steps = checkScenario(scenario);
   const missing = pendingSecrets(scenario, process.env);
-  if (missing.length) throw new Error(missing.map(({ id }) =>
-    `step ${id} needs a secret: set SHOWREEL_SECRET_${id.toUpperCase()}`).join('; '));
+  if (missing.length) throw new Error(missing.map(({ id, actions }) =>
+    `step ${id} needs a secret: set ${actions.filter(a => a.sensitive).map(a => a.secretEnv ?? 'SHOWREEL_SECRET_' + id.toUpperCase()).join(', ')}`).join('; '));
   const config = recordingProfile(mergeConfig(await optionalJson(path.join(dir, 'config.json'))
     ?? { baseURL: brief.baseURL ?? scenario.baseURL }), profile);
   const requested = scale ?? config.captureScale;

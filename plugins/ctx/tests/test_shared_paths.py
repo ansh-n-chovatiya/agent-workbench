@@ -41,7 +41,7 @@ ALL_MODULES = (
     "migrate.py", "miniyaml.py", "paths.py", "phases.py", "plain.py",
     "plan.py", "preview.py", "preview_html.py", "preview_page.py",
     "redact.py", "reduce.py", "review.py", "snapshot.py", "spec.py", "state.py",
-    "telemetry.py", "trust.py", "verify.py", "work.py", "worktree.py",
+    "telemetry.py", "testmap.py", "trust.py", "verify.py", "work.py", "worktree.py",
 )
 
 # The two modules allowed to build `units` into a path:

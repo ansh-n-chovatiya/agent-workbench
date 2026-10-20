@@ -32,7 +32,7 @@ export function pickNearestBox(recorded, boxes, limit = 40) {
 // Copy only pipeline facts; page content must never invent captions or retain secrets.
 export function formatResolvedStep(step, i, selector, how) {
   const out = { i, action: step.action, selector, how };
-  for (const key of ['name', 'role', 'url', 'tab', 'frameUrl', 'sensitive', 'scope']) {
+  for (const key of ['name', 'role', 'url', 'tab', 'frameUrl', 'sensitive', 'scope', 'secretEnv', 'deltaY', 'ms']) {
     if (Object.hasOwn(step, key)) out[key] = step[key];
   }
   if (step.action === 'fill' && !step.sensitive) out.value = step.value;
@@ -40,7 +40,7 @@ export function formatResolvedStep(step, i, selector, how) {
   return out;
 }
 
-export function parseGuideAdd(flags) {
+function parseSingleGuideAdd(flags) {
   const allowed = ['name', 'action', 'selector', 'label', 'role', 'url', 'value', 'key', 'tab'];
   const options = {};
   for (let i = 0; i < flags.length; i += 2) {
@@ -77,4 +77,11 @@ export function sameDocument(a, b) {
     const path = (u) => u.pathname.replace(/\/+$/, '') || '/';
     return x.origin === y.origin && path(x) === path(y) && x.search === y.search;
   } catch { return false; }
+}
+
+export const GUIDE_ADD_USAGE = 'Usage: showreel guide add --name N (--json ARRAY | --file FILE | --action click|fill|press --selector SELECTOR --label LABEL)';
+export const GUIDE_ADD_EXAMPLE = "Example: showreel guide add --name demo --json '[{\"action\":\"click\",\"selector\":\"text=Features\",\"label\":\"Features\"}]'";
+export function parseGuideAdd(flags) {
+  try { return parseSingleGuideAdd(flags); }
+  catch (error) { throw new Error(error.message + '\n' + GUIDE_ADD_USAGE + '\n' + GUIDE_ADD_EXAMPLE); }
 }

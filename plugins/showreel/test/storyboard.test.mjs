@@ -29,7 +29,7 @@ test('draft captions use roles, trim names, and cut long names on word boundarie
 test('storyboard validates step fields, lengths, forbidden fragments and collects errors', () => {
   const cases = [
     ['id', ['s0', 's12'], ['', 'bad', 1]], ['caption', ['a', 'a'.repeat(70)], ['', 'a'.repeat(71), ...['`', '>>', 'role=', '#', '[data-'].map((v) => `Open ${v}`)]],
-    ['narration', [null, 'a'.repeat(280), Array(45).fill('a').join(' ')], ['', 'a'.repeat(281), Array(46).fill('a').join(' ')]],
+    ['narration', [null, 'a'.repeat(280), 'a'.repeat(281), Array(45).fill('a').join(' ')], ['', Array(46).fill('a').join(' ')]],
     ['zoom', ['auto', 'none'], ['yes', null]], ['highlight', [true, false], [0, 'true']],
     ['holdMs', [null, 0, 10000], [-1, 10001, Infinity, '0']], ['guideSteps', [[0], [1, 2]], [[], [-1], [0.5], ['0'], null]],
   ];

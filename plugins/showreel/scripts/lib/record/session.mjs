@@ -90,7 +90,7 @@ export class RecordingSession {
   }
 
   value(step, action) {
-    return action.sensitive ? process.env[`SHOWREEL_SECRET_${step.id.toUpperCase()}`] : action.value;
+    return action.sensitive ? process.env[action.secretEnv ?? `SHOWREEL_SECRET_${step.id.toUpperCase()}`] : action.value;
   }
 
   async rehearse(steps, url) {
