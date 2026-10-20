@@ -280,6 +280,8 @@ Beyond the fields in the [plan walkthrough](walkthroughs.md#step-2--decompose-in
 |---|---|
 | `kind: bug` | Turns on the four-phase gate below. `plan-check` **refuses** a bug unit with an empty `reproduction:` |
 | `reproduction:` | The exact command `reproduce` must fail on and `fix` must make pass. Required by `kind: bug` |
+| `risk:` | Optional list from `shared-interface`, `auth`, `data`, `ui`. A tagged unit is never reviewed on the cheapest tier, and its review package names the tags. `plan-check` refuses an unknown tag |
+| `failure_modes:` | Optional list of the spec's failure-mode categories that apply to this unit. The review package lists them and the reviewer must account for each. `plan-check` refuses an unknown name |
 | `phases: [a, b, c]` | Gates in exactly that order, with no meaning attached beyond the order. Ignored on a `kind: bug` unit, which always gets the preset |
 | `model:` | Pins this unit's model. Immune to the complexity score *and* to `escalate_on_failed_round` — an intentional choice is not escalated out from under the unit that made it |
 | `verified:` | Part of the sealed contract; see [Ungated is not done](#ungated-is-not-done) |

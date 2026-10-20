@@ -27,12 +27,14 @@ import os
 import re
 from pathlib import Path
 
-from . import atomic, config as config_mod, frontmatter, verify
+from . import atomic, config as config_mod, frontmatter, spec as spec_mod, verify
 
 TIERS = ("inline", "subagent", "session")
 STATUSES = ("pending", "running", "blocked", "verify_failed", "done")
 
 REQUIRED = ("unit", "tier", "owns")
+#: What a unit may be tagged as touching. A tagged unit is never reviewed on the cheapest tier (`dispatch.model_for`).
+RISK_TAGS = ("shared-interface", "auth", "data", "ui")
 _UNIT_NAME = re.compile(r"^[0-9]{2}-[a-z0-9][a-z0-9-]*$")
 # What `publishes_interface` strips before deciding a `## Interfaces` section is
 # empty — the scaffolded template is only an HTML comment, so a unit that never
@@ -89,6 +91,8 @@ class Unit:
     owns = property(lambda self: self._list("owns"))
     reads = property(lambda self: self._read_paths())
     forbid = property(lambda self: self._list("forbid"))
+    risk = property(lambda self: self._list("risk"))
+    failure_modes = property(lambda self: self._list("failure_modes"))
 
     @property
     def tier(self):
@@ -342,6 +346,14 @@ def validate(units):
                 f"{unit.name}: tier {unit.doc.meta.get('tier')!r} is not one of "
                 + "/".join(TIERS)
             )
+        for tag in unit.risk:
+            if tag not in RISK_TAGS:
+                problems.append(f"{unit.name}: risk {tag!r} is not one of " + "/".join(RISK_TAGS))
+        for mode in unit.failure_modes:
+            if mode not in spec_mod.FAILURE_MODES:
+                problems.append(
+                    f"{unit.name}: failure mode {mode!r} is not one of the spec's categories "
+                    f"({'; '.join(spec_mod.FAILURE_MODES)})")
         if unit.kind == "bug" and not unit.reproduction:
             problems.append(
                 f"{unit.name}: kind is `bug` but `reproduction` is empty — add the "
