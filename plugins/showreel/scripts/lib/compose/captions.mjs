@@ -1,3 +1,4 @@
+import { sceneOutputAt } from './scene-timemap.mjs';
 import { outputAt } from './timemap.mjs';
 const smooth = (t) => t * t * (3 - 2 * t);
 export function cuesFromRun({ storyboard, events, captionsEnabled }) {
@@ -52,6 +53,20 @@ function timestamp(t, delimiter) {
   return `${pad(Math.floor(ms / 3600000))}:${pad(Math.floor(ms / 60000) % 60)}:${pad(Math.floor(ms / 1000) % 60)}${delimiter}${pad(ms % 1000, 3)}`;
 }
 function exportCues(cues, timemap, delimiter) {
+  if (timemap.scenes) {
+    const flattened = cues.flatMap(cue => {
+      const scene = timemap.scenes.find(s => s.id === cue.sceneId);
+      if (!scene) return [];
+      // The normal exporter handles trimmed endpoints; translate its map to the sequence clock.
+      const map = {...scene.timemap,segments:scene.segments};
+      map.toOutput = t => sceneOutputAt(timemap,scene.id,t);
+      return [{cue,map}];
+    });
+    // Export individually, then order and renumber all surviving cues by their output time.
+    return flattened.map(({cue,map}) => exportCues([cue],map,delimiter)).filter(Boolean)
+      .sort((a,b) => a.split('\n')[1].localeCompare(b.split('\n')[1]))
+      .map((text,i) => text.replace(/^1\n/,`${i+1}\n`)).join('\n');
+  }
   const toOutput = (t) => typeof timemap.toOutput === 'function' ? timemap.toOutput(t) : outputAt(timemap, t);
   return cues.flatMap((cue) => {
     const start = toOutput(cue.start);

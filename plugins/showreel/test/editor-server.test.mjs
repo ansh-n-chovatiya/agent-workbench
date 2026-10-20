@@ -24,6 +24,11 @@ test('editor authenticates routes, saves validated compositions, streams ranges 
     const bearer = {Authorization:`Bearer ${server.token}`};
     const request = async (route,options={}) => fetch(base+route,{...options,headers:{...bearer,...options.headers},redirect:'manual'});
     assert.equal((await fetch(base+'/api/project')).status,401);
+    assert.equal((await fetch(base+'/api/export/settings')).status,401);
+    assert.equal((await request('/api/export/settings')).status,200);
+    for (const route of ['/api/reveal','/api/open']) assert.equal((await request(route,{method:'POST'})).status,404);
+    assert.equal((await request('/api/export/folder',{method:'POST',body:JSON.stringify({dir:path.join(home,'exports')})})).status,200);
+    assert.equal((await (await request('/api/export/settings')).json()).exportDir,path.join(home,'exports'));
     const first = await fetch(server.url,{redirect:'manual'});
     assert.equal(first.status,303); assert.equal(first.headers.get('location'),'/');
     const cookie = first.headers.get('set-cookie'); assert.match(cookie,/HttpOnly/); assert.match(cookie,/SameSite=Strict/);
@@ -48,6 +53,9 @@ test('editor authenticates routes, saves validated compositions, streams ranges 
     response = await request('/api/composition',{method:'PUT',body:' '.repeat(1024*1024+1)}); assert.equal(response.status,413);
     composition.captions.cues = [{id:'c',text:'Edited',start:1,end:3}];
     assert.equal((await request('/api/composition',{method:'PUT',body:JSON.stringify(composition)})).status,200);
+    assert.deepEqual(JSON.parse(await readFile(path.join(dir,'composition.json'),'utf8')),composition);
+    const legacy = {...composition,overlays:{invalid:'ignored'},theme:{name:'clean',overlay:{accent:'retired'}},motion:{pace:1.6}};
+    assert.equal((await request('/api/composition',{method:'PUT',body:JSON.stringify(legacy)})).status,200);
     assert.deepEqual(JSON.parse(await readFile(path.join(dir,'composition.json'),'utf8')),composition);
     const controller = new AbortController();
     const events = await request('/api/export/events',{signal:controller.signal});

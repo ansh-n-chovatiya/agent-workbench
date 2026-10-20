@@ -1,8 +1,7 @@
-import { presetOutput } from './layout.mjs';
+import { presetOutput, sizeKeyFor } from './layout.mjs';
 import { suggestZoomRegions, validateRegions } from './zoom.mjs';
 import { buildTimeMap } from './timemap.mjs';
 import { THEMES } from './themes.mjs';
-import { validateOverlays, storyboardOverlays } from './overlays.mjs';
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 function freeze(value) {
   if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); }
@@ -31,8 +30,7 @@ export const DEFAULT_COMPOSITION = freeze({
     fontWeight: 600, color: '#ffffff', background: 'rgba(17,24,39,0.86)', maxLines: 2, align: 'center' },
   cards: { title: { ...cardDefaults, enabled: true, title: null, subtitle: null, durationSec: 2.2 },
     outro: { ...cardDefaults, enabled: true, text: 'Thank you', subtitle: null, durationSec: 2 }, fade: 0.4, transition: 'crossfade' },
-  motion: { pace: 1 }, overlays: [],
-  edits: { trims: [], speeds: [], holds: [] },
+  edits: { trims: [], speeds: [], holds: [], splits: [], mutes: [] },
   audio: { voice: { enabled: null, voiceId: 'af_heart', speed: 1, gainDb: 0 },
     music: { enabled: false, file: null, gainDb: -18, loop: true, fadeInSec: 1, fadeOutSec: 2,
       duck: { enabled: true, depthDb: 12, attackMs: 150, releaseMs: 400 } },
@@ -40,7 +38,7 @@ export const DEFAULT_COMPOSITION = freeze({
     narration: { steps: {} } },
 });
 export const COMPOSITION_RANGES = [
-    ['motion.pace',1,1.6], ['output.width',2,7680,true],['output.height',2,4320,true],['frame.paddingXPct',0,25],['frame.paddingYPct',0,25],
+    ['output.width',2,7680,true],['output.height',2,4320,true],['frame.paddingXPct',0,25],['frame.paddingYPct',0,25],
     ['frame.radiusPx',0,300],['frame.shadow.blurPx',0,300],['frame.shadow.offsetYPx',-300,300],['frame.shadow.opacity',0,1],['frame.border.widthPx',0,30],
     ['cursor.followThrough.distancePx',0,500],['cursor.followThrough.durationSec',0.1,5],['cursor.followThrough.startAfterClickSec',0,5],
     ['cursor.sizePct',1,8],['cursor.hideWhenIdleSec',0,60],['cursor.pressScale',0.1,1],['cursor.clickEffect.sizeMult',0.1,10],['cursor.clickEffect.durationSec',0.05,5],
@@ -53,7 +51,7 @@ export const COMPOSITION_ENUMS = { 'cursor.style':['arrow','pointer','dot','ring
     'zoom.speed':['slow','normal','fast'], 'captions.mode':['band','overlay'], 'captions.position':['top','bottom'],
     'captions.fontWeight':[400,600,700], 'captions.maxLines':[1,2,3], 'captions.align':['center','left'], 'cards.transition':['crossfade','cut'] };
 export const SETTING_RANGES = Object.fromEntries([
-  ...COMPOSITION_RANGES, ['frame.paddingPct',0,25], ['zoom.depth',1.05,4], ['cursor.custom.heightPct',1,8],
+  ...COMPOSITION_RANGES, ['frame.paddingPct',0,25], ['zoom.depth',1.05,5], ['cursor.custom.heightPct',1,8],
   ...['arrow','hand','text'].flatMap(s => ['x','y'].map(k => [`cursor.custom.${s}.hotspot.${k}`,0,1])),
   ...['title','outro'].flatMap(k => [['durationSec',0,30],['titleSizePct',1,20],['subtitleSizePct',1,12],['accent.widthPct',0,100],['logo.heightPct',1,40]].map(([p,a,b]) => [`cards.${k}.${p}`,a,b])),
   ...['frame.background','cards.title.background','cards.outro.background'].map(p => [`${p}.angle`,0,360]),
@@ -80,21 +78,33 @@ export const safeImagePath = (v) => typeof v === 'string' && !!v.trim() && !/^(?
 export const MUSIC_EXTENSIONS = ['wav', 'mp3', 'm4a', 'ogg'];
 export const safeMusicPath = (v) => safeImagePath(v) && new RegExp(`\\.(${MUSIC_EXTENSIONS.join('|')})$`, 'i').test(v);
 const narrationStepModel = { text: '', muted: false };
+// Discard retired fields without mutating legacy documents supplied by callers.
+function withoutOverlays(input) {
+  if (!object(input)) return input;
+  const result = copy(input);
+  delete result.overlays;
+  delete result.motion; // Retired overlay entrance/exit timing.
+  if (object(result.theme) && Object.hasOwn(result.theme, 'overlay')) {
+    delete result.theme.overlay;
+    result.theme = result.theme.name ?? 'clean';
+  }
+  return result;
+}
 export function resolveComposition(input) {
+  input = withoutOverlays(input);
   const theme = typeof input.theme === 'string' && Object.hasOwn(THEMES, input.theme) ? THEMES[input.theme] : THEMES.clean;
   let themed = merge(DEFAULT_COMPOSITION, { frame: { ...theme.frame, shadow: { ...theme.frame.shadow }, background: { colors: theme.background.colors, angle: theme.background.angle } }, cursor: theme.cursor, zoom: theme.zoom, captions: { ...theme.caption, fontSizePct: DEFAULT_COMPOSITION.captions.fontSizePct * theme.typography.captionSizeMultiplier },
     cards: Object.fromEntries(['title', 'outro'].map((key) => [key, { titleColor: theme.card.titleColor,
       subtitleColor: theme.card.subtitleColor, background: { colors: theme.card.background.colors, angle: theme.card.background.angle ?? 135 }, accent: { color: theme.card.accent } }])) });
   if (input.output?.preset === 'vertical') themed = merge(themed, {
-    frame: { paddingXPct: 4, paddingYPct: 0 }, captions: { bandHeightPct: 16, fontSizePct: 3.9, maxLines: 3 }, zoom: { depth: 1.5 }, layout: { safeZones: true },
+    frame: { paddingXPct: 4, paddingYPct: 0 }, captions: { bandHeightPct: 16, fontSizePct: 3.0, maxLines: 2 }, zoom: { depth: 1.5 }, layout: { safeZones: true },
   });
   delete themed.frame.shadow.color;
   themed.cards.transition = theme.transition;
   const patch = copy(input);
   patch.themeSource ??= input.theme ? 'user' : 'default';
   if (['landscape', 'vertical', 'square'].includes(patch.output?.preset)) {
-    const size = Math.max(patch.output.width ?? 0, patch.output.height ?? 0) > 1920 ? '4k' : '1080';
-    Object.assign(patch.output, presetOutput(patch.output.preset, size));
+    Object.assign(patch.output, presetOutput(patch.output.preset, sizeKeyFor(patch.output.width, patch.output.height)));
   }
   if (patch.frame?.paddingPct !== undefined) {
     patch.frame.paddingXPct ??= patch.frame.paddingPct; patch.frame.paddingYPct ??= patch.frame.paddingPct;
@@ -109,6 +119,7 @@ export function resolveComposition(input) {
   return merge(themed, patch);
 }
 export function validateComposition(c, { duration = Number.MAX_VALUE } = {}) {
+  c = withoutOverlays(c);
   const errors = [], warnings = [];
   const fail = (p, m) => errors.push(`composition.json: "${p}" ${m}`);
   const range = (p, v, min, max, integer = false) => {
@@ -162,7 +173,7 @@ export function validateComposition(c, { duration = Number.MAX_VALUE } = {}) {
   enumAt('version',[1]); enumAt('theme',Object.keys(THEMES)); enumAt('output.fps',[30,60]); enumAt('output.quality',['standard','high']);
   if (typeof c.run?.id !== 'string' || !c.run.id.trim()) fail('run.id','must be nonempty');
   for (const [p,min,max,int] of COMPOSITION_RANGES) range(p,get(p),min,max,int);
-  range('zoom.depth',zoomDepth(d.zoom?.depth),1.05,4);
+  range('zoom.depth',zoomDepth(d.zoom?.depth),1.05,5);
   for (const [p,values] of Object.entries(COMPOSITION_ENUMS)) enumAt(p,values);
   const custom = d.cursor?.custom;
   if (d.cursor?.style === 'custom' && !safeImagePath(custom?.arrow?.image)) fail('cursor.custom.arrow.image', 'is required for custom style');
@@ -223,22 +234,26 @@ export function validateComposition(c, { duration = Number.MAX_VALUE } = {}) {
     if (!object(steps) || Object.keys(steps).length > 200) fail('audio.narration.steps', 'must be an object with at most 200 steps');
     else for (const [id, entry] of Object.entries(steps)) {
       const p = `audio.narration.steps.${id}`;
-      if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || ['__proto__', 'constructor', 'prototype'].includes(id)) { fail(p, 'is not a valid step ID'); continue; }
+      if (!/^(?:[A-Za-z0-9_-]{1,80}:)?[A-Za-z0-9_-]{1,64}$/.test(id) || ['__proto__', 'constructor', 'prototype'].includes(id)) { fail(p, 'is not a valid step ID'); continue; }
       walk(entry, narrationStepModel, p);
       if (entry?.text !== undefined && (typeof entry.text !== 'string' || !entry.text.trim() || entry.text.length > 280)) fail(`${p}.text`, 'must contain 1 to 280 characters');
       if (entry?.muted !== undefined && typeof entry.muted !== 'boolean') fail(`${p}.muted`, 'must be boolean');
     }
   }
-  errors.push(...validateOverlays(c.overlays ?? [], { duration }).map(e => `composition.json: ${e}`));
-  for (const [i,o] of (Array.isArray(c.overlays) ? c.overlays : []).entries()) {
-    if (o?.template === 'logo-sting' && o.params?.useLogo && !safeImagePath(o.params.logo)) fail(`overlays.${i}.params.logo`, 'must be a local path inside the project');
-  }
   const regions = validateRegions(c.zoom?.regions); errors.push(...regions.errors); warnings.push(...regions.warnings);
-  for (const [k,model] of [['trims',{start:0,end:0}],['speeds',{start:0,end:0,rate:1}],['holds',{t:0,duration:0}]]) if (Array.isArray(c.edits?.[k])) c.edits[k].forEach((v,i) => {
+  for (const [k,model] of [['trims',{start:0,end:0}],['mutes',{start:0,end:0}],['speeds',{start:0,end:0,rate:1}],['holds',{t:0,duration:0}]]) if (Array.isArray(c.edits?.[k])) c.edits[k].forEach((v,i) => {
     walk(v,model,`edits.${k}.${i}`);
-    try { buildTimeMap({ duration: Number.MAX_VALUE, [k]: [v] }); } catch (e) { fail(`edits.${k}.${i}`,e.message); }
+    try { buildTimeMap({ duration, [k === 'mutes' ? 'trims' : k]: [v] }); } catch (e) { fail(`edits.${k}.${i}`,e.message); }
   });
-  try { buildTimeMap({ duration: Number.MAX_VALUE, trims: c.edits?.trims, speeds: c.edits?.speeds, holds: c.edits?.holds }); } catch (e) { fail('edits',e.message); }
+  try { buildTimeMap({ duration, trims: c.edits?.trims, speeds: c.edits?.speeds, holds: c.edits?.holds }); } catch (e) { fail('edits',e.message); }
+  if (c.edits?.splits !== undefined) {
+    const splits = c.edits.splits;
+    if (!Array.isArray(splits)) fail('edits.splits','must be an array');
+    else splits.forEach((t,i) => {
+      if (!Number.isFinite(t) || t <= 0 || t >= duration || (i && t - splits[i-1] < 0.1 - 1e-9)) fail(`edits.splits.${i}`,'must be sorted, inside the recording and at least 0.1 seconds apart');
+    });
+  }
+  try { buildTimeMap({duration,trims:c.edits?.mutes ?? []}); } catch(e) { fail('edits.mutes',e.message); }
   return { ok: !errors.length, errors, warnings };
 }
 export function compositionPaths(c) {
@@ -274,7 +289,19 @@ export function changeComposition(c, path, value, { reset = false } = {}) {
   const keys = path.split('.');
   if (keys.some((k) => ['__proto__','constructor','prototype'].includes(k))) throw new Error('Invalid composition path');
   const next = copy(c), last = keys.pop();
-  if (path === 'theme') next.themeSource = reset ? 'default' : 'user';
+  if (path === 'theme') {
+    next.themeSource = reset ? 'default' : 'user';
+    // Values still equal to the OLD theme's defaults were never chosen by the person: give them the new theme's value.
+    const oldDefaults = resolveComposition({ theme: c.theme }), newDefaults = resolveComposition({ theme: value });
+    const follow = (mine, base, fresh) => {
+      if (!object(mine) || !object(base) || !object(fresh)) return;
+      for (const k of Object.keys(mine)) {
+        if (object(mine[k])) follow(mine[k], base[k], fresh[k]);
+        else if (k in base && k in fresh && JSON.stringify(base[k]) !== JSON.stringify(fresh[k]) && JSON.stringify(mine[k]) === JSON.stringify(base[k])) mine[k] = copy(fresh[k]);
+      }
+    };
+    for (const part of ['frame', 'cursor', 'zoom', 'captions', 'cards']) follow(next[part], oldDefaults[part], newDefaults[part]);
+  }
   for (const p of Object.keys(next.brandDefaults ?? {})) if (p === path || p.startsWith(path + '.') || path.startsWith(p + '.')) delete next.brandDefaults[p];
   if (path === 'frame.paddingPct') {
     next.frame = { ...next.frame, paddingXPct: reset ? DEFAULT_COMPOSITION.frame.paddingXPct : value,
@@ -302,9 +329,8 @@ export function zoomOptions(zoom) {
 export const outputBitrate = ({ width, height, fps, quality }) => Math.min(60e6, Math.round(width * height * fps * (quality === 'high' ? 0.12 : 0.07)));
 export function buildComposition({ brief, storyboard, events, record, edits = {}, overrides = {} }) {
   // Storyboard captions are resolved later, against recorded step IDs rather than guideSteps.
-  const overlays = storyboardOverlays(storyboard, events);
   const c = resolveComposition(merge({
-    run: { id: record.runId }, theme: brief.theme, themeSource: Object.hasOwn(overrides,'theme') ? 'user' : brief.themeSource ?? (brief.theme !== 'clean' ? 'user' : 'default'), overlays,
+    run: { id: record.runId }, theme: brief.theme, themeSource: Object.hasOwn(overrides,'theme') ? 'user' : brief.themeSource ?? (brief.theme !== 'clean' ? 'user' : 'default'),
     captions: brief.captions,
     cards: { title: { ...brief.titleCard, title: brief.titleCard.title ?? brief.topic }, outro: brief.outroCard }, edits,
     // Choices made at intake seed the audio settings; overrides still win.

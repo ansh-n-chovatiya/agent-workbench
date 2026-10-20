@@ -1,10 +1,18 @@
 import { wrapLines } from './captions.mjs';
 export const OUTPUT_PRESETS = Object.freeze({ landscape: [1920, 1080], vertical: [1080, 1920], square: [1080, 1080] });
+// Output sizes are named by their short side; each scales the 1080 base of a format.
+export const OUTPUT_SIZES = Object.freeze({ '720': 2 / 3, '1080': 1, '1440': 4 / 3, '4k': 2 });
 export function presetOutput(preset = 'landscape', size = '1080') {
   if (!Object.hasOwn(OUTPUT_PRESETS, preset)) throw new Error('format must be landscape, vertical or square');
-  if (!['1080', '4k'].includes(size)) throw new Error('size must be 1080 or 4k');
-  const [width, height] = OUTPUT_PRESETS[preset], scale = size === '4k' ? 2 : 1;
-  return { preset, width: width * scale, height: height * scale };
+  if (!Object.hasOwn(OUTPUT_SIZES, String(size))) throw new Error('size must be 720, 1080, 1440 or 4k');
+  const [width, height] = OUTPUT_PRESETS[preset], scale = OUTPUT_SIZES[String(size)];
+  return { preset, width: Math.round(width * scale), height: Math.round(height * scale) };
+}
+// The size key a width and height belong to (by their short side); missing sizes mean the 1080 default.
+export function sizeKeyFor(width, height) {
+  const short = Math.min(Number(width) || 0, Number(height) || 0);
+  if (!short) return '1080';
+  return short >= 2160 ? '4k' : short >= 1440 ? '1440' : short >= 1080 ? '1080' : '720';
 }
 export const isVertical = (output) => output.preset === 'vertical' || output.height > output.width;
 export function safeArea(output, enabled = isVertical(output)) {
@@ -19,8 +27,8 @@ export function containRect(source, bounds) {
   return { x: bounds.x + Math.round((bounds.w - w) / 2), y: bounds.y + Math.round((bounds.h - h) / 2), w, h };
 }
 export function verticalCaptionMetrics(output, captions, texts = [], measureText) {
-  const size=output.height*(captions?.fontSizePct??3.9)/100, padding=size*.6;
-  const w=Math.round(output.width*.88), maxLines=Math.min(3,captions?.maxLines??3);
+  const size=output.height*(captions?.fontSizePct??3.0)/100, padding=size*.6;
+  const w=Math.round(output.width*.88), maxLines=Math.min(2,captions?.maxLines??2);
   const measure=measureText??(text=>Array.from(text).length*size*.55);
   const lines=Math.max(1,...texts.map(text=>wrapLines(text,w-padding*2,measure,{maxLines}).lines.length));
   return {size,w,lines,h:Math.ceil(lines*size*1.25+padding)};
@@ -29,15 +37,14 @@ export function verticalLayout({ output, source, composition, captionTexts = [],
   const { width, height } = output, captions = composition.captions;
   const safe = safeArea(output, composition.layout?.safeZones ?? true);
   const px = composition.frame?.paddingXPct ?? composition.frame?.paddingPct ?? 4;
-  const pad = Math.round(width * px / 100), gap = captions?.enabled && captions.mode !== 'band' ? Math.round(height * .012) : 0;
+  const pad = Math.round(width * px / 100), gap = captions?.enabled ? Math.ceil(height * .02) : 0;
   const py = Math.round(height * (composition.frame?.paddingYPct ?? 0) / 100);
   const metrics=verticalCaptionMetrics(output,captions,captionTexts,measureCaption);
   const captionH=captions?.enabled?metrics.h:0;
   const available={x:pad,y:safe.y+py,w:width-2*pad,h:Math.max(1,safe.h-2*py-captionH-gap)};
-  // Off-profile landscape recordings retain a letterboxed frame.
-  const frame=source.width>source.height?available:containRect(source,available);
+  const frame=containRect(source,available);
   frame.y=available.y;
-  const content=source.width>source.height?containRect(source,frame):{...frame};
+  const content={...frame};
   const caption=!captions?.enabled?null:{x:Math.round((width-metrics.w)/2),y:frame.y+frame.h+gap,w:metrics.w,h:captionH};
   return {canvas:{width,height},safe,frame,content,caption,scaleFramePx:content.w/source.width};
 }

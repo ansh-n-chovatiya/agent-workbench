@@ -1,8 +1,11 @@
+import { readScenes, validateScenesInProject, sceneStoryboard } from '../scenes.mjs';
+import { chaptersFor } from './chapters.mjs';
+import { getExportDir, validateExportDir, exportFileName, uniqueName } from '../export-dir.mjs';
 import { THEMES } from './themes.mjs';
 import { leafValues } from '../brand/apply.mjs';
 import { loadBriefBrand, resolveBrandRoute } from '../brand/storage.mjs';
 import { safeFile } from '../editor/files.mjs';
-import { presetOutput } from './layout.mjs';
+import { presetOutput, sizeKeyFor, OUTPUT_SIZES } from './layout.mjs';
 import { profileWarnings } from './plan.mjs';
 import { listRuns } from '../record/commands.mjs';
 import http from 'node:http';
@@ -67,7 +70,7 @@ export async function resolveImageAssets(composition, dir) {
   const c = resolveComposition(composition), assets = new Map(), root = await realpath(dir);
   assets.warnings = [];
   const custom = c.cursor.style === 'custom' ? ['arrow', 'hand', 'text'].map((shape) => c.cursor.custom?.[shape]).filter(Boolean) : [];
-  for (const spec of [c.watermark, c.frame.background, c.cards.title.background, c.cards.outro.background, c.cards.title.logo, c.cards.outro.logo, ...(c.overlays ?? []).filter(o => o.template === 'logo-sting' && o.params.useLogo).map(o => ({ image:o.params.logo })), ...custom]) {
+  for (const spec of [c.watermark, c.frame.background, c.cards.title.background, c.cards.outro.background, c.cards.title.logo, c.cards.outro.logo, ...custom]) {
     if (!spec?.image) continue;
     if (!safeImagePath(spec.image)) throw new Error('Image must be inside the project');
     const isCursor = custom.includes(spec);
@@ -93,9 +96,10 @@ export async function resolveImageAssets(composition, dir) {
   }
   return assets;
 }
-export async function startRenderServer({ rawFile, outFile, assets = new Map(), projectDir: audioDir = null, onProgress = () => {} }) {
+export async function startRenderServer({ rawFile, outFile, assets = new Map(), projectDir: audioDir = null, rawFiles = new Map(), onProgress = () => {} }) {
   const prefix = `/${randomUUID()}/`;
-  const rawStat = await stat(rawFile);
+  const sourceRoutes = new Map([['raw.mp4',{file:rawFile,stat:await stat(rawFile)}]]);
+  for (const [run,file] of rawFiles) sourceRoutes.set(`run/${encodeURIComponent(run)}/raw.mp4`,{file,stat:await stat(file)});
   const bundle = await readFile(new URL('dist/render-page.js', root));
   let file, server, failure, bytes = 0, writes = Promise.resolve();
   const close = async () => {
@@ -111,7 +115,9 @@ export async function startRenderServer({ rawFile, outFile, assets = new Map(), 
     server = http.createServer((request, response) => {
       const handle = async () => {
         const route = request.url;
-        if (['GET', 'HEAD'].includes(request.method) && route === `${prefix}raw.mp4`) {
+        const raw = route.startsWith(prefix) ? sourceRoutes.get(route.slice(prefix.length)) : null;
+        if (['GET', 'HEAD'].includes(request.method) && raw) {
+          const rawStat=raw.stat;
           const headers = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes' };
           let start = 0, end = rawStat.size - 1, status = 200;
           if (request.headers.range) {
@@ -128,7 +134,7 @@ export async function startRenderServer({ rawFile, outFile, assets = new Map(), 
           response.writeHead(status, headers);
           if (request.method === 'HEAD') response.end();
           else {
-            const stream = createReadStream(rawFile, { start, end });
+            const stream = createReadStream(raw.file, { start, end });
             stream.on('error', (error) => { failure ??= error; response.destroy(error); });
             response.on('close', () => stream.destroy()); stream.pipe(response);
           }
@@ -216,6 +222,7 @@ export async function loadRunComposition({ name, runId, rebuild = false, rebind 
   if (composition) {
     const validation = validateComposition(composition);
     if (!validation.ok) throw new Error(validation.errors.join('\n'));
+    composition = resolveComposition(composition);
   }
   if (composition && composition.run.id !== runId) {
     if (!rebind) throw new Error('Composition belongs to another run; use --rebuild to select this run');
@@ -224,7 +231,6 @@ export async function loadRunComposition({ name, runId, rebuild = false, rebind 
     composition.edits = { trims: [], speeds: [], holds: [] };
     composition.zoom.regions = [];
     delete composition.captions.cues;
-    composition.overlays = [];
   }
   const [brief, storyboard, events, record] = await Promise.all([
     readProjectFile(name, 'brief'), readProjectFile(name, 'storyboard'), json(path.join(runDir, 'events.json')),
@@ -238,14 +244,33 @@ export async function loadRunComposition({ name, runId, rebuild = false, rebind 
   return { dir, compositionFile, composition, runId, runDir, rawFile, brief, storyboard, events, record };
 }
 
-export async function renderRun({ name, runId, format = 'landscape', size, fps, out, rebuild = false, stills = null, log = console.log, signal, isCancelled = () => false, onProgress = () => {} }) {
+export async function renderRun({ name, runId, sceneId, format = 'landscape', size, fps, out, exportDir, rebuild = false, stills = null, log = console.log, signal, isCancelled = () => false, onProgress = () => {} }) {
   presetOutput(format, size ?? '1080');
   const cancelled = () => signal?.aborted || isCancelled();
   const checkCancelled = () => { if (cancelled()) throw new Error('Render aborted'); };
   checkCancelled();
-  if (size !== undefined && !['1080', '4k'].includes(size)) throw new Error('size must be 1080 or 4k');
+  if (size !== undefined && !Object.hasOwn(OUTPUT_SIZES, String(size))) throw new Error('size must be 720, 1080, 1440 or 4k');
   if (fps !== undefined && ![30, 60].includes(fps)) throw new Error('fps must be 30 or 60');
+  const sceneData = await readScenes(projectDir(name));
+  let selectedScenes;
+  if (sceneData !== null) {
+    const validation=await validateScenesInProject(projectDir(name),sceneData);
+    if (!validation.ok) throw new Error(validation.errors.join('\n'));
+    for (const warning of validation.warnings) log(`warning: ${warning}`);
+    selectedScenes=sceneId ? sceneData.scenes.filter(s => s.id === sceneId) : sceneData.scenes;
+    if (!selectedScenes.length) throw new Error(sceneId ? `Unknown scene: ${sceneId}` : 'No scenes to render');
+    // Preserve source-bound edits from the saved run while loading each other run independently.
+    let savedRun;
+    if (!rebuild) { try { savedRun=(await json(path.join(projectDir(name),'composition.json'))).run?.id; } catch (e) { if (e.code !== 'ENOENT') throw e; } }
+    runId=selectedScenes.some(s => s.run === savedRun) ? savedRun : selectedScenes[0].run;
+  } else if (sceneId) throw new Error('--scene requires scenes.json');
   const { dir, compositionFile, rawFile, brief, storyboard, events, record, composition: loaded } = await loadRunComposition({ name, runId, rebuild, rebind: true });
+  const sceneInputs = selectedScenes ? await Promise.all(selectedScenes.map(async scene => {
+    const runFile = file => safeFile(dir,`runs/${encodeURIComponent(scene.run)}/${file}`);
+    const [rawFile,events,record,board] = await Promise.all([runFile('raw.mp4'),runFile('events.json').then(json),runFile('record.json').then(json),sceneStoryboard(dir,scene,storyboard)]);
+    return {...scene,rawFile,events,record,storyboardFile:scene.storyboard,storyboard:board};
+  })) : null;
+  const rawFiles = new Map(sceneInputs?.map(s => [s.run,s.rawFile]) ?? []);
   const brand = await loadBriefBrand(brief,log);
   let composition = loaded;
   // Keep the editable composition on its original run when exporting another profile.
@@ -263,14 +288,17 @@ export async function renderRun({ name, runId, format = 'landscape', size, fps, 
   }
   const renderId = `${localRunId()}-${format}-${randomUUID().slice(0, 8)}`, renderDir = path.join(dir, 'renders', renderId);
   await mkdir(path.dirname(renderDir), { recursive: true }); await mkdir(renderDir);
-  const finalFile = out ? path.resolve(out) : path.join(renderDir, format === 'landscape' ? 'final.mp4' : `final-${format}.mp4`);
+  const destination = out ? path.dirname(path.resolve(out)) : await validateExportDir(exportDir ?? await getExportDir(), { create: true });
+  const readable = exportFileName({ projectName: name, format, size: size ?? sizeKeyFor(composition.output.width, composition.output.height) });
+  const finalFile = out ? path.resolve(out) : await uniqueName(destination, path.basename(readable, '.mp4'));
+  const sidecarBase = finalFile.slice(0, -path.extname(finalFile).length);
   await mkdir(path.dirname(finalFile), { recursive: true });
   let server, browser, page, plan, result;
   let lastLog = 0, cancelTimer, completed = false, ownsOutput = false;
   const started = Date.now();
   try {
     checkCancelled();
-    server = await startRenderServer({ rawFile, outFile: finalFile, assets, projectDir: dir, onProgress({ frame, total }) {
+    server = await startRenderServer({ rawFile, rawFiles, outFile: finalFile, assets, projectDir: dir, onProgress({ frame, total }) {
       onProgress({frame,total});
       const now = Date.now();
       if (now - lastLog < 1000) return;
@@ -289,7 +317,8 @@ export async function renderRun({ name, runId, format = 'landscape', size, fps, 
     checkCancelled();
     await page.goto(server.url); await page.waitForFunction(() => typeof window.renderComposition === 'function');
     const sourceSize = await page.evaluate(() => window.probeRenderSource());
-    plan = planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings: assets.warnings, voiceClips, brand });
+    if (sceneInputs) for (const scene of sceneInputs) scene.sourceSize = await page.evaluate(url => window.probeRenderSource(url),new URL(`run/${encodeURIComponent(scene.run)}/raw.mp4`,server.url).href);
+    plan = planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings: assets.warnings, voiceClips, brand, scenes:sceneInputs });
     for (const warning of plan.warnings) if (!profileWarnings(record.profile ?? events.profile, format).includes(warning)) log(`warning: ${warning}`);
     for (const warning of plan.audio.warnings) log(`warning: ${warning.message}`);
     if (stills) {
@@ -318,19 +347,28 @@ export async function renderRun({ name, runId, format = 'landscape', size, fps, 
       plan: JSON.parse(JSON.stringify(plan)), t: plan.timemap.mainStart + (plan.timemap.mainEnd - plan.timemap.mainStart) * 0.35,
     });
     await Promise.all([
-      writeFile(path.join(renderDir, 'final.srt'), toSrt(plan.cues, plan.timemap)),
-      writeFile(path.join(renderDir, 'final.vtt'), toVtt(plan.cues, plan.timemap)),
+      writeFile(`${sidecarBase}.srt`, toSrt(plan.cues, plan.timemap)),
+      writeFile(`${sidecarBase}.vtt`, toVtt(plan.cues, plan.timemap)),
       writeFile(path.join(renderDir, 'poster.png'), Buffer.from(poster.split(',')[1], 'base64')),
     ]);
+    if (plan.scenes) {
+      const chapters = chaptersFor(plan);
+      await writeFile(`${sidecarBase}.chapters.vtt`, chapters.vtt);
+      if (chapters.txt !== null) await writeFile(`${sidecarBase}.chapters.txt`, chapters.txt);
+      else log(chapters.notice);
+    }
+    await writeFile(path.join(renderDir, 'export.json'), JSON.stringify({ finalFile }, null, 2));
+    await writeFile(path.join(renderDir, 'summary.json'), JSON.stringify({ finalFile, durationSec: plan.timemap.outputDuration, output: composition.output, audio: result.audio ?? null }, null, 2));
     log(`Final video: ${finalFile} (${plan.timemap.outputDuration.toFixed(2)} s, ${composition.output.width}x${composition.output.height}, ${composition.output.fps} fps)`);
+    log(`Saved to: ${path.dirname(finalFile)}`);
     checkCancelled(); completed = true;
-    return { renderDir, finalFile, plan, ...result };
+    return { renderDir, finalFile, plan, ...result, sizeBytes: (await stat(finalFile)).size, durationSec: plan.timemap.outputDuration, ...composition.output };
   } finally {
     clearInterval(cancelTimer);
     try { await page?.close(); }
     finally { try { await browser?.close(); } finally {
       try { await server?.close(); }
-      finally { if (!completed && ownsOutput) await rm(finalFile,{force:true}); }
+      finally { if (!completed && ownsOutput) await Promise.all([finalFile, ...['.srt','.vtt','.chapters.txt','.chapters.vtt'].map(ext => sidecarBase + ext)].map(file => rm(file,{force:true}))); }
     } }
   }
 }
@@ -339,20 +377,19 @@ export async function renderRun({ name, runId, format = 'landscape', size, fps, 
 export function compositionForFormat(input, format, size, fps) {
   const c = structuredClone(input);
   const previous = c.output.preset ?? 'landscape';
-  c.output = { ...c.output, ...presetOutput(format, size ?? (Math.max(c.output.width, c.output.height) > 1920 ? '4k' : '1080')), ...(fps ? { fps } : {}) };
+  c.output = { ...c.output, ...presetOutput(format, size ?? sizeKeyFor(c.output.width, c.output.height)), ...(fps ? { fps } : {}) };
   if (format !== previous) {
     if (format === 'vertical') {
       if (c.frame.paddingXPct === 8) c.frame.paddingXPct = 4;
       if (c.frame.paddingYPct === 5) c.frame.paddingYPct = 0;
       if (c.captions.bandHeightPct === 13) c.captions.bandHeightPct = 16;
-      if (c.captions.fontSizePct === 3.4*THEMES[c.theme].typography.captionSizeMultiplier) c.captions.fontSizePct=3.9;
-      if (c.captions.maxLines === 2) c.captions.maxLines=3;
+      if (c.captions.fontSizePct === 3.4*THEMES[c.theme].typography.captionSizeMultiplier) c.captions.fontSizePct=3.0;
       if (c.zoom.depth === resolveComposition({ theme: c.theme }).zoom.depth) c.zoom.depth = 1.5;
     } else if (previous === 'vertical') {
       if (c.frame.paddingXPct === 4) c.frame.paddingXPct = 8;
       if (c.frame.paddingYPct === 0) c.frame.paddingYPct = 5;
       if (c.captions.bandHeightPct === 16) c.captions.bandHeightPct = 13;
-      if (c.captions.fontSizePct === 3.9) c.captions.fontSizePct=3.4*THEMES[c.theme].typography.captionSizeMultiplier;
+      if (c.captions.fontSizePct === 3.0) c.captions.fontSizePct=3.4*THEMES[c.theme].typography.captionSizeMultiplier;
       if (c.captions.maxLines === 3) c.captions.maxLines=2;
       if (c.zoom.depth === 1.5) c.zoom.depth = resolveComposition({ theme: c.theme }).zoom.depth;
       if (c.layout?.safeZones === true) c.layout.safeZones = null;
@@ -374,7 +411,7 @@ export function selectRenderRuns(runs) {
   return [...(desktop ? [{ runId: desktop.id, format: 'landscape' }] : []), ...(phone ? [{ runId: phone.id, format: 'vertical' }] : [])];
 }
 export async function renderAll(options) {
-  if (options.runId || options.out || options.format) throw new Error('--all cannot be combined with --run, --out or --format');
+  if (options.runId || options.sceneId || options.out || options.format) throw new Error('--all cannot be combined with --run, --out or --format');
   const selected = selectRenderRuns(await listRuns(options.name));
   if (!selected.length) throw new Error('No completed recordings found');
   const results = [];

@@ -41,7 +41,7 @@ test('boundary values validate and invalid scalar ranges fail independently', ()
   const cases = [
     ['output.width', [2, 7680], [1, 7681, 2.5]], ['output.height', [2, 4320], [1, 4321]],
     ['frame.paddingPct', [0, 25], [-1, 26]], ['cursor.sizePct', [1, 8], [0, 0.9, 8.1, 11]],
-    ['zoom.depth', [1.05, 4], [1, 4.1]], ['cards.fade', [0, 1.5], [-1, 1.6, 6]],
+    ['zoom.depth', [1.05, 5], [1, 5.1]], ['cards.fade', [0, 1.5], [-1, 1.6, 6]],
     ['cards.title.duration', [0, 30], [-1, 31]], ['cards.outro.duration', [0, 30], [-1, 31]],
   ];
   for (const [path, good, bad] of cases) for (const value of [...good, ...bad, null, Infinity, '1']) {

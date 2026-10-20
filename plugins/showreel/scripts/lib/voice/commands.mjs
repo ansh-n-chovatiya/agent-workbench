@@ -1,6 +1,7 @@
 import { readFile, mkdir, access } from 'node:fs/promises';
 import path from 'node:path';
 import { projectDir } from '../paths.mjs';
+import { readScenes, sceneStoryboard } from '../scenes.mjs';
 import { readProjectFile } from '../project.mjs';
 import { sampleDir, clipFile, pronunciationsFile } from './paths.mjs';
 import { atomicWriteJson } from './atomic.mjs';
@@ -19,9 +20,9 @@ const SPECS = {
   install: { flags: ['--yes', '--check'], switches: ['--yes', '--check'] },
   list: { flags: ['--json'], switches: ['--json'] },
   samples: { flags: ['--voice', '--all'], switches: ['--all'] },
-  generate: { flags: ['--name', '--step', '--voice', '--speed', '--force'], switches: ['--force'], needsName: true },
-  status: { flags: ['--name', '--json'], switches: ['--json'], needsName: true },
-  import: { flags: ['--name', '--step', '--file', '--as'], switches: [], needsName: true },
+  generate: { flags: ['--name', '--scene', '--step', '--voice', '--speed', '--force'], switches: ['--force'], needsName: true },
+  status: { flags: ['--name', '--scene', '--json'], switches: ['--json'], needsName: true },
+  import: { flags: ['--name', '--scene', '--step', '--file', '--as'], switches: [], needsName: true },
   clean: { flags: ['--name'], switches: [], needsName: true },
 };
 export function parseVoiceArgs(sub, flags) {
@@ -68,8 +69,16 @@ export function wantedClips({ storyboard, pronunciations, voice, speed, engine, 
   return wanted;
 }
 
-async function statusRows(name, { voice, speed }) {
-  const storyboard = await readProjectFile(name, 'storyboard');
+export async function voiceStoryboard(name, sceneId) {
+  const fallback=await readProjectFile(name,'storyboard');
+  if (!sceneId) return fallback;
+  const data=await readScenes(projectDir(name)), scene=data?.scenes?.find(s => s.id === sceneId);
+  if (!scene) throw new Error(`Unknown scene: ${sceneId}`);
+  const board=await sceneStoryboard(projectDir(name),scene,fallback);
+  return {...board,steps:board.steps.map(s => ({...s,id:`${sceneId}:${s.id}`}))};
+}
+async function statusRows(name, { voice, speed, sceneId }) {
+  const storyboard = await voiceStoryboard(name,sceneId);
   const index = await readIndex(name);
   const pronunciations = await readPronunciations(name);
   const wanted = wantedClips({ storyboard, pronunciations, voice, speed, engine: currentEngineName(), modelHash: await currentModelHash() });
@@ -84,8 +93,8 @@ function table(rows, headers) {
 
 async function generateCommand(o) {
   const name = o['--name'], voice = checkVoiceId(o['--voice'] ?? DEFAULT_VOICE), speed = parseSpeed(o['--speed']), force = Boolean(o['--force']);
-  const { storyboard, index: initial, pronunciations, wanted } = await statusRows(name, { voice, speed });
-  const only = o['--step'];
+  const { storyboard, index: initial, pronunciations, wanted } = await statusRows(name, { voice, speed, sceneId:o['--scene'] });
+  const only = o['--step'] && (o['--scene'] ? `${o['--scene']}:${o['--step']}` : o['--step']);
   if (only && !storyboard.steps.some((s) => s.id === only)) throw new Error(`Unknown step "${only}"`);
   let index = initial;
   const out = [];
@@ -122,7 +131,7 @@ async function statusCommand(o) {
   const index = await readIndex(name);
   const clips = Object.values(index.clips).filter((c) => c.source === 'tts');
   const voice = clips.at(-1)?.voice ?? DEFAULT_VOICE, speed = clips.at(-1)?.speed ?? 1;
-  const { rows } = await statusRows(name, { voice, speed });
+  const { rows } = await statusRows(name, { voice, speed, sceneId:o['--scene'] });
   if (o['--json']) { console.log(JSON.stringify({ voice, speed, steps: rows }, null, 2)); return; }
   console.log(table(rows.map((r) => [r.stepId, r.status, r.durationSec == null ? '-' : f2(r.durationSec), r.source ?? '-']), ['step', 'status', 'seconds', 'source']));
 }
@@ -149,10 +158,10 @@ async function samplesCommand(o) {
 }
 
 async function importCommand(o) {
-  const name = o['--name'], step = o['--step'], file = o['--file'], as = o['--as'] ?? 'file';
+  const name = o['--name'], step = o['--step'] && (o['--scene'] ? `${o['--scene']}:${o['--step']}` : o['--step']), file = o['--file'], as = o['--as'] ?? 'file';
   if (!step || !file) throw new Error('Usage: showreel voice import --name <name> --step <sN> --file <F.wav> [--as own|file]');
   if (!['own', 'file'].includes(as)) throw new Error('--as must be own or file');
-  const storyboard = await readProjectFile(name, 'storyboard');
+  const storyboard = await voiceStoryboard(name,o['--scene']);
   const s = storyboard.steps.find((x) => x.id === step);
   if (!s) throw new Error(`Unknown step "${step}"`);
   const r = await importWavFile(name, path.resolve(file));

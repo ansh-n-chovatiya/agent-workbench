@@ -52,7 +52,7 @@ export function createEditorStore({ api = request, debounce = 800 } = {}) {
   const publish = patch => { if (!disposed) { state = { ...state, ...patch }; listeners.forEach(fn => fn(state)); } };
   function rebuild() {
     if (!state.project || !sourceSize) return;
-    try { publish({ plan: planRender({ ...state.project, composition: state.composition, sourceSize, voiceClips: state.project.clips ?? null, audioUrls: editorAudioUrls, brandBase: '/media/brand/' }), error: null, errors: [] }); }
+    try { publish({ plan: planRender({ ...state.project, scenes: undefined, composition: state.composition, sourceSize, voiceClips: state.project.clips ?? null, audioUrls: editorAudioUrls, brandBase: '/media/brand/' }), error: null, errors: [] }); }
     catch (error) { publish({ plan: null, error: error.message, errors: error.message.split('\n') }); }
   }
   function dispatch(action) {

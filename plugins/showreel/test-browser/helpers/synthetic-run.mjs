@@ -11,7 +11,7 @@ async function helperBundle() {
   bundle ??= build({ stdin: { resolveDir: fileURLToPath(new URL('../../', import.meta.url)), contents: `
     import { Output, Mp4OutputFormat, BufferTarget, CanvasSource, canEncodeVideo,
       Input, UrlSource, ALL_FORMATS, CanvasSink } from 'mediabunny';
-    window.makeSynthetic = async () => {
+    window.makeSynthetic = async ({ background = '#808080', duration = 4 } = {}) => {
       const canvas = document.createElement('canvas'); canvas.width = 1280; canvas.height = 720;
       const ctx = canvas.getContext('2d');
       let codec;
@@ -24,8 +24,8 @@ async function helperBundle() {
       let done = false;
       try {
         await output.start();
-        for (let k = 0; k < 120; k++) {
-          ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, 1280, 720);
+        for (let k = 0; k < Math.round(duration * 30); k++) {
+          ctx.fillStyle = background; ctx.fillRect(0, 0, 1280, 720);
           ctx.fillStyle = '#ff0000'; ctx.fillRect(200, 100, 60, 60);
           ctx.fillStyle = '#0000ff'; ctx.fillRect(900, 500, 80, 80);
           ctx.fillStyle = '#00ff00'; ctx.fillRect(40 + 280 * (k / 30), 650, 40, 40);
@@ -99,7 +99,7 @@ export async function inspectionPage(browser, rawFile, outFile, assets = new Map
   } catch (error) { try { await page?.close(); } finally { await server.close(); } throw error; }
 }
 
-export async function syntheticRun(browser, { name = 'synthetic', runId = '20261018-120000' } = {}) {
+export async function syntheticRun(browser, { name = 'synthetic', runId = '20261018-120000', background = '#808080', duration = 4 } = {}) {
   const dir = projectDir(name), runDir = path.join(dir, 'runs', runId);
   await mkdir(runDir, { recursive: true });
   const rawFile = path.join(runDir, 'raw.mp4'), scratch = path.join(runDir, 'bootstrap.mp4');
@@ -107,19 +107,19 @@ export async function syntheticRun(browser, { name = 'synthetic', runId = '20261
   let session, encoded;
   try {
     session = await inspectionPage(browser, rawFile, scratch);
-    encoded = await session.page.evaluate(() => window.makeSynthetic());
+    encoded = await session.page.evaluate(options => window.makeSynthetic(options), {background,duration});
   } finally { try { await session?.close(); } finally { await rm(scratch, { force: true }); } }
   const bytes = Buffer.from(encoded.base64, 'base64'); await writeFile(rawFile, bytes);
   const events = { version: 1, viewport: { width: 1280, height: 720 }, scale: 1,
     cursor: Array.from({ length: 67 }, (_, i) => ({ t: 0.5 + i / 60, x: 100 + 840 * i / 66, y: 100 + 440 * i / 66 })),
     clicks: [{ t: 1.7, x: 940, y: 540, stepId: 's1', tab: 0 }],
     targets: [{ t: 1.2, stepId: 's1', kind: 'click', sensitive: false, box: { x: 900, y: 500, w: 80, h: 80 } }],
-    steps: [{ id: 's1', tStart: 0.1, holdStart: 1.8, tEnd: 3.8 }], keys: [], moves: [], blocked: [], tabs: [],
+    steps: [{ id: 's1', tStart: 0.1, holdStart: Math.min(1.8,duration-0.2), tEnd: duration-0.2 }], keys: [], moves: [], blocked: [], tabs: [],
   };
   const record = { version: 1, projectName: name, runId, startedAt: '2026-10-18T12:00:00.000Z',
     scale: { requested: 1, used: 1, reason: 'synthetic' }, fps: { nominal: 30, effective: 30, dropped: 0, maxBacklog: 0 },
-    video: { file: 'raw.mp4', width: 1280, height: 720, durationSec: 4, bytes: bytes.length },
-    durationSec: 4, warnings: [], codec: encoded.codec };
+    video: { file: 'raw.mp4', width: 1280, height: 720, durationSec: duration, bytes: bytes.length },
+    durationSec: duration, warnings: [], codec: encoded.codec };
   const storyboard = { version: 1, steps: [{ id: 's1', caption: 'Open the report' }] };
   const brief = structuredClone(DEFAULT_BRIEF);
   Object.assign(brief, { topic: 'Synthetic report', theme: 'clean', captions: { enabled: true, mode: 'band' },

@@ -8,11 +8,12 @@ export const sampleUrl = voice => `/media/voice-sample/${encodeURIComponent(voic
 export const clipUrl = key => `/media/voice/${encodeURIComponent(key)}.wav`;
 
 export function createVoiceController({ store, api = request, send = upload, fetchImpl = (...args) => fetch(...args), createAudio = () => new Audio() }) {
-  let state = { job: idle(), samples: new Set(), sampleBusy: null, playing: null, error: '', cancelled: false };
+  // `notice` says which button an error belongs to ({kind:'sample'|'clip'|'music', id, message}) so it can be shown right there.
+  let state = { job: idle(), samples: new Set(), sampleBusy: null, playing: null, error: '', notice: null, cancelled: false };
   const listeners = new Set();
   let stream = null, disposed = false, retry = null, audio = null, announced = false;
   const publish = patch => { state = { ...state, ...patch }; listeners.forEach(fn => fn(state)); };
-  const fail = error => { publish({ error: error?.message ?? String(error) }); return null; };
+  const fail = (error, notice = null) => { const message = error?.message ?? String(error); publish({ error: message, notice: notice ? { ...notice, message } : state.notice }); return null; };
 
   async function refresh() {
     try { const { voice, clips } = await api('/api/voice/status'); store.setProject({ voice, clips }); publish({ error: '' }); return voice; }
@@ -53,13 +54,17 @@ export function createVoiceController({ store, api = request, send = upload, fet
   }
   function player() { return audio ??= createAudio(); }
   function stopPlayback() { if (audio) { audio.pause(); audio.removeAttribute?.('src'); } publish({ playing: null }); }
+  // Plays one URL through the shared element. Resolves true once the browser has started playing, false when it could not
+  // (the error is published beside the button that asked, never silently).
   async function play(kind, id, url) {
-    if (state.playing?.kind === kind && state.playing.id === id) { stopPlayback(); return; }
+    if (state.playing?.kind === kind && state.playing.id === id) { stopPlayback(); return false; }
     const element = player();
     element.pause(); element.src = url;
-    element.onended = () => publish({ playing: null }); element.onerror = () => { publish({ playing: null, error: 'This audio could not be played.' }); };
-    publish({ playing: { kind, id } });
-    try { await element.play(); } catch (error) { if (error?.name !== 'AbortError') { publish({ playing: null }); fail(error); } }
+    element.onended = () => { if (state.playing?.kind === kind && state.playing.id === id) publish({ playing: null }); };
+    element.onerror = () => { if (state.playing?.kind === kind && state.playing.id === id) { publish({ playing: null }); fail(new Error('This audio could not be played. Try again.'), { kind, id }); } };
+    publish({ playing: { kind, id }, notice: state.notice?.kind === kind && state.notice.id === id ? null : state.notice });
+    try { await element.play(); return true; }
+    catch (error) { if (error?.name !== 'AbortError') { publish({ playing: null }); fail(error, { kind, id }); } return false; }
   }
   return {
     getState: () => state,
@@ -81,15 +86,22 @@ export function createVoiceController({ store, api = request, send = upload, fet
       } catch (error) { publish({ job: idle() }); fail(error); return false; }
     },
     async cancel() { publish({ job: { ...state.job, cancelling: true } }); try { await api('/api/voice/cancel', { method: 'POST' }); } catch (error) { fail(error); } },
-    async playSample(voice) {
-      if (state.playing?.kind === 'sample' && state.playing.id === voice) { stopPlayback(); return; }
+    // Plays a voice's sample: from disk when it exists, otherwise it is made first (spinner on that button) and plays when ready.
+    async playSample(voice, { retry = true } = {}) {
+      if (state.playing?.kind === 'sample' && state.playing.id === voice) { stopPlayback(); return false; }
       if (!state.samples.has(voice)) {
-        publish({ sampleBusy: voice, error: '' });
+        publish({ sampleBusy: voice, error: '', notice: null });
         try { await api('/api/voice/sample', { method: 'POST', body: JSON.stringify({ voice }) }); publish({ samples: new Set([...state.samples, voice]) }); }
-        catch (error) { publish({ sampleBusy: null }); return fail(error); }
+        catch (error) { publish({ sampleBusy: null }); fail(error, { kind: 'sample', id: voice }); return false; }
         publish({ sampleBusy: null });
       }
-      await play('sample', voice, sampleUrl(voice));
+      const started = await play('sample', voice, sampleUrl(voice));
+      // A sample listed on disk that cannot load any more is made again once.
+      if (!started && retry && state.notice?.kind === 'sample' && state.notice.id === voice && state.samples.has(voice)) {
+        const samples = new Set(state.samples); samples.delete(voice); publish({ samples });
+        return this.playSample(voice, { retry: false });
+      }
+      return started;
     },
     playClip: (stepId, key) => play('clip', stepId, clipUrl(key)),
     playMusic: url => play('music', 'music', url),
@@ -108,7 +120,7 @@ export function createVoiceController({ store, api = request, send = upload, fet
     async saveMusic(file) {
       return send(`/api/music?filename=${encodeURIComponent(file.name)}`, file, file.type || 'application/octet-stream');
     },
-    clearError() { publish({ error: '' }); },
+    clearError() { publish({ error: '', notice: null }); },
     dispose() { disposed = true; clearTimeout(retry); stream?.abort(); audio?.pause(); listeners.clear(); },
   };
 }

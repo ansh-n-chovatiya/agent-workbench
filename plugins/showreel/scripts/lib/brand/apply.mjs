@@ -66,7 +66,6 @@ export function brandTheme(brand, themeName) {
   theme.background.colors=[c.background,c.background];
   theme.card.background.colors=[c.background,c.background];
   Object.assign(theme.card,{titleColor:c.text,subtitleColor:c.muted,accent:c.primary});
-  theme.overlay={...theme.overlay,accent:c.accent,surface:c.background,onSurface:c.text,muted:c.muted};
   theme.ripple.color=c.accent;
   if (brand.fonts.heading) {
     theme.typography.family=brand.fonts.heading.family;

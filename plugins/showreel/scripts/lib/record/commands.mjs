@@ -7,9 +7,9 @@ import { readProjectFile } from '../project.mjs';
 export function parseRecordOptions(command, flags) {
   const allowed = {
     record: ['--name', '--headed', '--no-rehearsal', '--scale', '--fps', '--profile'],
-    login: ['--name', '--url'], runs: ['--name'], 'cursor-demo': ['--headed'],
+    login: ['--name', '--url'], runs: ['--name', '--json'], 'cursor-demo': ['--headed'],
   }[command];
-  const switches = ['--headed', '--no-rehearsal'];
+  const switches = ['--headed', '--no-rehearsal', '--json'];
   const options = {};
   for (let i = 0; i < flags.length; i++) {
     const flag = flags[i];
@@ -107,9 +107,14 @@ export async function recordingCommand(command, flags) {
   }
   if (command === 'login') return login({ name, url: options['--url'] });
   if (command === 'runs') {
-    for (const run of await listRuns(name)) {
+    const runs = await listRuns(name);
+    if (options['--json']) { console.log(JSON.stringify(runs, null, 2)); return; }
+    const shown = process.argv.includes('--verbose') ? runs : runs.slice(0, 10);
+    if (runs.length > 10) console.log(`${runs.length} runs`);
+    for (const run of shown) {
       console.log(`${run.id}\t${run.profile}\t${run.durationSec.toFixed(1)} s\t${run.bytes} bytes`);
     }
+    if (shown.length < runs.length) console.log(`${runs.length - shown.length} more, use --verbose`);
     return;
   }
   const { cursorDemo } = await import('./cursor-demo.mjs');

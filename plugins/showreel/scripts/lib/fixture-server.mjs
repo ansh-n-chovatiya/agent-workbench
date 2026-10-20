@@ -2,6 +2,7 @@ import http from 'node:http';
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { PLUGIN_ROOT } from './env.mjs';
+import { createBenchmarkRoutes } from '../../fixtures/demo-app/server.mjs';
 
 const types = {
   '.html': 'text/html; charset=utf-8',
@@ -19,6 +20,7 @@ const outside = (root, file) => {
 
 export async function startFixtureServer(dir = path.join(PLUGIN_ROOT, 'fixtures', 'demo-app')) {
   const root = await realpath(dir);
+  const benchmarkRoutes = root === await realpath(path.join(PLUGIN_ROOT, 'fixtures', 'demo-app')) ? createBenchmarkRoutes() : null;
   const server = http.createServer(async (req, res) => {
     const reply = (status, text) => {
       res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -30,12 +32,16 @@ export async function startFixtureServer(dir = path.join(PLUGIN_ROOT, 'fixtures'
       res.end();
       return;
     }
-    if (!['GET', 'HEAD'].includes(req.method)) return reply(405, 'Method not allowed');
     let pathname;
     try { pathname = decodeURIComponent(req.url.split(/[?#]/, 1)[0]); }
     catch { return reply(400, 'Invalid path'); }
     // Inspect the raw request target before URL normalization can erase traversal.
     if (pathname.split(/[\\/]/).includes('..') || pathname.includes('\0')) return reply(403, 'Forbidden');
+    if (benchmarkRoutes) {
+      try { if (await benchmarkRoutes(req, res, pathname)) return; }
+      catch { return reply(500, 'Cannot serve benchmark page'); }
+    }
+    if (!['GET', 'HEAD'].includes(req.method)) return reply(405, 'Method not allowed');
     const file = path.resolve(root, `.${pathname === '/' ? '/index.html' : pathname}`);
     if (outside(root, file)) return reply(403, 'Forbidden');
     try {

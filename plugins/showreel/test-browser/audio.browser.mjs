@@ -43,7 +43,7 @@ test('export with narration and music: audio track, loudness within 0.5 LU of -1
     const composition = buildComposition({ ...run, overrides: { audio: { voice: { enabled: true }, music: { enabled: true, file: 'music/bed.wav', fadeInSec: 0.3, fadeOutSec: 0.5 } } } });
     await writeFile(path.join(run.dir, 'composition.json'), JSON.stringify(composition, null, 2) + '\n');
     const logs = [];
-    const result = await renderRun({ name: run.name, log: (line) => logs.push(line) });
+    const result = await renderRun({ name: run.name, exportDir: path.join(directory, 'exports'), log: (line) => logs.push(line) });
     assert.ok(result.audio, 'render reports audio'); assert.ok(['aac', 'opus'].includes(result.audio.codec));
     assert.ok(Math.abs(result.audio.measured.integratedLufs + 16) <= 0.5, JSON.stringify(result.audio.measured));
     assert.ok(result.audio.measured.truePeakDb <= -0.95, JSON.stringify(result.audio.measured));

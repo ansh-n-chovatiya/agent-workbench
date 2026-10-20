@@ -99,7 +99,7 @@ the DOM, which removes the expensive dry-run. *Spike:* build on Playwright's own
 
 Features: timeline with cut and trim; fast-forward and slow-down ramps; custom cursor (style, size, smoothing, click
 effect); zoom regions with easing (auto-suggested, hand-adjustable); background, padding, corner radius, shadow, device
-frame; editable captions with style; per-step narration (text, voice, speed, language); motion templates and cards; music;
+frame; editable captions with style; per-step narration (text, voice, speed, language); title and outro cards; music;
 brand kit; multi-scene sequence with transitions and chapters; undo and redo; autosave; keyboard shortcuts; export queue
 with progress and cancel.
 
@@ -142,18 +142,17 @@ dictionary (brand names, acronyms) and pause and emphasis markers are supported.
 Bring your own file, or choose from a small set of bundled CC0 loops. Music ducks under narration. Output is normalised to
 a consistent broadcast loudness (EBU R128, -16 LUFS), computed in JavaScript. No sound effects in v1.
 
-## 10. Motion graphics and themes
+## 10. Cards, transitions and themes
 
-Free HTML, SVG and canvas templates parameterised by a few JSON fields, so Claude fills in a handful of values and spends
-almost no tokens: title card, outro, lower third, step badge, callout arrow, spotlight and dim, highlight box, number
-counter, progress bar, animated gradient background, and transitions (crossfade, slide, zoom-through).
+Title and outro cards support text, brand logos and backgrounds. Scenes support crossfade, slide and zoom-through
+transitions. Videos keep the recording clear, with captions, cursor, zoom and the optional brand watermark.
 
 Our own easing token table for video (standard easing curves, longer cinematic durations, spring for camera and cursor;
 ease-out for entrances, ease-in-out for moves, exits faster than entrances, no scale from zero, bounce off by default).
 The third-party `motion-design` skill was reviewed and rejected: wrong domain (interactive UI), no licence, and it adds a
 dependency and token cost.
 
-**Three complete themes** for v1 (background, cursor, zoom feel, typography, card and lower-third style, transition):
+**Three complete themes** for v1 (background, cursor, zoom feel, typography, card style, transition):
 *clean*, *dark* and *bold*. Open fonts (OFL) only.
 
 ## 11. Brand kit and multi-scene
@@ -210,7 +209,7 @@ hard budget for showreel and track it with a per-run meter in CI-style benchmark
 | 4 | Compositor and exporter | Golden frames match; export plays in QuickTime, VLC and browsers. |
 | 5 | Editor | All section 7 features work; edit-rule tests pass; preview matches export. |
 | 6 | Voice with preview, own voice, music | Real-time factor target met on the reference low-end PC. |
-| 7 | Themes, templates, brand kit, multi-scene | Three themes render the same storyboard distinctly. |
+| 7 | Themes, cards, brand kit, multi-scene | Three themes render the same storyboard distinctly. |
 | 8 | Token meter and benchmark | Per-video tokens at or under the budget, and below the baseline. |
 | 9 | Parity, release, retire the old skill | Showreel passes the quality bar (section 21) on the acceptance corpus; tag `showreel-v0.1.0`; first demo video made with showreel; only then `plugins/skills-demo` is removed and its marketplace entry replaced. |
 

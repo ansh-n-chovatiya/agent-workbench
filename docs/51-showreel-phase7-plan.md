@@ -30,3 +30,7 @@ measured plates, auto callout leader (reviewed and fixed after a first review ro
 Not done: Task D multi-scene and chapters (scenes.json, scene time map, multi-source compositor, transitions, chapters.txt/.vtt); Task E editor UI (overlays picker and params form, overlays timeline track, theme and brand panels, scenes strip, vertical preview); Task F integration (contact sheet of the three themes for the owner, SKILL.md update, CI confirmation, Phase 7 outcome).
 Known visual items to polish: in vertical, the caption block touches the bottom edge of the frame and its text is large (wraps to two lines at 3.9% of height); the lower-third plate sits inside the frame but could use a little more inset on bold.
 Reminder: `render --rebuild` regenerates the composition and drops saved settings (voice on, overlays, theme); use `composition set` instead.
+
+## Owner scope update
+
+Overlays removed on 2026-10-20 at the owner's request. The template and overlay decisions, tasks and status above are historical and superseded. Title and outro cards, captions, cursor, zoom, brand watermark, themes, easing, scenes/transitions, voice/music, vertical output and brand kit remain. Legacy composition and storyboard overlay fields are silently ignored.

@@ -40,7 +40,7 @@ export function createAudioPreview({ load = loadAudio, ContextClass = globalThis
       await new Promise(resolve => setTimeout(resolve, 0)); // let the page paint before the long synchronous mix
       if (disposed) return 'none';
       if (mine !== ticket) return 'stale'; // a newer plan arrived while this one was decoding
-      const mix = mixAudio({ durationSec: audio.durationSec, sampleRate: audio.sampleRate, clips, music, duck: audio.duck, loudness: audio.loudness });
+      const mix = mixAudio({ durationSec: audio.durationSec, sampleRate: audio.sampleRate, clips, music, mutes: audio.mutes, duck: audio.duck, loudness: audio.loudness });
       const made = new AudioBuffer({ length: mix.channels[0].length, numberOfChannels: 2, sampleRate: audio.sampleRate });
       made.copyToChannel(mix.channels[0], 0); made.copyToChannel(mix.channels[1], 1);
       buffer = made; signature = next;

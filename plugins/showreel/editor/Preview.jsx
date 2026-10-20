@@ -1,3 +1,5 @@
+import { ZoomBox } from './ZoomBox.jsx';
+import { Popover } from './ui/popover.jsx';
 import { h, Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { drawFrame, loadFonts, loadAssets } from '../scripts/lib/compose/draw.js';
@@ -9,12 +11,12 @@ import { Slider } from './ui/slider.jsx';
 import { Select } from './ui/select.jsx';
 import { Tooltip } from './ui/tooltip.jsx';
 import { Label } from './ui/label.jsx';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-preact';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Ellipsis } from 'lucide-preact';
 import { fitPreview, readPreference, writePreference } from './layout.mjs';
 import { playbackSync, previewBelowRate, audioSignature } from './playback.mjs';
 import { createAudioPreview } from './audio-preview.js';
 
-export function Preview({ plan, provider, time, setTime, playing, setPlaying, onPick, focus }) {
+export function Preview({ plan, provider, time, setTime, playing, setPlaying, focus, onZoomChange }) {
   const stage = useRef(), [size, setSize] = useState({width:0,height:0});
   const aspect = plan ? plan.output.width / plan.output.height : 16/9;
   useEffect(() => {
@@ -23,7 +25,7 @@ export function Preview({ plan, provider, time, setTime, playing, setPlaying, on
     const observer = new ResizeObserver(resize); observer.observe(node); resize();
     return () => observer.disconnect();
   }, [aspect]);
-  const video = useRef(), canvas = useRef(), current = useRef(time), drawn = useRef(null);
+  const video = useRef(), canvas = useRef(), current = useRef(time);
   const [loop, setLoop] = useState(false), [rate, setRate] = useState(1);
   const [assets, setAssets] = useState(null), [error, setError] = useState(''), [dropped, setDropped] = useState(false);
   current.current = time;
@@ -102,7 +104,7 @@ export function Preview({ plan, provider, time, setTime, playing, setPlaying, on
       const width = Math.round(plan.output.width * scale), height = Math.round(plan.output.height * scale);
       if (target.width !== width || target.height !== height) { target.width = width; target.height = height; }
       target.getContext('2d').setTransform(width / plan.output.width, 0, 0, height / plan.output.height, 0, 0);
-      drawFrame(target, plan, t, frame, assets); drawn.current = { plan, state }; lastTime = t;
+      drawFrame(target, plan, t, frame, assets); lastTime = t;
       if (playing) perf.lastFrameMs = performance.now() - start;
     }
     const tick = async now => {
@@ -180,49 +182,32 @@ export function Preview({ plan, provider, time, setTime, playing, setPlaying, on
       if (frameCallback !== undefined) media.cancelVideoFrameCallback(frameCallback);
     };
   }, [plan, provider, assets, playing, duration, rate, loop, audioReady]);
-  function pick(event) {
-    if (!onPick || !drawn.current) return;
-    const { plan: p, state } = drawn.current;
-    if (state.section !== 'main') return;
-    const rect = canvas.current.getBoundingClientRect(), f = p.layout.frame;
-    const x = (event.clientX - rect.left) / rect.width * p.output.width;
-    const y = (event.clientY - rect.top) / rect.height * p.output.height;
-    if (x < f.x || x > f.x + f.w || y < f.y || y > f.y + f.h) return;
-    const camera = state.camera;
-    onPick({ x: camera.cx + ((x - f.x) / f.w - 0.5) * p.sourceSize.width / camera.z / p.scale,
-      y: camera.cy + ((y - f.y) / f.h - 0.5) * p.sourceSize.height / camera.z / p.scale });
-  }
-  let crosshair = null;
-  if (plan && focus) {
-    const state = stateAt(plan,time), f = plan.layout.frame;
-    const k = focus.keyframes.findLast(k => k.t <= state.sourceT) ?? focus.keyframes[0];
-    if (k && state.section === 'main') {
-      const x = f.x + (0.5 + (k.x-state.camera.cx)*state.camera.z*plan.scale/plan.sourceSize.width)*f.w;
-      const y = f.y + (0.5 + (k.y-state.camera.cy)*state.camera.z*plan.scale/plan.sourceSize.height)*f.h;
-      if (x >= f.x && x <= f.x+f.w && y >= f.y && y <= f.y+f.h) crosshair = {left:`${x/plan.output.width*100}%`,top:`${y/plan.output.height*100}%`};
-    }
-  }
   // Like any player: pressing Play at the very end starts again from the beginning.
   const togglePlay = () => { audio.current.unlock(); if (!playing && duration > 0 && current.current >= duration - 0.05) { current.current = 0; setTime(0); } setPlaying(!playing); };
   const step = direction => { setPlaying(false); setTime(Math.max(0, Math.min(duration, time + direction / fps))); };
   return <section class="preview" aria-label="Video preview">
     <video ref={video} src="/media/raw.mp4" muted playsInline preload="auto" hidden />
-    <div class="preview-stage" ref={stage}><div class="preview-canvas-wrap" style={{width:size.width,height:size.height}}><canvas ref={canvas} onClick={pick} aria-label="Composition preview; click to pick zoom focus" style={{ aspectRatio: plan ? `${plan.output.width}/${plan.output.height}` : '16/9' }} />{crosshair && <span class="focus-crosshair" style={crosshair} aria-label="Selected zoom focus">+</span>}</div></div>
+    <div class="preview-stage" ref={stage}><div class="preview-canvas-wrap" style={{width:size.width,height:size.height}}><canvas ref={canvas} aria-label="Composition preview" style={{ aspectRatio: plan ? `${plan.output.width}/${plan.output.height}` : '16/9' }} />{plan && focus && <ZoomBox plan={plan} region={focus} time={time} size={size} onChange={onZoomChange} onPause={()=>setPlaying(false)}/>}</div></div>
     {error && <p class="error" role="alert">{error}</p>}
     {dropped && <p class="warning" role="status">Preview below 24 fps — frames are being dropped.</p>}
     {hasAudio && audioStatus === 'preparing' && <p class="audio-status" role="status">Preparing audio…</p>}
     {hasAudio && rate !== 1 && <p class="audio-status" role="status">Audio muted at this speed</p>}
     {audioStatus === 'error' && <p class="warning" role="status">Preview audio is unavailable: {audioError}</p>}
     <div class="transport" role="toolbar" aria-label="Preview transport">
+      <output class="timecode transport-current" aria-label="Current time">{timecode(time, fps)}</output>
+      <div class="transport-play">
       <Tooltip text={plan ? 'Previous frame (,)' : 'Load a recording to step frames'}><Button size="icon" onClick={() => step(-1)} aria-label="Previous frame" disabled={!plan}><SkipBack size={16} aria-hidden="true" /></Button></Tooltip>
       <Tooltip text={plan && assets ? `${playing ? 'Pause' : 'Play'} (Space)` : 'Waiting for the preview to load'}><Button size="icon" onClick={togglePlay} disabled={!plan || !assets} aria-label={playing ? 'Pause' : 'Play'}>{playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}</Button></Tooltip>
       <Tooltip text={plan ? 'Next frame (.)' : 'Load a recording to step frames'}><Button size="icon" onClick={() => step(1)} aria-label="Next frame" disabled={!plan}><SkipForward size={16} aria-hidden="true" /></Button></Tooltip>
-      <output class="timecode">{timecode(time, fps)} / {timecode(duration, fps)}</output>
-      <div class="seek"><Slider aria-label="Seek output time" min={0} max={duration || 1} step={1 / fps} value={[time]} disabled={!plan} onValueChange={([next]) => {setPlaying(false);setTime(next);}} /></div>
+      </div><div class="transport-right"><output class="timecode transport-duration" aria-label="Total time">{timecode(duration, fps)}</output>
+
       {hasAudio && <><Tooltip text={muted ? 'Turn preview audio on' : 'Mute preview audio'}><Button size="icon" aria-label={muted ? 'Unmute audio' : 'Mute audio'} aria-pressed={muted} onClick={() => { setMuted(!muted); writePreference('muted', muted ? '' : 'yes'); }}>{muted ? <VolumeX size={16} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />}</Button></Tooltip>
         <div class="volume"><Slider aria-label="Volume" min={0} max={1} step={0.05} value={[muted ? 0 : volume]} onValueChange={([next]) => { setVolume(next); writePreference('volume', String(next)); if (muted && next > 0) { setMuted(false); writePreference('muted', ''); } }} /></div></>}
+      <Popover label="Playback options" trigger={<Button size="icon" aria-label="Playback options"><Ellipsis size={16} aria-hidden="true"/></Button>}>
+      <div class="seek"><Slider aria-label="Seek output time" min={0} max={duration || 1} step={1 / fps} value={[time]} disabled={!plan} onValueChange={([next]) => {setPlaying(false);setTime(next);}} /></div>
       <Label className="loop-control"><Checkbox aria-label="Loop" checked={loop} onCheckedChange={setLoop} />Loop</Label>
       <Tooltip text="Preview playback speed"><span><Select aria-label="Playback rate" value={rate} onValueChange={next => setRate(+next)} options={[0.5,1,2].map(n => ({value:n,label:`${n}×`}))} /></span></Tooltip>
+      </Popover></div>
     </div>
   </section>;
 }

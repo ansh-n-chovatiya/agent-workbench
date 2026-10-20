@@ -76,3 +76,13 @@ export function extendCues(cues, spans, timemap, { gapSec = 0.05, minSec = 0.5 }
   }
   return sorted;
 }
+
+// Map source mute ranges through cuts, playback speeds and frozen frames.
+export function mutedOutputRanges(timemap, ranges = []) {
+  return ranges.flatMap(r => keptParts(timemap,r.start,r.end).map(p => ({start:p.outStart,end:p.outEnd})))
+    .sort((a,b) => a.start-b.start).reduce((out,r) => {
+      const last = out.at(-1);
+      if (last && r.start <= last.end + 1e-9) last.end = Math.max(last.end,r.end); else out.push(r);
+      return out;
+    },[]);
+}

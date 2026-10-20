@@ -28,7 +28,7 @@ test('synthetic offline compositor and exporter', { timeout: 300000 }, async (t)
   try {
     browser = await chromium.launch({ headless: true });
     const run = await syntheticRun(browser);
-    const baseline = await renderRun({ name: run.name, log() {} });
+    const baseline = await renderRun({ name: run.name, out: path.join(directory, 'final.mp4'), log() {} });
     const plan = baseline.plan;
     const sessionFor = async (rawFile, assets) => {
       const file = path.join(directory, `transport-${counter++}.mp4`);
@@ -59,7 +59,7 @@ test('synthetic offline compositor and exporter', { timeout: 300000 }, async (t)
       assert.deepEqual([info.width, info.height], [1920, 1080]); near(info.fps, 60, 0.1, 'fps');
       near(info.duration, plan.timemap.outputDuration, 0.1, 'duration');
       assert.equal(baseline.frames, Math.round(plan.timemap.outputDuration * 60));
-      for (const ext of ['srt', 'vtt']) assert.match(await readFile(path.join(baseline.renderDir, `final.${ext}`), 'utf8'), /Open the report/);
+      for (const ext of ['srt', 'vtt']) assert.match(await readFile(baseline.finalFile.replace(/\.mp4$/, `.${ext}`), 'utf8'), /Open the report/);
     });
     await t.test('full view geometry, rounded corners and settled zoom', async () => {
       const f = plan.layout.frame;

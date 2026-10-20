@@ -44,7 +44,7 @@ test('phone recording CLI, vertical stills and export', { timeout: 180000 }, asy
     const { buildComposition } = await import('../scripts/lib/compose/composition.mjs');
     const built = buildComposition({ brief, storyboard: { steps }, events: run.events, record: run.record, overrides: composition });
     await writeFile(path.join(dir, 'composition.json'), JSON.stringify(built));
-    const stills = await renderRun({ name, runId: run.record.runId, format: 'vertical', stills: [0.5], log() {} });
+    const stills = await renderRun({ name, runId: run.record.runId, format: 'vertical', exportDir: path.join(directory, 'exports'), stills: [0.5], log() {} });
     const png = await readFile(stills.files[0]);
     assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1080, 1920]);
     const { frame, caption } = stills.plan.layout;
@@ -53,9 +53,9 @@ test('phone recording CLI, vertical stills and export', { timeout: 180000 }, asy
     assert.ok(Math.abs(frame.w/frame.h-390/844)/(390/844)<.005);
     assert.equal(caption.w,Math.round(1080*.88)); assert.ok(caption.y > 1920 / 2);
     assert.ok(caption.y + caption.h <= 1920 * .86);
-    const exported = await renderRun({ name, runId: run.record.runId, format: 'vertical', log() {} });
+    const exported = await renderRun({ name, runId: run.record.runId, format: 'vertical', out: path.join(directory, 'exports', 'final-vertical.mp4'), log() {} });
     assert.equal(path.basename(exported.finalFile), 'final-vertical.mp4');
-    media = await startFixtureServer(exported.renderDir); browser = await chromium.launch();
+    media = await startFixtureServer(path.dirname(exported.finalFile)); browser = await chromium.launch();
     const page = await browser.newPage(); await page.goto(media.url);
     const dimensions = await page.evaluate(async url => {
       const video = document.createElement('video'); video.muted = true;
