@@ -66,7 +66,8 @@ def model_for(config, unit=None, role="runner", *, stats=None, round=1,
        only `review.dispatch_stats`' `bytes` and `out_of_scope`. Under
        `review.small_package_bytes` (`ctx.yaml`, defaulting to
        `config.DEFAULTS["review"]`) with no violations, the tier one below
-       the floor is enough; otherwise the floor holds.
+       the floor is enough; otherwise the floor holds. A unit tagged with a
+       `risk` is never cheapened, whatever its size.
     4. `models.<role>` in `ctx.yaml` — the floor every role falls back to
        when neither of the above has anything to say (no `unit`, no `stats`,
        or a `models.<role>` that is not even in `models.tiers`, which a
@@ -111,7 +112,7 @@ def model_for(config, unit=None, role="runner", *, stats=None, round=1,
         picked = tiers[index]
     elif stats is not None:
         small = stats.get("bytes", 0) <= _small_package_bytes(config)
-        clean = not stats.get("out_of_scope", 0)
+        clean = not stats.get("out_of_scope", 0) and not stats.get("risky", False)
         if small and clean and floor in tiers:
             picked = tiers[max(0, tiers.index(floor) - 1)]
 

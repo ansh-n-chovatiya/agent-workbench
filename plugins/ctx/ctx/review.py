@@ -482,6 +482,7 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
         "modified": len(delta.modified),
         "deleted": len(delta.deleted),
         "out_of_scope": len(stray),
+        "risky": bool(unit.risk),
         "truncated": delta.truncated,
         "round": round_number,
         "head_key": head_key,
@@ -538,6 +539,7 @@ def dispatch_stats(layout, slug, unit, round_number=1):
     return {
         "bytes": path.stat().st_size,
         "out_of_scope": len(stray),
+        "risky": bool(unit.risk),
     }
 
 
@@ -577,6 +579,14 @@ def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
     ]
     criteria = unit.doc.list_items("acceptance criteria", "criteria")
     out += [f"{i}. {c}" for i, c in enumerate(criteria, 1)] or ["(none stated)"]
+
+    if unit.risk or unit.failure_modes:
+        out += ["", "## Risk and failure modes", ""]
+        if unit.risk:
+            out.append(f"- **risk**: {', '.join(unit.risk)} (this unit is not reviewed on the cheapest tier)")
+        if unit.failure_modes:
+            out += ["- **failure modes that apply**: " + "; ".join(unit.failure_modes),
+                    "  Account for each one: say where the change handles it, or that it does not."]
 
     interfaces = unit.doc.section("interfaces").strip()
     if interfaces:
