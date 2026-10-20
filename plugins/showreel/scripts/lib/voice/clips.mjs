@@ -4,9 +4,11 @@ import path from 'node:path';
 import { clipsDir, clipsIndexFile, clipFile } from './paths.mjs';
 import { atomicWriteJson } from './atomic.mjs';
 
+import { VOICE_POST } from './pins.mjs';
+
 export const emptyIndex = () => ({ version: 1, clips: {}, steps: {} });
-export function clipKey({ engine, modelHash, voice, speed, preparedText }) {
-  return createHash('sha256').update(JSON.stringify({ engine, modelHash, voice, speed, preparedText })).digest('hex');
+export function clipKey({ engine, modelHash, voice, speed, preparedText, post = VOICE_POST }) {
+  return createHash('sha256').update(JSON.stringify({ engine, modelHash, voice, speed, preparedText, post })).digest('hex');
 }
 export async function readIndex(name) {
   let text;
@@ -29,7 +31,7 @@ export function stepStatus({ index, stepId, wanted, muted = [] }) {
   if (clip && (clip.source === 'own' || clip.source === 'file')) return clip.source;
   if (!wanted) return clip ? 'stale' : 'missing';
   if (!clip) return 'missing';
-  return clip.key === wanted.key ? 'fresh' : 'stale';
+  return clip.post === VOICE_POST && clip.key === wanted.key ? 'fresh' : 'stale';
 }
 export function computeStatuses({ index, steps, wantedByStep, muted = [] }) {
   return steps.map((step) => {

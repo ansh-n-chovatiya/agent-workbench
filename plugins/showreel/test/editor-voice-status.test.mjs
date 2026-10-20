@@ -6,7 +6,7 @@ import { buildTimeMap } from '../scripts/lib/compose/timemap.mjs';
 import { resolveComposition } from '../scripts/lib/compose/composition.mjs';
 import { FALLBACK_VOICES } from '../scripts/lib/voice/voices.mjs';
 
-const entry = (over = {}) => ({ key: 'k', text: 'Hello there', voice: 'af_heart', speed: 1, source: 'tts', durationSec: 2, ...over });
+const entry = (over = {}) => ({ key: 'k', text: 'Hello there', voice: 'af_heart', speed: 1, source: 'tts', post: 'trim1', durationSec: 2, ...over });
 test('status mapping covers ready, needs update, not generated, recordings, imports, muted and no narration', () => {
   const base = { text: 'Hello there', voice: 'af_heart', speed: 1 };
   assert.equal(voiceStatus({ ...base, entry: entry() }), 'fresh');
@@ -91,4 +91,11 @@ test('the Voice and Music panels together show every audio setting exactly once'
   const shown = [...VOICE_PANEL_PATHS, ...Object.values(MUSIC_PANEL_PATHS).flat()].sort();
   assert.deepEqual(shown, SETTINGS.filter(s => s.group === 'audio').map(s => s.path).sort());
   assert.equal(new Set(shown).size, shown.length);
+});
+
+test('legacy TTS displays Needs update while own and imported recordings remain ready', () => {
+  const old = entry(); delete old.post;
+  const args = { text: old.text, voice: old.voice, speed: old.speed, entry: old };
+  assert.equal(voiceStatus(args), 'stale');
+  for (const source of ['own', 'file']) assert.equal(voiceStatus({ ...args, entry: { ...old, source } }), source);
 });

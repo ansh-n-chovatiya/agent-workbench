@@ -111,6 +111,15 @@ test('generate, status, import and clean end to end', async () => {
   const idx = JSON.parse(await readFile(path.join(dir, 'voice', 'clips.json'), 'utf8'));
   assert.equal(idx.version, 1); assert.equal(Object.keys(idx.clips).length, 2);
   assert.ok(Math.abs(idx.clips[idx.steps.s3].durationSec - (0.32 * 2 + 0.4 + 0.5 + 0.32 * 2 + 0.4)) < 0.01);
+  assert.equal(idx.clips[idx.steps.s1].post, 'trim1');
+  assert.equal(idx.clips[idx.steps.s3].post, 'trim1');
+  // An index without post remains readable but cannot be reused as a processed clip.
+  delete idx.clips[idx.steps.s1].post;
+  await writeFile(path.join(dir, 'voice', 'clips.json'), JSON.stringify(idx));
+  assert.equal(JSON.parse(ok('voice', 'status', '--name', name, '--json').stdout).steps[0].status, 'stale');
+  assert.match(ok('voice', 'generate', '--name', name, '--step', 's1').stdout, /stale -> fresh.*generated/);
+  const refreshed = JSON.parse(await readFile(path.join(dir, 'voice', 'clips.json'), 'utf8'));
+  assert.equal(refreshed.clips[refreshed.steps.s1].post, 'trim1');
   // pronunciations change the prepared text, so the clip becomes stale, then regenerates
   await writeFile(path.join(dir, 'voice', 'pronunciations.json'), JSON.stringify({ dashboard: 'dash board' }));
   await writeFile(path.join(dir, 'storyboard.json'), JSON.stringify({ ...sb, steps: sb.steps.map((s) => (s.id === 's1' ? { ...s, narration: 'Welcome to the new dashboard.' } : s)) }));

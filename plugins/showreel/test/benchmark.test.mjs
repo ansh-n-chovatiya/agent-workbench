@@ -237,7 +237,7 @@ test('runner integrates preflight, isolated runs, successful-only medians, expor
   assert.equal(new Set(runs.map((call) => call.opts.env.SHOWREEL_HOME)).size, 3);
   for (const call of runs) {
     assert.ok(call.opts.cwd.startsWith(root));
-    assert.match(call.args[call.args.indexOf('--plugin-dir') + 1], /plugins\/skills-demo$/);
+    assert.match(call.args[call.args.indexOf('--plugin-dir') + 1], /plugins[\\/]skills-demo$/);
     assert.doesNotMatch(call.args[1], /private-bench-secret/);
     assert.ok(call.args.includes('dontAsk'));
     assert.ok(!call.args.includes('--dangerously-skip-permissions'));

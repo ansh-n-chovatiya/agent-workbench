@@ -1,5 +1,6 @@
 // Pure helpers behind the Voice panel, the timeline voice track and the export checklist. No DOM, no network.
 import { SPEED_MIN, SPEED_MAX, MAX_NARRATION_CHARS, clampVoiceSpeed, stepName, effectiveNarration } from '../scripts/lib/voice/narration.mjs';
+import { VOICE_POST } from '../scripts/lib/voice/pins.mjs';
 export { SPEED_MIN, SPEED_MAX, MAX_NARRATION_CHARS, clampVoiceSpeed, stepName, effectiveNarration };
 export const firstWords = (text, count = 4) => {
   const words = String(text ?? '').trim().split(/\s+/).filter(Boolean);
@@ -12,11 +13,11 @@ export function voiceStatus({ text, entry, muted = false, voice, speed }) {
   if (entry && (entry.source === 'own' || entry.source === 'file')) return entry.source;
   if (!text) return 'none';
   if (!entry) return 'missing';
-  return entry.text === text && entry.voice === voice && Number(entry.speed) === clampVoiceSpeed(speed) ? 'fresh' : 'stale';
+  return entry.post === VOICE_POST && entry.text === text && entry.voice === voice && Number(entry.speed) === clampVoiceSpeed(speed) ? 'fresh' : 'stale';
 }
 export const STATUS_LABELS = { fresh: 'Ready', stale: 'Needs update', missing: 'Not generated', own: 'Your recording', file: 'Imported file', muted: 'Muted', none: 'No narration' };
 export const STATUS_HELP = {
-  fresh: 'The voice-over matches the words, voice and speed.', stale: 'The words, voice or speed changed since this voice-over was made.',
+  fresh: 'The voice-over matches the words, voice and speed.', stale: 'The words, voice, speed or audio processing changed; generate this voice-over again.',
   missing: 'No voice-over has been made for this step yet.', own: 'Your own recording is used for this step.', file: 'An imported audio file is used for this step.',
   muted: 'This step is silent.', none: 'Write narration for this step to give it a voice-over.',
 };

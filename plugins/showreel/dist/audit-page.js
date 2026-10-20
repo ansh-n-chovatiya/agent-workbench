@@ -1,4 +1,4 @@
-// showreel audit sources sha256: 5ab3af78d60cd3657ff632888e51256a77b372cf4f191e5558c21d784e0beab0
+// showreel audit sources sha256: e234334aa903884842776361f2689c304fbc9ccb8ea17d82fee3e3b44b5fd00a
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -31760,7 +31760,7 @@
     });
   }
 
-  // scripts/audit/checks.mjs
+  // scripts/lib/voice/trim.mjs
   var finite = Number.isFinite;
   function monoRmsEnvelope(channels, sampleRate, stepSec = 5e-3) {
     const width = Math.round(sampleRate * stepSec), values = [];
@@ -31776,11 +31776,14 @@
     }
     return { values, stepSec: width / sampleRate };
   }
+
+  // scripts/audit/checks.mjs
+  var finite2 = Number.isFinite;
   function meanDifference(a, b, channels = 3) {
     if (!a.length || a.length !== b.length || a.length % channels) throw new Error("Image sizes differ or are empty");
     const sums = Array(channels).fill(0);
     for (let i = 0; i < a.length; i++) {
-      if (!finite(a[i]) || !finite(b[i])) throw new Error("Invalid pixel");
+      if (!finite2(a[i]) || !finite2(b[i])) throw new Error("Invalid pixel");
       sums[i % channels] += Math.abs(a[i] - b[i]);
     }
     return sums.map((s) => s / (a.length / channels));

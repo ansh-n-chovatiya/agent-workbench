@@ -6,9 +6,9 @@ import { orderVoices, FALLBACK_VOICES, normalizeVoices } from '../scripts/lib/vo
 const base = { engine: 'kokoro', modelHash: 'abc', voice: 'af_heart', speed: 1, preparedText: 'Hello there.' };
 test('cache keys are stable and sensitive to every field', () => {
   assert.equal(clipKey(base), clipKey({ ...base })); assert.match(clipKey(base), /^[0-9a-f]{64}$/);
-  for (const [k, v] of [['engine', 'fake'], ['modelHash', 'x'], ['voice', 'am_adam'], ['speed', 1.1], ['preparedText', 'Hello there!']]) assert.notEqual(clipKey({ ...base, [k]: v }), clipKey(base), k);
+  for (const [k, v] of [['post', 'trim2'], ['engine', 'fake'], ['modelHash', 'x'], ['voice', 'am_adam'], ['speed', 1.1], ['preparedText', 'Hello there!']]) assert.notEqual(clipKey({ ...base, [k]: v }), clipKey(base), k);
 });
-const entry = (key, stepId, source = 'tts') => ({ key, stepId, text: 't', voice: 'af_heart', speed: 1, engine: 'kokoro', durationSec: 1, sampleRate: 24000, source, createdAt: 'now' });
+const entry = (key, stepId, source = 'tts') => ({ key, stepId, text: 't', voice: 'af_heart', speed: 1, engine: 'kokoro', durationSec: 1, sampleRate: 24000, source, post: 'trim1', createdAt: 'now' });
 test('status: fresh, stale, missing, own, file, muted', () => {
   const k = clipKey(base), wanted = { key: k };
   let index = setClip(emptyIndex(), entry(k, 's1'));
@@ -30,4 +30,15 @@ test('voice ordering puts American English first, then British, default first', 
   const ids = orderVoices(FALLBACK_VOICES.slice().reverse()).map((v) => v.id);
   assert.equal(ids[0], 'af_heart'); assert.ok(ids.indexOf('am_adam') < ids.indexOf('bf_alice'));
   assert.equal(normalizeVoices({ ef_x: { name: 'X', language: 'es', gender: 'Female', overallGrade: 'B' }, af_heart: { name: 'Heart', language: 'en-us' } })[0].id, 'af_heart');
+});
+
+test('pre-trim cache keys are stale while legacy records and durations remain readable', async () => {
+  const { createHash } = await import('node:crypto');
+  const legacyKey = createHash('sha256').update(JSON.stringify(base)).digest('hex');
+  assert.notEqual(legacyKey, clipKey(base));
+  assert.equal(clipKey(base), clipKey({ ...base, post: 'trim1' }));
+  const legacy = entry(legacyKey, 's1'); delete legacy.post;
+  const index = setClip(emptyIndex(), legacy);
+  assert.equal(stepStatus({ index, stepId: 's1', wanted: { key: clipKey(base) } }), 'stale');
+  assert.equal(index.clips[index.steps.s1].durationSec, 1);
 });

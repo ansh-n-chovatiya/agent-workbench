@@ -30,13 +30,16 @@ async function selectScale(browser, requested, url, options) {
     if (!benchmarkScale) {
       const results = await benchmarkPipeline({ browser, url, seconds: 2, ...options });
       if (results.every((result) => result.error)) {
-        throw new Error(`Pipeline benchmark failed: ${results.map((r) => r.error).join('; ')}`);
+        // A benchmark glitch (slow or software-rendered machines) must never stop a recording: record at normal sharpness
+        // and do not cache the result, so the next recording tries again.
+        benchmarkScale = 1;
+      } else {
+        benchmarkScale = recommendScale(results);
+        await mkdir(HOME_DIR, { recursive: true });
+        await writeFile(path.join(HOME_DIR, options.profile === 'phone' ? 'benchmark-phone.json' : 'benchmark.json'), JSON.stringify({
+          scale: benchmarkScale, at: new Date().toISOString(),
+        }) + '\n');
       }
-      benchmarkScale = recommendScale(results);
-      await mkdir(HOME_DIR, { recursive: true });
-      await writeFile(path.join(HOME_DIR, options.profile === 'phone' ? 'benchmark-phone.json' : 'benchmark.json'), JSON.stringify({
-        scale: benchmarkScale, at: new Date().toISOString(),
-      }) + '\n');
     }
   }
   const candidate = chooseScale({ requested, benchmarkScale });

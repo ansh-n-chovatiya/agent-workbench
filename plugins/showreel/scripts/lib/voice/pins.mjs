@@ -9,6 +9,7 @@ export const REQUIRED_DISK_BYTES = 400 * 1024 * 1024;
 export const DEFAULT_VOICE = 'af_heart';
 export const SAMPLE_TEXT = 'Hi, this is how I sound. A quick tour of your product starts now.';
 export const SAMPLE_RATE = 24000;
+export const VOICE_POST = 'trim1';
 export const REQUEST_TIMEOUT_MS = 120000;
 export const FAKE_ENGINE = 'fake';
 export const isFakeEngine = (env = process.env) => env.SHOWREEL_VOICE_ENGINE === FAKE_ENGINE;

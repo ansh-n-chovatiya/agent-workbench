@@ -59,3 +59,5 @@ Problems seen: a help sentence under nearly every control makes panels very long
 
 ## Narration pacing
 Audio > Voice > Narrator includes **Trim waiting after narration**, enabled by default, and **Pause after each sentence** (0.4 s by default, adjustable from 0.1 to 2 s). Exports and the timeline's Result length shorten idle holds after narration while preserving actions, overlapping user edits, and the last step's final half-second. Recordings and saved edits stay unchanged; disable the switch to restore the original pacing.
+
+Newly generated narration removes excess leading and trailing silence using 5 ms RMS windows at −50 dBFS, keeping up to 60 ms before speech and 180 ms after it, with short fades at cut points. Explicit pauses remain intact; your recordings and imported audio keep their original timing. Existing generated clips remain playable and show **Needs update** until regenerated with `voice generate`.

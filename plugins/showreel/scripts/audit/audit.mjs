@@ -5,13 +5,16 @@ import { readFile, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { projectDir } from '../lib/paths.mjs';
-import { loadRunComposition, resolveImageAssets, loadVoiceClips, compositionForFormat } from '../lib/compose/render.mjs';
+import { loadRunComposition, resolveImageAssets, loadVoiceClips, resolveAudioRoute, compositionForFormat } from '../lib/compose/render.mjs';
 import { planRender } from '../lib/compose/plan.mjs';
 import { sizeKeyFor } from '../lib/compose/layout.mjs';
 import { readScenes, validateScenesInProject, sceneStoryboard } from '../lib/scenes.mjs';
 import { safeFile } from '../lib/editor/files.mjs';
 import { loadBriefBrand, resolveBrandRoute } from '../lib/brand/storage.mjs';
 import { checkCadence, checkSync, checkLoudness, checkCaptions, checkFrozen, allowedFreezeRanges, checkParity, checkContainer, auditPassed, formatAudit } from './checks.mjs';
+
+import { parseWav } from '../lib/voice/wav.mjs';
+import { speechBounds } from '../lib/voice/trim.mjs';
 
 const root = new URL('../../', import.meta.url);
 const json = async file => JSON.parse(await readFile(file, 'utf8'));
@@ -63,12 +66,30 @@ export async function startAuditServer({ video, sources = new Map(), assets = ne
     check() { if (failure) throw failure; },
     close: () => new Promise((resolve, reject) => { server.closeAllConnections(); server.close(error => error ? reject(error) : resolve()); }) };
 }
+// Preserve indexed placements even if a clip was removed after the export was made.
+export async function loadAuditVoiceClips(dir) {
+  const { voiceClips } = await loadVoiceClips(dir); // validate the index shape
+  return voiceClips ? json(path.join(dir, 'voice', 'clips.json')) : null;
+}
+export async function loadNarrationLeads(dir, narration) {
+  const cache = new Map();
+  return Promise.all(narration.map(async n => {
+    if (!cache.has(n.clipUrl)) cache.set(n.clipUrl, (async () => {
+      const found = await resolveAudioRoute(dir, n.clipUrl);
+      if (!found) return { leadSilence: null };
+      const wav = parseWav(await readFile(found.file));
+      const bounds = speechBounds(wav.data, wav.sampleRate, -45);
+      return { leadSilence: bounds ? bounds.start / wav.sampleRate : null, clipSilent: !bounds };
+    })());
+    return { ...n, ...await cache.get(n.clipUrl) };
+  }));
+}
 async function projectInputs(name) {
   const dir = projectDir(name);
   // The saved composition identifies the source run; do not silently substitute the newest capture.
   const saved = await json(path.join(dir, 'composition.json'));
   const loaded = await loadRunComposition({ name, runId: saved.run.id });
-  const { voiceClips } = await loadVoiceClips(dir), brand = await loadBriefBrand(loaded.brief, () => {});
+  const voiceClips = await loadAuditVoiceClips(dir), brand = await loadBriefBrand(loaded.brief, () => {});
   const sceneData = await readScenes(dir);
   let scenes;
   if (sceneData) {
@@ -112,8 +133,9 @@ export async function auditVideo({ video, srt, project, strict = false }) {
     }
     server.check();
     const cadence = checkCadence({ frames: decoded.frames, containerDuration: decoded.containerDuration, fps: plan?.output.fps });
+    const narration = plan ? await loadNarrationLeads(projectDir(project), plan.audio.narration) : null;
     const checks = [cadence,
-      checkSync(decoded.videoDuration, decoded.audioDuration, { envelope: decoded.envelope, narration: plan?.audio.narration ?? null }), checkLoudness(decoded.loudness), checkCaptions(captions, decoded.duration),
+      checkSync(decoded.videoDuration, decoded.audioDuration, { envelope: decoded.envelope, narration }), checkLoudness(decoded.loudness), checkCaptions(captions, decoded.duration),
       checkFrozen(decoded.samples, plan ? allowedFreezeRanges(plan) : [], cadence.pass), checkParity(parity), checkContainer({ ...decoded, sizeBytes })];
     return { pass: auditPassed(checks, strict), strict, checks };
   } finally { try { await browser?.close(); } finally { await server?.close(); } }

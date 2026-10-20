@@ -1,3 +1,4 @@
+import { VOICE_POST } from './pins.mjs';
 import { readFile, mkdir, access } from 'node:fs/promises';
 import path from 'node:path';
 import { projectDir } from '../paths.mjs';
@@ -109,13 +110,13 @@ async function generateCommand(o) {
       warnings.push(...w.warnings.map((x) => `${step.id}: ${x}`));
       const file = clipFile(name, w.key);
       const known = index.clips[w.key];
-      if (!force && known && known.source === 'tts' && await exists(file)) {
+      if (!force && known && known.source === 'tts' && known.post === VOICE_POST && await exists(file)) {
         if (index.steps[step.id] !== w.key) index = setClip(index, { ...known, stepId: step.id });
         out.push([step.id, 'fresh', f2(known.durationSec), 'cache', '-']); continue;
       }
       const prior = current ? 'stale' : 'missing';
       const r = await synthesizeToFile({ engine: getClient(), text: step.narration, voice, speed, pronunciations, out: file });
-      index = setClip(index, { key: w.key, stepId: step.id, text: step.narration, voice, speed, engine: currentEngineName(), durationSec: r.durationSec, sampleRate: r.sampleRate, source: 'tts', createdAt: new Date().toISOString() });
+      index = setClip(index, { key: w.key, stepId: step.id, text: step.narration, voice, speed, engine: currentEngineName(), durationSec: r.durationSec, sampleRate: r.sampleRate, source: 'tts', post: VOICE_POST, createdAt: new Date().toISOString() });
       await writeIndex(name, index);   // persist after each clip so an interruption keeps finished work
       warnings.push(...r.warnings.map((x) => `${step.id}: ${x}`));
       out.push([step.id, `${prior} -> fresh`, f2(r.durationSec), 'generated', f2(r.rtf)]);

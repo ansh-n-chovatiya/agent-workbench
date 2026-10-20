@@ -1,3 +1,4 @@
+import { VOICE_POST } from '../voice/pins.mjs';
 // Editor server routes for voice-over, voice samples, own recordings, imported clips and background music.
 // Everything here runs behind the server's token, Host and Origin checks; paths are confined to the project (or SHOWREEL_HOME/voice-samples).
 import path from 'node:path';
@@ -136,13 +137,13 @@ export function createVoiceApi({ name, runId, dir, uploadLimit = MAX_UPLOAD_BYTE
           emit('step', { stepId: item.id, state: 'started', index: i, total: work.length });
           try {
             const file = clipFile(name, item.wanted.key), known = (await readIndex(name)).clips[item.wanted.key];
-            if (!force && known?.source === 'tts' && await exists(file)) {
+            if (!force && known?.source === 'tts' && known.post === VOICE_POST && await exists(file)) {
               await withIndex(ix => setClip(ix, { ...known, stepId: item.id }));
               done++; cached++; emit('step', { stepId: item.id, state: 'done', cached: true, durationSec: known.durationSec, index: i, total: work.length });
             } else {
               const made = await synthesizeToFile({ engine: getClient(), text: item.text, voice, speed, pronunciations, out: file });
               await withIndex(ix => setClip(ix, { key: item.wanted.key, stepId: item.id, text: item.text, voice, speed, engine: currentEngineName(), durationSec: made.durationSec,
-                sampleRate: made.sampleRate, source: 'tts', createdAt: new Date().toISOString() }));
+                sampleRate: made.sampleRate, source: 'tts', post: VOICE_POST, createdAt: new Date().toISOString() }));
               done++; emit('step', { stepId: item.id, state: 'done', cached: false, durationSec: made.durationSec, warnings: made.warnings, index: i, total: work.length });
             }
           } catch (error) {

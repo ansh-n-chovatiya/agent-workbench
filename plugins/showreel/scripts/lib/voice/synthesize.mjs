@@ -4,6 +4,7 @@ import path from 'node:path';
 import { prepareText, clampSpeed } from './prepare.mjs';
 import { parseWav, encodeWav, silence, concatChannels } from './wav.mjs';
 import { atomicWrite } from './atomic.mjs';
+import { trimSilence } from './trim.mjs';
 import { SAMPLE_RATE } from './pins.mjs';
 
 // Synthesizes prepared segments through `engine.generate` and writes ONE wav (24 kHz mono 16-bit unless the engine says otherwise).
@@ -21,7 +22,7 @@ export async function synthesizeToFile({ engine, text, voice, speed = 1, pronunc
         const wav = parseWav(await readFile(file));
         rate ??= wav.sampleRate;
         if (wav.sampleRate !== rate) throw new Error('Engine returned inconsistent sample rates');
-        parts.push(wav.data[0]);
+        parts.push(trimSilence([wav.data[0]], wav.sampleRate)[0]);
         if (Number.isFinite(r.rtf)) { rtfTotal += r.rtf; rtfCount++; }
       } else parts.push({ silence: seg.seconds });
     }

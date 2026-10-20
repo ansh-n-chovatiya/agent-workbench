@@ -1,3 +1,5 @@
+import { monoRmsEnvelope } from '../lib/voice/trim.mjs';
+export { monoRmsEnvelope };
 // Pure quality checks. Times are seconds; image metrics use RGB levels (0..255).
 const row = (id, pass, measured, target, detail) => ({ id, pass, measured, target, detail });
 export const skipped = (id, detail, neededInput = false) => ({ ...row(id, true, null, null, detail), skipped: true, neededInput });
@@ -16,20 +18,6 @@ export function checkCadence({ frames, fps, containerDuration }) {
   return row('cadence', pass, { fps, count: frames.length, duration, containerDuration, badIntervals, badDurations },
     'constant frame duration ±1 ms; container ±0.1 s', `${fps.toFixed(3)} fps; ${frames.length} frames; ${badIntervals} gaps/irregular intervals`);
 }
-// Non-overlapping 5 ms windows of the mono downmix, timestamped at each window's start.
-export function monoRmsEnvelope(channels, sampleRate, stepSec = 0.005) {
-  const width = Math.round(sampleRate * stepSec), values = [];
-  if (!channels.length || width < 1 || !finite(sampleRate) || channels.some(c => c.length !== channels[0].length)) throw new Error('Invalid audio channels or sample rate');
-  for (let start = 0; start < channels[0].length; start += width) {
-    const end = Math.min(start + width, channels[0].length); let energy = 0;
-    for (let i = start; i < end; i++) {
-      const mono = channels.reduce((sum, channel) => sum + channel[i], 0) / channels.length;
-      energy += mono * mono;
-    }
-    values.push(Math.sqrt(energy / (end - start)));
-  }
-  return { values, stepSec: width / sampleRate };
-}
 export function narrationOnsets(envelope, narration) {
   const threshold = 10 ** (-45 / 20), step = envelope?.stepSec;
   const values = envelope?.values ?? [], candidates = [];
@@ -38,27 +26,29 @@ export function narrationOnsets(envelope, narration) {
     if (finite(values[i]) && values[i] > threshold && [1, 2].every(back => i < back || values[i - back] <= threshold)) candidates.push(i * step);
   }
   const used = new Set();
-  return narration.map(({ stepId, outStart: expected }) => {
-    const onset = candidates.filter(t => !used.has(t) && Math.abs(t - expected) <= 0.3 + 1e-9)
+  return narration.map(({ stepId, outStart, leadSilence = 0, clipSilent = false }) => {
+    const exact = leadSilence !== null || clipSilent, expected = outStart + (leadSilence ?? 0);
+    const onset = candidates.filter(t => !clipSilent && !used.has(t) && (exact ? Math.abs(t - expected) <= 0.3 + 1e-9 : t >= outStart - 1e-9 && t <= outStart + 0.4 + 1e-9))
       .sort((a, b) => Math.abs(a - expected) - Math.abs(b - expected))[0] ?? null;
     if (onset !== null) used.add(onset);
-    return { stepId, expected, onset, errorMs: onset === null ? null : Math.abs(onset - expected) * 1000 };
+    return { stepId, expected: exact && !clipSilent ? expected : null, onset, exact,
+      errorMs: onset === null || !exact ? null : Math.abs(onset - expected) * 1000 };
   });
 }
 export function checkSync(videoDuration, audioDuration, { envelope, narration = null } = {}) {
   if (audioDuration === null) return skipped('av-sync', 'no audio');
   const durationDifferenceMs = Math.abs(audioDuration - videoDuration) * 1000;
   const onsets = narration === null ? null : narrationOnsets(envelope, narration);
-  const errors = onsets?.map(o => o.errorMs) ?? [];
-  const complete = errors.every(e => e !== null && finite(e));
+  const errors = onsets?.filter(o => o.exact).map(o => o.errorMs) ?? [];
+  const complete = (onsets ?? []).every(o => o.onset !== null) && errors.every(e => e !== null && finite(e));
   const worstMs = complete && errors.length ? Math.max(...errors) : null;
   const meanMs = complete && errors.length ? errors.reduce((a, b) => a + b, 0) / errors.length : null;
   const detail = onsets === null ? 'onset not checked (no --project)' : !onsets.length ? 'no narration placements' :
-    `${onsets.length} narration onsets; worst ${worstMs?.toFixed(2) ?? 'unknown'} ms; mean ${meanMs?.toFixed(2) ?? 'unknown'} ms; ${errors.filter(e => e === null).length} missing`;
+    `${onsets.length} narration onsets; worst ${worstMs?.toFixed(2) ?? 'unknown'} ms; mean ${meanMs?.toFixed(2) ?? 'unknown'} ms; ${onsets.filter(o => o.onset === null).length} missing${onsets.some(o => !o.exact) ? '; onset not verified exactly (clip unavailable; lead within 400 ms)' : ''}`;
   return row('av-sync', finite(videoDuration) && finite(audioDuration) && durationDifferenceMs <= 100 + 1e-6
     && complete && errors.every(e => e <= 40 + 1e-6),
     { videoDuration, audioDuration, durationDifferenceMs, onsets, worstMs, meanMs },
-    'duration difference ≤100 ms; narration onset ±40 ms (with --project)', `${durationDifferenceMs.toFixed(2)} ms duration difference; ${detail}`);
+    'duration difference ≤100 ms; narration onset ±40 ms (with --project); unavailable clip: lead ≤400 ms', `${durationDifferenceMs.toFixed(2)} ms duration difference; ${detail}`);
 }
 export function checkLoudness(measured) {
   if (measured === null) return skipped('loudness', 'no audio');

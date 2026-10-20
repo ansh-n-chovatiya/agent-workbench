@@ -162,3 +162,46 @@ test('audit loopback transport serves byte ranges, suffixes, HEAD, invalid range
     server.check();
   } finally { await server?.close(); await rm(dir, { recursive: true, force: true }); }
 });
+
+test('audit compensates 250 ms clip lead measured from WAV, rejects 120 ms shift and retains legacy clips', async () => {
+  const { loadNarrationLeads, loadAuditVoiceClips } = await import('../scripts/audit/audit.mjs');
+  const { loadVoiceClips } = await import('../scripts/lib/compose/render.mjs');
+  const { mkdir } = await import('node:fs/promises');
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'showreel-audit-lead-'));
+  try {
+    await mkdir(path.join(dir, 'voice', 'clips'), { recursive: true });
+    const pcm = new Float32Array(24000);
+    for (let i = 6000; i < 18000; i++) pcm[i] = 0.1 * Math.cos(2 * Math.PI * 400 * i / 24000);
+    await writeFile(path.join(dir, 'voice', 'clips', 'legacy.wav'), encodeWav(pcm, 24000));
+    const index = { version: 1, steps: { s1: 'legacy', s2: 'missing' }, clips: {
+      legacy: { key: 'legacy', durationSec: 1, source: 'tts' }, missing: { key: 'missing', durationSec: 1, source: 'own' } } };
+    await writeFile(path.join(dir, 'voice', 'clips.json'), JSON.stringify(index));
+    assert.equal((await loadVoiceClips(dir)).voiceClips.steps.s1, 'legacy', 'legacy audio still renders');
+    assert.deepEqual(await loadAuditVoiceClips(dir), index, 'audit keeps unavailable placements');
+    const narration = await loadNarrationLeads(dir, [{ stepId: 's1', clipUrl: 'voice/legacy.wav', outStart: 0.5 }]);
+    assert.equal(narration[0].leadSilence, 0.25);
+    const check = start => checkSync(3, 3.06, { envelope: burstEnvelope([start]), narration });
+    assert.equal(check(0.75).pass, true);
+    assert.equal(check(0.75).measured.onsets[0].expected, 0.75);
+    assert.equal(check(0.87).pass, false);
+    assert.equal(check(0.63).pass, false);
+    // -45 dBFS on the original clip, not the trimming threshold (-50).
+    pcm.fill(0); pcm.fill(0.004, 2400, 4800); pcm.fill(0.1, 6000, 18000);
+    await writeFile(path.join(dir, 'voice', 'clips', 'legacy.wav'), encodeWav(pcm, 24000));
+    assert.equal((await loadNarrationLeads(dir, narration))[0].leadSilence, 0.25);
+    pcm.fill(0);
+    await writeFile(path.join(dir, 'voice', 'clips', 'legacy.wav'), encodeWav(pcm, 24000));
+    const silent = await loadNarrationLeads(dir, narration);
+    const silentResult = checkSync(3, 3, { envelope: burstEnvelope([0.5]), narration: silent });
+    assert.equal(silentResult.pass, false, 'an available silent clip cannot use the missing-file fallback');
+    assert.doesNotMatch(silentResult.detail, /onset not verified exactly/);
+    const missing = await loadNarrationLeads(dir, [{ stepId: 's2', clipUrl: 'voice/missing.wav', outStart: 0.5 }]);
+    assert.equal(missing[0].leadSilence, null);
+    for (const start of [0.5, 0.75, 0.9]) {
+      const result = checkSync(3, 3, { envelope: burstEnvelope([start]), narration: missing });
+      assert.equal(result.pass, true); assert.match(result.detail, /onset not verified exactly/);
+      assert.equal(result.measured.onsets[0].errorMs, null);
+    }
+    for (const starts of [[0.495], [0.905], []]) assert.equal(checkSync(3, 3, { envelope: burstEnvelope(starts), narration: missing }).pass, false);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
