@@ -1,6 +1,7 @@
 import { open, readFile, rename, rm, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { parseBoxes, mp4Metadata, chunkOffsets, child } from './mp4-boxes.mjs';
+import { renameRetry } from './fs-retry.mjs';
 export { parseBoxes, mp4Metadata, chunkOffsets } from './mp4-boxes.mjs';
 function setDuration(bytes, node, value, offset0, offset1) {
   const version = bytes[node.data];
@@ -119,7 +120,7 @@ export async function alignAudioTrack(input, options) {
       await output.sync();
     } finally { await Promise.all([original?.close(), output?.close()]); }
     await readMp4Metadata(temp);
-    await rename(temp, input); temp = null;
+    await renameRetry(temp, input); temp = null;
     return { ...result, bytes: undefined };
   } catch (error) { return { aligned: false, reason: error.message, ...((Buffer.isBuffer(input) || input instanceof Uint8Array) ? { buffer: input } : {}) }; }
   finally { if (temp) await rm(temp, { force: true }).catch(() => {}); }

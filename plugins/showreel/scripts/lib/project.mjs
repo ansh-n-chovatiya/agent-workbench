@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile, rename, link, unlink, stat } from 'node:fs/
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { projectDir } from './paths.mjs';
+import { renameRetry } from './fs-retry.mjs';
 
 export const PROJECT_FILES = Object.freeze({ config: 'config.json', brief: 'brief.json', guide: 'guide.json', resolved: 'guide.resolved.json', storyboard: 'storyboard.json', scenario: 'scenario.json' });
 const commands = { config: 'init', brief: 'brief init', guide: 'guide', resolved: 'guide resolve', storyboard: 'storyboard draft', scenario: 'scenario build' };
@@ -27,7 +28,7 @@ export async function writeProjectFile(name, key, data, { overwrite = true } = {
   try {
     await writeFile(temp, JSON.stringify(data, null, 2) + '\n', { flag: 'wx' });
     // Linking publishes complete bytes without a check-then-write overwrite race.
-    if (overwrite) await rename(temp, file);
+    if (overwrite) await renameRetry(temp, file);
     else await link(temp, file);
   } catch (err) {
     if (err.code === 'EEXIST') throw new Error(`Refusing to overwrite existing ${key}: ${file}`);

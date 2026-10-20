@@ -25,8 +25,8 @@ import time
 import traceback
 
 from . import (
-    briefing, bundle, config as config_mod, frontmatter, journal, log, paths,
-    state, telemetry, verify, work,
+    briefing, bundle, config as config_mod, frontmatter, improve, journal, log, paths,
+    plan as plan_mod, state, telemetry, verify, work,
 )
 
 
@@ -203,6 +203,7 @@ def on_session_start(layout, config, payload):
 
 def on_user_prompt_submit(layout, config, payload):
     """Silent unless drift was detected. This is why steady-state cost is zero."""
+    _capture_correction(layout, config, payload)
     message = state.take_nudge(layout)
     if not message:
         return ""
@@ -270,6 +271,8 @@ def on_post_tool_use(layout, config, payload):
         # and the gate would never fire again for this item.
         item.set_status("pending")
         journal.append(layout, config, "gate", item.key, "re-armed by edit")
+    if item is None and payload.get("tool_name") in _EDIT_TOOLS:
+        _capture_manual_fix(layout, config, current, targets)
     return ""
 
 
@@ -355,6 +358,10 @@ def on_stop(layout, config, payload):
     if attempts > limit:
         item.set_status("verify_failed")
         state.clear_attempts(layout, item.attempt_key)
+        _record_safely(
+            layout, config, "blocked", unit=item.key,
+            plan=str(item.doc.meta.get("plan") or ""),
+            summary="done-gate failed repeatedly; escalated to the user")
         state.set_nudge(
             layout,
             f"the done-gate for {item.key} failed {limit} times and has stopped "
@@ -365,6 +372,81 @@ def on_stop(layout, config, payload):
         return ""
 
     return {"decision": "block", "reason": _gate_reason(item, results, attempts, limit)}
+
+
+# --------------------------------------------------------------------------- #
+# improve capture: each is fail-open and adds at most one append
+# --------------------------------------------------------------------------- #
+
+#: A prompt this soon after a completion that sounds like a correction is a
+#: possible redo. Heuristic, so every record it makes is low confidence.
+REDO_WINDOW_SECONDS = 30 * 60
+MANUAL_FIX_PLAN_SCAN = 20
+_CORRECTION = re.compile(
+    r"that['\u2019]?s wrong|not what i asked|still broken|doesn['\u2019]?t work|\bfix\b|\bagain\b",
+    re.IGNORECASE,
+)
+
+
+def _record_safely(layout, config, kind, **fields):
+    try:
+        improve.record(layout, config, kind, **fields)
+    except Exception as exc:  # record never raises; belt and braces
+        log.failure("hooks.improve", exc)
+
+
+def _capture_correction(layout, config, payload):
+    """Record `possible-redo` (category only; the prompt is never stored)."""
+    try:
+        if not improve.enabled(config):
+            return
+        prompt = payload.get("prompt")
+        if not isinstance(prompt, str) or not _CORRECTION.search(prompt):
+            return
+        done = state.load(layout).get("last_done")
+        if not isinstance(done, dict):
+            return
+        stamp = float(done.get("ts"))
+        if not 0 <= time.time() - stamp <= REDO_WINDOW_SECONDS:
+            return
+        name = str(done.get("name") or "")
+        improve.record(layout, config, "possible-redo", unit=name,
+                       summary="correction after completion", confidence="low",
+                       key=f"redo:{name}:{int(stamp)}")
+    except Exception as exc:
+        log.failure("hooks.capture_correction", exc)
+
+
+def _capture_manual_fix(layout, config, current, targets):
+    """Record `manual-fix` for an edit inside a finished unit's `owns`."""
+    try:
+        if not improve.enabled(config):
+            return
+        if config_mod.normalise_level(current.get("level")) == "0":
+            return
+        if current.get("unit") or current.get("task"):
+            return
+        relatives = [_relative(layout, t) for t in targets]
+        relatives = [r for r in relatives if not _is_shell_noise(r)]
+        if not relatives or not layout.plans.is_dir():
+            return
+        # Bounded: an idle edit must not re-read every unit of every plan ever made, inside a hook timeout.
+        recent = sorted((d for d in layout.plans.iterdir() if d.is_dir()),
+                        key=lambda d: d.stat().st_mtime, reverse=True)[:MANUAL_FIX_PLAN_SCAN]
+        for plan_dir in recent:
+            for unit in plan_mod.load_units(layout, plan_dir.name):
+                if unit.status != "done":
+                    continue
+                for relative in relatives:
+                    if _matches(relative, unit.owns):
+                        base = os.path.basename(relative)
+                        improve.record(
+                            layout, config, "manual-fix", unit=unit.name,
+                            plan=plan_dir.name, summary=f"edited {base} after unit was done",
+                            confidence="low", key=f"manual-fix:{plan_dir.name}/{unit.name}/{base}")
+                        return
+    except Exception as exc:
+        log.failure("hooks.capture_manual_fix", exc)
 
 
 def _gate_reason(item, results, attempts, limit):

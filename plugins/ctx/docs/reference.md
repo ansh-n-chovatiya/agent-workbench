@@ -46,6 +46,14 @@ telemetry:
                               # to gitignored .ctx/runtime/. Local-only; nothing
                               # is transmitted.
 
+improve:
+  enabled: true               # a private improvement log of ctx's own misses
+                              # (review findings, forced overrides, blocked
+                              # units), kept outside the repo in
+                              # ~/.agent-workbench/improve/. Scrubbed: no code,
+                              # paths, emails or tokens. Local-only; nothing is
+                              # transmitted, and nothing is changed by it.
+
 gate:
   enabled: true               # false disables the done-gate
   max_attempts: 3             # blocks before it escalates to you

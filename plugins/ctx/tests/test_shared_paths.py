@@ -37,7 +37,7 @@ ALL_MODULES = (
     "__init__.py", "__main__.py", "advice.py", "atomic.py", "briefing.py",
     "bundle.py", "callers.py", "cli.py", "commands.py", "complexity.py", "config.py",
     "contract.py", "detect.py", "dispatch.py",
-    "findings.py", "footprint.py", "frontmatter.py", "hooks.py", "journal.py", "lock.py", "log.py",
+    "findings.py", "footprint.py", "frontmatter.py", "hooks.py", "improve.py", "journal.py", "lock.py", "log.py",
     "migrate.py", "miniyaml.py", "paths.py", "phases.py", "plain.py",
     "plan.py", "preview.py", "preview_html.py", "preview_page.py",
     "redact.py", "reduce.py", "review.py", "snapshot.py", "spec.py", "state.py",

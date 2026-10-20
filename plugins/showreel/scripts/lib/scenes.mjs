@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { safeFile } from './editor/files.mjs';
 import { buildTimeMap } from './compose/timemap.mjs';
 import { TRANSITIONS, buildSceneTimeMap } from './compose/scene-timemap.mjs';
+import { renameRetry } from './fs-retry.mjs';
 
 const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 export const validSceneId = id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(id);
@@ -80,7 +81,7 @@ export async function writeScenesAtomic(dir,data) {
   let handle;
   try {
     handle = await open(temp,'wx',0o600); await handle.writeFile(JSON.stringify(data,null,2)+'\n'); await handle.sync();
-    await handle.close(); handle = null; await rename(temp,path.join(root,'scenes.json'));
+    await handle.close(); handle = null; await renameRetry(temp,path.join(root,'scenes.json'));
   } finally { await handle?.close(); await rm(temp,{force:true}); }
   return report;
 }

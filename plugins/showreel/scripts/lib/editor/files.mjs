@@ -2,6 +2,7 @@ import path from 'node:path';
 import { realpath, stat, open, rename, rm } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { safeRelativePath } from './http.mjs';
+import { renameRetry } from '../fs-retry.mjs';
 
 export const contained = (root, file) => { const rel = path.relative(root,file); return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel); };
 export async function safeFile(root, encoded) {
@@ -20,6 +21,6 @@ export async function writeCompositionAtomic(dir, composition) {
     file = await open(temp,'wx',0o600);
     await file.writeFile(JSON.stringify(composition,null,2) + '\n'); await file.sync();
     await file.close(); file = null;
-    await rename(temp,target);
+    await renameRetry(temp,target);
   } finally { await file?.close(); await rm(temp,{force:true}); }
 }
