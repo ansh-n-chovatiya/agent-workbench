@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ctx import briefing, config as config_mod, findings as findings_mod  # noqa: E402
+from ctx import briefing, config as config_mod, contract as contract_mod, findings as findings_mod  # noqa: E402
 from ctx import frontmatter, plan as plan_mod  # noqa: E402
 from support import OK, Fixture  # noqa: E402
 
@@ -153,6 +153,54 @@ class TestConfidence(ConfidenceFixture):
     def test_AC6_control_unknown_id_refused(self):
         code, _ = self.cli("findings", NAME, "--set", "9", "--confidence", "high")
         self.assertEqual(code, 1)
+
+
+class TestReviewFindings(ConfidenceFixture):
+    """Holes the first review found: demoting a blocking finding must not be a way past the gate."""
+
+    def sealed(self):
+        unit = plan_mod.load_units(self.layout, self.slug)[0]
+        contract_mod.seal(self.layout, self.config, self.slug, unit, self.root)
+
+    def test_AC2_a_builder_cannot_demote_a_finding_with_set(self):
+        self.add("critical")
+        code, out = self.cli("findings", NAME, "--set", "1", "--confidence", "low")
+        self.assertNotEqual(code, 0, out)
+        self.assertEqual(self.ledger().get(1).confidence, "high")
+        self.assertEqual([f.id for f in self.ledger().blocking()], [1])
+
+    def test_AC2_a_demotion_with_a_valid_status_changes_nothing(self):
+        self.add("critical")
+        code, _ = self.cli("findings", NAME, "--set", "1", "--status", "disputed",
+                           "--ruling", "not real", "--evidence", "x", "--confidence", "low")
+        self.assertNotEqual(code, 0)
+        finding = self.ledger().get(1)
+        self.assertEqual((finding.status, finding.confidence), ("open", "high"))
+
+    def test_AC1_confidence_alone_is_refused_not_ignored(self):
+        code, _ = self.cli("findings", NAME, "--confidence", "low")
+        self.assertEqual(code, 2)
+
+    def test_AC4_a_hand_edit_to_low_is_drift(self):
+        self.sealed()
+        self.add("critical")
+        ledger = self.ledger()
+        ledger.get(1).confidence = "low"
+        ledger.save()
+        drift = contract_mod.findings_drift(self.layout, self.slug, NAME)
+        self.assertTrue(any("low confidence" in line for line in drift), drift)
+
+    def test_AC4_control_a_finding_added_as_low_is_not_drift(self):
+        self.sealed()
+        self.add("critical", "--confidence", "low")
+        self.assertEqual(contract_mod.findings_drift(self.layout, self.slug, NAME), [])
+
+    def test_AC4_a_high_finding_leaves_the_file_as_it_always_was(self):
+        self.add("critical")
+        path = findings_mod.path_for(self.layout, self.slug, NAME)
+        text = path.read_text(encoding="utf-8")
+        self.assertNotIn("confidence", text)  # a high finding leaves the file as it always was
+        self.assertEqual(self.ledger().get(1).confidence, "high")
 
 
 if __name__ == "__main__":
