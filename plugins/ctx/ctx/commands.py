@@ -2614,6 +2614,11 @@ def cmd_findings(args):
              "summary": "", "findings": [], "escalations": [], "blocking": 0,
              "ok": True, "problem": None}
 
+    if conf and not args.add and args.set is None:
+        problem = "--confidence goes with --add (to record one) or --set (to re-mark one as high)"
+        _emit(dict(shape, ok=False, problem=problem), [problem])
+        return 2
+
     if args.add:
         finding = ledger.add(args.add, args.summary or "(no summary given)",
                              where=args.where or "", evidence=args.evidence or "",
@@ -2632,15 +2637,10 @@ def cmd_findings(args):
         return 0
 
     if args.set is not None:
-        if conf and not args.status:
-            ok, problem = ledger.set_confidence(args.set, conf)
-        else:
-            ok, problem = ledger.set_status(
-                args.set, args.status or "", ruling=args.ruling or "",
-                evidence=args.evidence or "",
-            )
-            if ok and conf:
-                ok, problem = ledger.set_confidence(args.set, conf)
+        ok, problem = ledger.update(
+            args.set, status=args.status or None, confidence=conf,
+            ruling=args.ruling or "", evidence=args.evidence or "",
+        )
         if not ok:
             _emit(dict(shape, mode="set", ok=False, problem=problem), [problem])
             return 1

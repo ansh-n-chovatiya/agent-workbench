@@ -290,20 +290,28 @@ class Ledger:
                 return finding
         return None
 
-    def set_confidence(self, finding_id, confidence):
-        """Re-mark a finding. Returns (ok, problem); a low finding re-marked
-        `high` blocks again."""
+    def update(self, finding_id, *, status=None, confidence=None, ruling="", evidence=""):
+        """Move a finding and/or re-mark its confidence under one lock, validated before anything is written. Returns (ok, problem).
+
+        Re-marking only ever goes to `high`: a finding is marked low when it is recorded (`add`), by the
+        reviewer, and a builder cannot lower it afterwards to get past the gate.
+        """
         with self._exclusive():
-            finding = self.get(finding_id)
-            if finding is None:
-                known = ", ".join(str(f.id) for f in self.findings) or "none"
-                return False, f"no finding {finding_id!r} in this ledger (have: {known})"
             wanted = str(confidence or "").strip().lower()
-            if wanted not in CONFIDENCES:
-                return False, (f"confidence {confidence!r} is not one of "
-                               f"{'/'.join(CONFIDENCES)}")
-            finding.confidence = wanted
-            self.save()
+            if confidence is not None and wanted != "high":
+                return False, ("--set can re-mark a finding as high only; confidence low is "
+                               "recorded when the reviewer adds the finding")
+            if status is None and confidence is None:
+                return self._set_status(finding_id, "", ruling=ruling, evidence=evidence)
+            if self.get(finding_id) is None:
+                return self._set_status(finding_id, status or "open", ruling=ruling, evidence=evidence)
+            if status is not None:
+                ok, problem = self._set_status(finding_id, status, ruling=ruling, evidence=evidence)
+                if not ok:
+                    return False, problem
+            if confidence is not None:
+                self.get(finding_id).confidence = "high"
+                self.save()
             return True, ""
 
     def set_status(self, finding_id, status, *, ruling="", evidence=""):

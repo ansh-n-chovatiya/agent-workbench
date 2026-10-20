@@ -399,6 +399,7 @@ def _as_seal(finding):
         "severity": finding.severity,
         "status": finding.status,
         "summary": finding.summary,
+        "confidence": finding.confidence,
     }
 
 
@@ -408,6 +409,8 @@ def _stronger(old, new):
         return new
     if _rank(new.get("severity")) < _rank(old.get("severity")):
         return old
+    if old.get("confidence", "high") != new.get("confidence", "high"):
+        return old if old.get("confidence", "high") == "high" else new
     if old.get("status") == "open" or new.get("status") != "open":
         return old
     return new
@@ -514,6 +517,11 @@ def findings_drift(layout, slug, unit_name):
             drift.append(
                 f"finding [{key}] was downgraded from {was.get('severity')} to "
                 f"{finding.severity}{detail}"
+            )
+        elif was.get("confidence", "high") == "high" and finding.confidence != "high":
+            drift.append(
+                f"finding [{key}] was marked {finding.confidence} confidence "
+                f"without `ctx findings --add`{detail}"
             )
         elif was.get("status") == "open" and finding.status != "open":
             drift.append(
