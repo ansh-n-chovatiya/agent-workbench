@@ -2609,13 +2609,15 @@ def cmd_findings(args):
     if unit is None:
         return 0
     ledger = findings_mod.load(layout, slug, unit.name)
+    conf = getattr(args, "confidence", None)
     shape = {"mode": "list", "plan": slug, "unit": unit.name, "round": ledger.round,
              "summary": "", "findings": [], "escalations": [], "blocking": 0,
              "ok": True, "problem": None}
 
     if args.add:
         finding = ledger.add(args.add, args.summary or "(no summary given)",
-                             where=args.where or "", evidence=args.evidence or "")
+                             where=args.where or "", evidence=args.evidence or "",
+                             confidence=conf or "high")
         # Authoritative: this *is* the legitimate way to record a finding, so
         # the seal takes it verbatim. Once sealed, deleting the finding from the
         # file by hand is visible to the done-gate.
@@ -2630,10 +2632,15 @@ def cmd_findings(args):
         return 0
 
     if args.set is not None:
-        ok, problem = ledger.set_status(
-            args.set, args.status or "", ruling=args.ruling or "",
-            evidence=args.evidence or "",
-        )
+        if conf and not args.status:
+            ok, problem = ledger.set_confidence(args.set, conf)
+        else:
+            ok, problem = ledger.set_status(
+                args.set, args.status or "", ruling=args.ruling or "",
+                evidence=args.evidence or "",
+            )
+            if ok and conf:
+                ok, problem = ledger.set_confidence(args.set, conf)
         if not ok:
             _emit(dict(shape, mode="set", ok=False, problem=problem), [problem])
             return 1
@@ -2643,12 +2650,12 @@ def cmd_findings(args):
             layout, slug, unit.name, ledger, authoritative=True
         )
         journal.append(layout, config, "finding", unit.name,
-                       f"#{args.set} -> {args.status}")
+                       f"#{args.set} -> {args.status or conf}")
         moved = ledger.get(args.set)
         _emit(dict(shape, mode="set", summary=ledger.summary(),
                    findings=[moved.as_dict()] if moved else [],
                    blocking=len(ledger.blocking())),
-              [f"[{args.set}] is now {args.status}"])
+              [f"[{args.set}] is now {args.status or conf}"])
         return 0
 
     # Listing only observes: it may add a finding to the seal or strengthen one,
@@ -2669,8 +2676,15 @@ def cmd_findings(args):
     out = []
     if ledger.findings:
         out.append(ledger.summary())
+        asks = ledger.questions()
         for finding in ledger.findings:
-            out.append("  " + finding.line())
+            if finding not in asks:
+                out.append("  " + finding.line())
+        if asks:
+            out.append("")
+            out.append(f"ask the builder ({len(asks)}) — low confidence, never blocking:")
+            for finding in asks:
+                out.append("  " + finding.line())
     if ledger.escalations:
         # A fact about a round, never a finding's status (see `findings`'s
         # module docstring) — shown separately so "what got escalated and

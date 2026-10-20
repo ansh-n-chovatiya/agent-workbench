@@ -412,7 +412,7 @@ SHAPES = {
         "summary": str,
         "findings": [{"id": int, "severity": str, "status": str, "summary": str,
                       "evidence": str, "where": str, "round": int,
-                      "ruling": str, "source": str}],
+                      "ruling": str, "source": str, "confidence": str}],
         "escalations": [{"round": int, "from": str, "to": str, "reason": str}],
         "blocking": int,
         "ok": bool,

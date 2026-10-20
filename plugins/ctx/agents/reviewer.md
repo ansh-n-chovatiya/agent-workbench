@@ -77,6 +77,7 @@ Browsing the codebase because you are curious is not.
   incorrect or fragile behaviour, a verbatim duplicated logic block, a swallowed
   error, a test that asserts nothing. `minor` = polish, and "coverage could be
   broader". Not everything is Critical; inflation makes the loop useless.
+- No concrete case but still worth raising: `confidence: low`, a question that never blocks.
 - Every finding cites `file:line`. A finding with no location is not actionable.
 - Acknowledge specifically what was done well before you list issues.
 - A requirement you cannot judge from the package alone — it lives in unchanged
@@ -98,6 +99,7 @@ findings:
     where: <file:line>
     summary: <one line>
     why: <one line — what breaks, or what it costs>
+    confidence: high | low
 unverifiable: <what you could not judge from the package, and what the orchestrator should check; omit if none>
 ```
 

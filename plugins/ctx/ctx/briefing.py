@@ -14,7 +14,8 @@ Cost at L0 is around 30 tokens against a 61-token cap. That is the number that
 makes it acceptable to leave this on for a two-line fix.
 """
 
-from . import bundle, config as config_mod, frontmatter, journal, spec as spec_mod
+from . import (bundle, config as config_mod, findings as findings_mod, frontmatter,
+               journal, spec as spec_mod)
 
 TRUNCATED = "…[briefing truncated]"
 
@@ -108,6 +109,10 @@ def _plan_blocks(layout, state):
     forbid = doc.meta.get("forbid") or []
     if forbid:
         blocks.insert(2, "must not touch: " + ", ".join(map(str, forbid)))
+    asks = findings_mod.load(layout, plan, unit).questions()
+    if asks:
+        blocks.append(f"ask the builder ({len(asks)} low-confidence, not blocking): "
+                      + "; ".join(f.line() for f in asks[:3]))
     return blocks
 
 

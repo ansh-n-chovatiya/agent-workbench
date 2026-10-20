@@ -1,3 +1,4 @@
+import { mp4Metadata } from '../lib/mp4-boxes.mjs';
 import { monoRmsEnvelope } from '../lib/voice/trim.mjs';
 export { monoRmsEnvelope };
 // Pure quality checks. Times are seconds; image metrics use RGB levels (0..255).
@@ -35,8 +36,17 @@ export function narrationOnsets(envelope, narration) {
       errorMs: onset === null || !exact ? null : Math.abs(onset - expected) * 1000 };
   });
 }
-export function checkSync(videoDuration, audioDuration, { envelope, narration = null } = {}) {
+// Accept the shared parser's metadata (or a byte buffer in pure tests).
+export function audioEditInfo(mp4) {
+  const metadata = mp4?.tracks ? mp4 : mp4Metadata(mp4);
+  const audio = metadata.tracks.find(t => t.handler === 'soun');
+  if (!audio?.edits?.length) return null;
+  return { mediaTime: audio.edits[0].mediaTime, durationSec: audio.edits.reduce((n, e) => n + e.segmentDuration, 0) / metadata.movie.timescale };
+}
+export function checkSync(videoDuration, audioDuration, { envelope, narration = null, mp4 = null } = {}) {
   if (audioDuration === null) return skipped('av-sync', 'no audio');
+  const edit = mp4 ? audioEditInfo(mp4) : null;
+  if (edit) audioDuration = edit.durationSec;
   const durationDifferenceMs = Math.abs(audioDuration - videoDuration) * 1000;
   const onsets = narration === null ? null : narrationOnsets(envelope, narration);
   const errors = onsets?.filter(o => o.exact).map(o => o.errorMs) ?? [];
@@ -45,10 +55,10 @@ export function checkSync(videoDuration, audioDuration, { envelope, narration = 
   const meanMs = complete && errors.length ? errors.reduce((a, b) => a + b, 0) / errors.length : null;
   const detail = onsets === null ? 'onset not checked (no --project)' : !onsets.length ? 'no narration placements' :
     `${onsets.length} narration onsets; worst ${worstMs?.toFixed(2) ?? 'unknown'} ms; mean ${meanMs?.toFixed(2) ?? 'unknown'} ms; ${onsets.filter(o => o.onset === null).length} missing${onsets.some(o => !o.exact) ? '; onset not verified exactly (clip unavailable; lead within 400 ms)' : ''}`;
-  return row('av-sync', finite(videoDuration) && finite(audioDuration) && durationDifferenceMs <= 100 + 1e-6
+  return row('av-sync', finite(videoDuration) && finite(audioDuration) && durationDifferenceMs <= (edit ? 10 : 100) + 1e-6
     && complete && errors.every(e => e <= 40 + 1e-6),
     { videoDuration, audioDuration, durationDifferenceMs, onsets, worstMs, meanMs },
-    'duration difference ≤100 ms; narration onset ±40 ms (with --project); unavailable clip: lead ≤400 ms', `${durationDifferenceMs.toFixed(2)} ms duration difference; ${detail}`);
+    `duration difference ≤${edit ? 10 : 100} ms; narration onset ±40 ms (with --project); unavailable clip: lead ≤400 ms`, `${durationDifferenceMs.toFixed(2)} ms duration difference; ${edit ? `edit list present: media_time ${edit.mediaTime}; ` : ''}${detail}`);
 }
 export function checkLoudness(measured) {
   if (measured === null) return skipped('loudness', 'no audio');

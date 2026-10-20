@@ -20,6 +20,7 @@ import { localRunId } from '../record/timing.mjs';
 import { buildComposition, validateComposition, safeImagePath, resolveComposition, safeMusicPath } from './composition.mjs';
 import { planRender } from './plan.mjs';
 import { imageAssetUrl, cursorImageWarning } from './custom-cursor.mjs';
+import { alignAudioTrack } from '../mp4-align.mjs';
 import { toSrt, toVtt } from './captions.mjs';
 
 const root = new URL('../../../', import.meta.url);
@@ -102,13 +103,14 @@ export async function startRenderServer({ rawFile, outFile, assets = new Map(), 
   for (const [run,file] of rawFiles) sourceRoutes.set(`run/${encodeURIComponent(run)}/raw.mp4`,{file,stat:await stat(file)});
   const bundle = await readFile(new URL('dist/render-page.js', root));
   let file, server, failure, bytes = 0, writes = Promise.resolve();
+  let closed = false;
   const close = async () => {
     try {
       if (server?.listening) {
         server.closeAllConnections();
         await new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       }
-    } finally { await writes.catch(() => {}); await file?.close(); }
+    } finally { await writes.catch(() => {}); if (!closed) { await file?.close(); closed = true; } }
   };
   try {
     file = await open(outFile, 'wx');
@@ -195,7 +197,7 @@ export async function startRenderServer({ rawFile, outFile, assets = new Map(), 
     });
     return { url: `http://127.0.0.1:${server.address().port}${prefix}`, close,
       options: { cursorImages: Object.fromEntries([...assets.keys()].map((image) => [image, imageAssetUrl(image)])) },
-      async finish() { await writes; if (failure) throw failure; await file.sync(); return bytes; } };
+      async finish() { await writes; if (failure) throw failure; await file.sync(); await file.close(); closed = true; return bytes; } };
   } catch (error) {
     try { await close(); } finally { if (file) await rm(outFile,{force:true}); }
     throw error;
@@ -338,6 +340,12 @@ export async function renderRun({ name, runId, sceneId, format = 'landscape', si
     result = await page.evaluate(({ plan, options }) => window.renderComposition(plan, { ...options, audio: plan.audio.enabled ? {} : null }), { plan: JSON.parse(JSON.stringify(plan)), options: server.options });
     for (const warning of result.warnings) if (!plan.warnings.includes(warning)) { plan.warnings.push(warning); log(`warning: ${warning}`); }
     await server.finish();
+    // AAC-LC encoder delay of Chromium/WebCodecs AAC: 2112 samples.
+    // Opus carries its own pre-skip in dOps and must remain untouched.
+    const audioAlignment = result.audio?.codec === 'aac'
+      ? await alignAudioTrack(finalFile, { primingSamples: 2112, videoDurationSec: result.frames / plan.output.fps })
+      : { aligned: false, reason: result.audio?.codec === 'opus' ? 'Opus dOps pre-skip; unchanged' : 'No audio track' };
+    if (result.audio?.codec === 'aac' && !audioAlignment.aligned) log(`warning: Audio alignment skipped: ${audioAlignment.reason}`);
     if (result.audio) {
       const { integratedLufs, truePeakDb } = result.audio.measured;
       log(`Loudness: ${integratedLufs.toFixed(1)} LUFS, true peak ${truePeakDb.toFixed(1)} dBTP`);
@@ -358,7 +366,7 @@ export async function renderRun({ name, runId, sceneId, format = 'landscape', si
       if (chapters.txt !== null) await writeFile(`${sidecarBase}.chapters.txt`, chapters.txt);
       else log(chapters.notice);
     }
-    await writeFile(path.join(renderDir, 'export.json'), JSON.stringify({ finalFile }, null, 2));
+    await writeFile(path.join(renderDir, 'export.json'), JSON.stringify({ finalFile, audioAlignment }, null, 2));
     await writeFile(path.join(renderDir, 'summary.json'), JSON.stringify({ finalFile, durationSec: plan.timemap.outputDuration, output: composition.output, audio: result.audio ?? null }, null, 2));
     log(`Final video: ${finalFile} (${plan.timemap.outputDuration.toFixed(2)} s, ${composition.output.width}x${composition.output.height}, ${composition.output.fps} fps)`);
     log(`Saved to: ${path.dirname(finalFile)}`);

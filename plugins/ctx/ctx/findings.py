@@ -65,6 +65,11 @@ from . import config as config_mod, frontmatter, lock
 SEVERITIES = ("critical", "important", "minor")
 STATUSES = ("open", "addressed", "disputed", "parked")
 
+# `low` means the reviewer could not name a concrete case. A low finding is a
+# question for the builder, never a blocker, whatever its severity. `high` is the
+# default and what every file written before this field existed loads as.
+CONFIDENCES = ("high", "low")
+
 # `minor` is deliberately absent: minor findings are recorded and deferred, never
 # entered into a fix loop. A review that can block on nits is a review the
 # implementer learns to route around.
@@ -76,7 +81,7 @@ BLOCKING = ("critical", "important")
 MAX_ROUNDS = 3
 
 _HEADING = re.compile(r"^###\s+\[(\d+)\]\s+([A-Za-z]+)\s*/\s*([A-Za-z]+)\s*(?:—\s*(.*))?$")
-_FIELD = re.compile(r"^-\s+(where|round|source)\s*:\s*(.*)$")
+_FIELD = re.compile(r"^-\s+(where|round|source|confidence)\s*:\s*(.*)$")
 _BLOCK = re.compile(r"^(evidence|ruling|reason)\s*:\s*$")
 _FENCE = re.compile(r"^(`{3,})\s*$")
 _BACKTICKS = re.compile(r"`+")
@@ -124,14 +129,16 @@ def round_ceiling(open_findings, config):
         return MAX_ROUNDS
     # Critical is the proxy for D12's serious findings: security, data scope
     # or data loss. Those earn more attempts, but never an unbounded loop.
-    if any(f.status == "open" and f.severity == "critical" for f in open_findings):
+    if any(f.status == "open" and f.severity == "critical"
+           and getattr(f, "confidence", "high") != "low" for f in open_findings):
         return 4
     return 2
 
 
 class Finding:
     def __init__(self, id, severity, summary, *, status="open", evidence="",
-                 where="", round_number=1, ruling="", source="reviewer"):
+                 where="", round_number=1, ruling="", source="reviewer",
+                 confidence="high"):
         self.id = int(id)
         self.severity = _severity(severity)
         self.status = _status(status)
@@ -141,12 +148,18 @@ class Finding:
         self.round = int(round_number)
         self.ruling = str(ruling or "").strip()
         self.source = _oneline(source) or "reviewer"
+        self.confidence = _confidence(confidence)
 
     def __repr__(self):
         return f"<Finding {self.id} {self.severity}/{self.status}>"
 
     def blocking(self):
-        return self.severity in BLOCKING and self.status == "open"
+        return (self.severity in BLOCKING and self.status == "open"
+                and self.confidence != "low")
+
+    def is_question(self):
+        """An open low-confidence finding: asked of the builder, not enforced."""
+        return self.status == "open" and self.confidence == "low"
 
     def as_dict(self):
         """Comparable form, for round-trip assertions and for the briefing."""
@@ -154,13 +167,14 @@ class Finding:
             "id": self.id, "severity": self.severity, "status": self.status,
             "summary": self.summary, "evidence": self.evidence,
             "where": self.where, "round": self.round, "ruling": self.ruling,
-            "source": self.source,
+            "source": self.source, "confidence": self.confidence,
         }
 
     def line(self):
         """One line for a gate refusal message."""
         where = f" ({self.where})" if self.where else ""
-        return f"[{self.id}] {self.severity}: {self.summary}{where}"
+        low = " [low confidence]" if self.confidence == "low" else ""
+        return f"[{self.id}] {self.severity}{low}: {self.summary}{where}"
 
 
 class Escalation:
@@ -246,18 +260,21 @@ class Ledger:
         self.escalations = escalations
         self.round = _int(doc.meta.get("round"), self.round)
 
-    def add(self, severity, summary, *, where="", evidence="", source="reviewer"):
+    def add(self, severity, summary, *, where="", evidence="", source="reviewer",
+            confidence="high"):
         with self._exclusive():
             return self._add(severity, summary, where=where, evidence=evidence,
-                             source=source)
+                             source=source, confidence=confidence)
 
-    def _add(self, severity, summary, *, where="", evidence="", source="reviewer"):
+    def _add(self, severity, summary, *, where="", evidence="", source="reviewer",
+             confidence="high"):
         """`add` with the plan lock already held. `_next_id` therefore counts
         the findings the *file* has, not the ones this object was loaded with,
         so two reviewers cannot both mint id 3."""
         finding = Finding(
             self._next_id(), severity, summary,
             where=where, evidence=evidence, round_number=self.round, source=source,
+            confidence=confidence,
         )
         self.findings.append(finding)
         self.save()
@@ -272,6 +289,22 @@ class Ledger:
             if finding.id == wanted:
                 return finding
         return None
+
+    def set_confidence(self, finding_id, confidence):
+        """Re-mark a finding. Returns (ok, problem); a low finding re-marked
+        `high` blocks again."""
+        with self._exclusive():
+            finding = self.get(finding_id)
+            if finding is None:
+                known = ", ".join(str(f.id) for f in self.findings) or "none"
+                return False, f"no finding {finding_id!r} in this ledger (have: {known})"
+            wanted = str(confidence or "").strip().lower()
+            if wanted not in CONFIDENCES:
+                return False, (f"confidence {confidence!r} is not one of "
+                               f"{'/'.join(CONFIDENCES)}")
+            finding.confidence = wanted
+            self.save()
+            return True, ""
 
     def set_status(self, finding_id, status, *, ruling="", evidence=""):
         """Move a finding, or say why it may not move. Returns (ok, problem)."""
@@ -432,6 +465,10 @@ class Ledger:
     def open_findings(self):
         return [f for f in self.findings if f.status == "open"]
 
+    def questions(self):
+        """Open low-confidence findings: the "ask the builder" list."""
+        return [f for f in self.findings if f.is_question()]
+
     def counts(self):
         out = {status: 0 for status in STATUSES}
         for finding in self.findings:
@@ -448,10 +485,14 @@ class Ledger:
         counts = self.counts()
         by_severity = []
         for severity in SEVERITIES:
-            total = len([f for f in self.open_findings() if f.severity == severity])
+            total = len([f for f in self.open_findings()
+                         if f.severity == severity and f.confidence != "low"])
             if total:
                 by_severity.append(f"{total} {severity}")
         bits = [", ".join(by_severity) + " open"] if by_severity else ["nothing open"]
+        asks = len(self.questions())
+        if asks:
+            bits.append(f"{asks} to ask the builder")
         for status in ("addressed", "disputed", "parked"):
             if counts[status]:
                 bits.append(f"{counts[status]} {status}")
@@ -478,6 +519,8 @@ class Ledger:
                     lines.append(f"- where: {finding.where}")
                 lines.append(f"- round: {finding.round}")
                 lines.append(f"- source: {finding.source}")
+                if finding.confidence != "high":
+                    lines.append(f"- confidence: {finding.confidence}")
                 for label, text in (("evidence", finding.evidence), ("ruling", finding.ruling)):
                     if not text:
                         continue
@@ -523,7 +566,7 @@ def unresolved(ledger):
     """
     out = []
     for finding in ledger.findings:
-        if finding.severity not in BLOCKING:
+        if finding.severity not in BLOCKING or finding.confidence == "low":
             continue
         if finding.status == "open":
             out.append(finding)
@@ -597,6 +640,8 @@ def _parse_body(body):
                     current.round = _int(value, current.round)
                 elif key == "where":
                     current.where = value
+                elif key == "confidence":
+                    current.confidence = _confidence(value)
                 else:
                     current.source = value or "reviewer"
                 index += 1
@@ -662,6 +707,12 @@ def _severity(value):
     """
     severity = str(value or "").strip().lower()
     return severity if severity in SEVERITIES else "important"
+
+
+def _confidence(value):
+    """Anything but `low` is `high`: an unknown value fails towards blocking,
+    like `_severity`, and a file with no field at all loads as it always did."""
+    return "low" if str(value or "").strip().lower() == "low" else "high"
 
 
 def _status(value):

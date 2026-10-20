@@ -205,3 +205,20 @@ test('audit compensates 250 ms clip lead measured from WAV, rejects 120 ms shift
     for (const starts of [[0.495], [0.905], []]) assert.equal(checkSync(3, 3, { envelope: burstEnvelope(starts), narration: missing }).pass, false);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+
+// Structural checks require neither ffprobe nor a decoder.
+const { fixture: mp4Fixture } = await import('./mp4-fixture.mjs');
+const { alignAudioTrack } = await import('../scripts/lib/mp4-align.mjs');
+test('sync reports edit media_time and compares the edited audio duration at 10 ms', async () => {
+  const input = mp4Fixture();
+  assert.equal(checkSync(10, 10.08, { mp4: input }).measured.audioDuration, 10.08);
+  const { buffer } = await alignAudioTrack(input, { primingSamples: 2112, videoDurationSec: 10 });
+  const sync = checkSync(10, 10.08, { mp4: buffer });
+  assert.equal(sync.pass, true);
+  assert.equal(sync.measured.audioDuration, 10);
+  assert.equal(sync.measured.durationDifferenceMs, 0);
+  assert.match(sync.detail, /edit list present: media_time 2112/);
+  assert.equal(checkSync(10.01, 10.08, { mp4: buffer }).pass, true);
+  assert.equal(checkSync(10.011, 10.08, { mp4: buffer }).pass, false);
+});

@@ -1,3 +1,4 @@
+import { readMp4Metadata } from '../lib/mp4-align.mjs';
 import http from 'node:http';
 import path from 'node:path';
 import { createReadStream } from 'node:fs';
@@ -108,6 +109,7 @@ async function projectInputs(name) {
 export async function auditVideo({ video, srt, project, strict = false }) {
   if (!video) throw new Error('--video is required');
   const videoFile = path.resolve(video), sizeBytes = (await stat(videoFile)).size;
+  const mp4 = (await readMp4Metadata(videoFile)).metadata;
   const captions = srt === undefined ? null : await readFile(srt, 'utf8');
   const context = project ? await projectInputs(project) : null;
   let server, browser;
@@ -135,7 +137,7 @@ export async function auditVideo({ video, srt, project, strict = false }) {
     const cadence = checkCadence({ frames: decoded.frames, containerDuration: decoded.containerDuration, fps: plan?.output.fps });
     const narration = plan ? await loadNarrationLeads(projectDir(project), plan.audio.narration) : null;
     const checks = [cadence,
-      checkSync(decoded.videoDuration, decoded.audioDuration, { envelope: decoded.envelope, narration }), checkLoudness(decoded.loudness), checkCaptions(captions, decoded.duration),
+      checkSync(decoded.videoDuration, decoded.audioDuration, { envelope: decoded.envelope, narration, mp4 }), checkLoudness(decoded.loudness), checkCaptions(captions, decoded.duration),
       checkFrozen(decoded.samples, plan ? allowedFreezeRanges(plan) : [], cadence.pass), checkParity(parity), checkContainer({ ...decoded, sizeBytes })];
     return { pass: auditPassed(checks, strict), strict, checks };
   } finally { try { await browser?.close(); } finally { await server?.close(); } }
