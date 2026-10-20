@@ -118,11 +118,11 @@ class TestScrub(StoreCase):
         self.assertIn(expect, self.real()[0]["summary"])
 
     def test_AC3_posix_home_path(self):
-        self.assert_scrubbed("edited /Users/alice/code/app/main.py today",
-                             "alice", "<path>")
+        self.assert_scrubbed("edited /Users/example/code/app/main.py today",
+                             "example", "<path>")
 
     def test_AC3_linux_home_path(self):
-        self.assert_scrubbed("see /home/bob/.ssh/config", "bob", "<path>")
+        self.assert_scrubbed("see /home/victim/.ssh/config", "victim", "<path>")
 
     def test_AC3_windows_path(self):
         self.assert_scrubbed(r"opened C:\Users\carol\secret.txt now",
@@ -146,10 +146,10 @@ class TestScrub(StoreCase):
         self.assertNotIn(token, self.target.read_text())
 
     def test_AC3_unit_plan_and_key_are_scrubbed_too(self):
-        improve.record(self.layout, ON, "k", unit="/Users/eve/x/y",
-                       plan="e@x.io", summary="s", key="/home/zed/a/b")
+        improve.record(self.layout, ON, "k", unit="/Users/victim/x/y",
+                       plan="e@example.com", summary="s", key="/home/runner/a/b")
         text = self.target.read_text()
-        for leaked in ("eve", "e@x.io", "zed"):
+        for leaked in ("victim", "e@example.com", "runner"):
             self.assertNotIn(leaked, text)
 
     def test_AC3_summary_is_one_line_and_capped(self):
@@ -274,11 +274,11 @@ class TestBackfill(StoreCase):
         self.assertEqual(len(self.real()), 2)
 
     def test_AC6_backfilled_summaries_are_scrubbed(self):
-        self.add_finding("p", "u1", "leaks /Users/frank/proj/a.py and g@h.io")
+        self.add_finding("p", "u1", "leaks /Users/victim/proj/a.py and g@example.org")
         improve.backfill(self.layout, ON)
         text = self.target.read_text()
-        self.assertNotIn("frank", text)
-        self.assertNotIn("g@h.io", text)
+        self.assertNotIn("victim", text)
+        self.assertNotIn("g@example.org", text)
 
     def test_AC6_low_confidence_finding_keeps_its_confidence(self):
         self.add_finding("p", "u1", "maybe", confidence="low")
