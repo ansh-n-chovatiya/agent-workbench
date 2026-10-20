@@ -36,7 +36,7 @@ export const AUDIT = () => {
     if (!control && el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1 && !scrolls && cs.display !== 'inline') {
       if (cs.overflowX === 'hidden' || cs.overflowX === 'clip') {
         if (texts(el) && cs.textOverflow !== 'ellipsis') problems.push({ kind: 'clipped-text', el: describe(el), text: el.textContent.trim().slice(0, 40), by: el.scrollWidth - el.clientWidth });
-        else if (!texts(el)) problems.push({ kind: 'clipped-content', el: describe(el), by: el.scrollWidth - el.clientWidth });
+        else if (!texts(el) && el.scrollWidth - el.clientWidth > 2) problems.push({ kind: 'clipped-content', el: describe(el), by: el.scrollWidth - el.clientWidth }); // 2 px: sub-pixel font metrics differ per OS
       } else problems.push({ kind: 'wider-than-box', el: describe(el), by: el.scrollWidth - el.clientWidth });
     }
   }

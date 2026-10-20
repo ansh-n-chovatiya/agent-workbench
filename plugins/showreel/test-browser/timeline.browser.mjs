@@ -13,10 +13,23 @@ const { syntheticRun } = await import('./helpers/synthetic-run.mjs');
 const { startEditorServer } = await import('../scripts/lib/editor/server.mjs');
 const { projectDir } = await import('../scripts/lib/paths.mjs');
 
+// On timeout, print what the page looked like (saved edits, clip blocks, console errors) so CI failures explain themselves.
+async function diagnose(what) {
+  const page = globalThis.__diagPage; if (!page) return '';
+  try {
+    const info = await page.evaluate(() => ({
+      url: location.pathname, scroll: [document.scrollingElement.scrollWidth, document.scrollingElement.scrollHeight],
+      clips: [...document.querySelectorAll('.clip-track .clip-block')].map(c => ({ cls: c.className.replace(/\s+/g, ' '), box: (r => [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)])(c.getBoundingClientRect()) })),
+      zooms: document.querySelectorAll('.timeline-block.zoom').length, menus: document.querySelectorAll('[role=menu]').length,
+      status: document.querySelector('.save-status')?.textContent, notice: document.querySelector('[role=status].timeline-notice, .timeline-message')?.textContent ?? null }));
+    return ` | DIAG(${what}) ${JSON.stringify(info)}`;
+  } catch (e) { return ` | DIAG failed: ${e.message}`; }
+}
+
 const until = async (fn,what,ms = 20000) => {
   const end = Date.now()+ms; let last;
   while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch (e) { last = e; } await new Promise(r => setTimeout(r,120)); }
-  throw new Error(`timed out waiting for ${what}${last ? `: ${last.message}` : ''}`);
+  throw new Error(`timed out waiting for ${what}${last ? `: ${last.message}` : ''}${await diagnose(what)}`);
 };
 const disjoint = list => list.every((z,i) => z.tStart < z.tEnd && (!i || z.tStart >= list[i-1].tEnd-1e-9));
 
@@ -27,7 +40,7 @@ test('timeline: layers, zooms that never overlap, context menus, keyboard and vi
     const run = await syntheticRun(browser,{name:'timeline',duration:4});
     const compositionFile = path.join(projectDir(run.name),'composition.json');
     server = await startEditorServer({name:run.name});
-    const page = await browser.newPage({viewport:{width:1440,height:900}});
+    const page = await browser.newPage({viewport:{width:1440,height:900}}); globalThis.__diagPage = page;
     const problems = [];
     page.on('pageerror',e => problems.push(`pageerror: ${e.message}`));
     page.on('console',m => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });

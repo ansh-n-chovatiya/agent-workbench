@@ -19,10 +19,23 @@ const { SETTINGS } = await import('../scripts/lib/compose/settings-schema.mjs');
 const { brandDefaults } = await import('../scripts/lib/brand/schema.mjs');
 const { encodeWav } = await import('../scripts/lib/voice/wav.mjs');
 
+// On timeout, print what the page looked like (saved edits, clip blocks, console errors) so CI failures explain themselves.
+async function diagnose(what) {
+  const page = globalThis.__diagPage; if (!page) return '';
+  try {
+    const info = await page.evaluate(() => ({
+      url: location.pathname, scroll: [document.scrollingElement.scrollWidth, document.scrollingElement.scrollHeight],
+      clips: [...document.querySelectorAll('.clip-track .clip-block')].map(c => ({ cls: c.className.replace(/\s+/g, ' '), box: (r => [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)])(c.getBoundingClientRect()) })),
+      zooms: document.querySelectorAll('.timeline-block.zoom').length, menus: document.querySelectorAll('[role=menu]').length,
+      status: document.querySelector('.save-status')?.textContent, notice: document.querySelector('[role=status].timeline-notice, .timeline-message')?.textContent ?? null }));
+    return ` | DIAG(${what}) ${JSON.stringify(info)}`;
+  } catch (e) { return ` | DIAG failed: ${e.message}`; }
+}
+
 const until = async (fn, what, ms = 20000) => {
   const end = Date.now() + ms; let last;
   while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch (e) { last = e; } await new Promise((r) => setTimeout(r, 150)); }
-  throw new Error(`timed out waiting for ${what}${last ? `: ${last.message}` : ''}`);
+  throw new Error(`timed out waiting for ${what}${last ? `: ${last.message}` : ''}${await diagnose(what)}`);
 };
 
 test('real editor: load, edit, undo, autosave, play and export', { timeout: 240000 }, async (t) => {
@@ -36,7 +49,7 @@ test('real editor: load, edit, undo, autosave, play and export', { timeout: 2400
     const exportBase = `http://127.0.0.1:${server.port}`;
     const exportApi = (route, options = {}) => fetch(exportBase + route, { ...options, headers: { Authorization: `Bearer ${server.token}`, ...options.headers } });
     assert.equal((await exportApi('/api/export/folder', { method: 'POST', body: JSON.stringify({ dir: exportFolder }) })).status, 200);
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }); globalThis.__diagPage = page;
     // Keep every Audio element the app creates so tests can prove sound really starts (the voice controller never attaches its player to the DOM).
     await page.addInitScript(() => { window.__audios = []; const A = window.Audio; window.Audio = function (...a) { const el = new A(...a); window.__audios.push(el); return el; }; window.Audio.prototype = A.prototype; });
     const problems = [];
