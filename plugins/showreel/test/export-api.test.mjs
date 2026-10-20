@@ -61,7 +61,7 @@ test('authenticated loopback export API validates destinations, exports, streams
     assert.equal((await post('/api/export/folder',{dir:path.join(temp,'exports')})).status,200);
     assert.equal((await (await request('/api/export/settings')).json()).exportDir,path.join(temp,'exports'));
     assert.deepEqual(await (await post('/api/export/choose-folder')).json(),{cancelled:true});
-    assert.equal((await post('/api/export',{dir:'/System'})).status,400);
+    assert.equal((await post('/api/export',{dir:process.platform==='win32'?(process.env.SystemRoot||'C:\\Windows'):'/System'})).status,400);
     const started=await post('/api/export');assert.equal(started.status,202,await started.text());
     while(!events.some(e=>e.event==='complete'))await new Promise(resolve=>setTimeout(resolve,5));
     const result=events.find(e=>e.event==='complete').data;

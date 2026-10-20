@@ -15,7 +15,8 @@ test('default export folders use the user home and OS media folder', () => {
 test('destination preferences are normalized, atomic and validated through symlinks', async () => {
   const home = process.env.SHOWREEL_HOME;
   assert.equal(await getExportDir(), defaultExportDir());
-  for (const dir of ['relative', '', '/', '/System', '/System/Library', path.join(home, 'projects', 'p')]) await assert.rejects(validateExportDir(dir));
+  const SYS = process.platform === 'win32' ? (process.env.SystemRoot || 'C:\\Windows') : '/System';
+  for (const dir of ['relative', '', path.parse(process.cwd()).root, SYS, path.join(SYS, 'Library'), path.join(home, 'projects', 'p')]) await assert.rejects(validateExportDir(dir));
   const folder = path.join(temp, 'exports');
   assert.equal(await setExportDir(folder + path.sep + '.'), folder);
   assert.equal(await getExportDir(), folder);
@@ -24,7 +25,7 @@ test('destination preferences are normalized, atomic and validated through symli
   const file = path.join(temp, 'file'); await writeFile(file, 'x');
   await assert.rejects(setExportDir(file), /folder/);
   await mkdir(path.join(home, 'projects'), { recursive: true });
-  await symlink(path.join(home, 'projects'), path.join(temp, 'alias'));
+  await symlink(path.join(home, 'projects'), path.join(temp, 'alias'), process.platform === 'win32' ? 'junction' : 'dir');
   await assert.rejects(setExportDir(path.join(temp, 'alias', 'new')), /outside/);
   assert.equal(await getExportDir(), folder);
 });

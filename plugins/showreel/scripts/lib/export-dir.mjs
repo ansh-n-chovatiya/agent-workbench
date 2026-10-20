@@ -20,7 +20,9 @@ export async function validateExportDir(dir, { create = false } = {}) {
   const normalized = path.normalize(dir);
   const resolved = await physical(normalized), projects = await physical(path.join(HOME_DIR, 'projects'));
   if (within(projects, resolved)) throw new Error('Choose a folder outside Showreel projects');
-  const forbidden = process.platform === 'win32' ? ['C:\\Windows', 'C:\\Program Files', 'C:\\Program Files (x86)'] : ['/System', '/bin', '/sbin', '/usr', '/etc', '/dev', '/proc', '/sys'];
+  const forbidden = process.platform === 'win32'
+    ? [...new Set(['C:\\Windows', 'C:\\Program Files', 'C:\\Program Files (x86)', 'C:\\ProgramData', process.env.SystemRoot, process.env.ProgramFiles, process.env['ProgramFiles(x86)'], process.env.ProgramData].filter(Boolean))]
+    : ['/System', '/bin', '/sbin', '/usr', '/etc', '/dev', '/proc', '/sys'];
   if (resolved === path.parse(resolved).root || forbidden.some(root => within(root, resolved))) throw new Error('Choose a personal folder, not a system folder');
   try { if (!(await stat(normalized)).isDirectory()) throw new Error('Export destination must be a folder'); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
