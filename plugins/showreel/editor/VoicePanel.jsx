@@ -158,6 +158,8 @@ export function VoicePanel(ctx) {
       <SettingRow path="audio.voice.voiceId" ctx={ctx} stacked render={({ id, value, onChange }) => <VoicePicker id={id} value={value} onChange={onChange} info={info} ctl={ctl} controller={controller} />} />
       <VoiceBrowser info={info} ctl={ctl} controller={controller} value={voiceId} onPick={id => store.change('audio.voice.voiceId', id)} />
       <SettingRow path="audio.voice.speed" ctx={ctx} setting={{ min: SPEED_MIN, max: SPEED_MAX, step: 0.05 }} help="How fast the narrator speaks; one is the natural pace. Changing it makes new voice-overs." />
+      <SettingRow path="audio.tighten.enabled" ctx={ctx} />
+      <SettingRow path="audio.tighten.pauseSec" ctx={ctx} />
     </SettingsCard>
     <SettingsCard id="script" title="Script" icon={MessageSquareText} badge={<Badge role="status">{summary.total ? `${summary.ready} of ${summary.total} ready` : 'No narration yet'}</Badge>}>
       {rows.length ? <>

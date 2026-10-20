@@ -75,7 +75,7 @@ export const TOPIC_CARDS = {
     { id: 'caption-style', title: 'Text style', icon: 'Type', primary: ['captions.color', 'captions.background'], advanced: ['captions.fontWeight', 'captions.align'] },
   ],
   audio: [
-    { id: 'narrator', title: 'Narrator', icon: 'Mic', tab: 'voice', primary: VOICE_PANEL_PATHS.slice(0, 3), advanced: VOICE_PANEL_PATHS.slice(3) },
+    { id: 'narrator', title: 'Narrator', icon: 'Mic', tab: 'voice', primary: VOICE_PANEL_PATHS.slice(0, 5), advanced: VOICE_PANEL_PATHS.slice(5) },
     { id: 'script', title: 'Script', icon: 'MessageSquareText', tab: 'voice', special: 'script' },
     { id: 'music', title: 'Background music', icon: 'Music', tab: 'music', primary: MUSIC_PANEL_PATHS.music.slice(0, 3), advanced: MUSIC_PANEL_PATHS.music.slice(3) },
     { id: 'ducking', title: 'Music under the voice', icon: 'AudioLines', tab: 'music', primary: MUSIC_PANEL_PATHS.ducking, advanced: MUSIC_PANEL_PATHS.advanced },

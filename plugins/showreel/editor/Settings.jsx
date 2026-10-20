@@ -38,7 +38,7 @@ export function Settings(props) {
   const [query, setQuery] = useState(''), [audioTab, setAudioTab] = useState(reveal?.tab ?? 'voice');
   useEffect(() => { if (reveal?.tab) setAudioTab(reveal.tab); }, [reveal?.n]);
   const index = useMemo(() => buildSearchIndex(), []);
-  const panel = panelFor(selection, topic), values = compositionPaths(state.composition), defaults = compositionPaths({});
+  const panel = panelFor(selection, topic), defaults = compositionPaths({}), values = { ...defaults, ...compositionPaths(state.composition) }; // projects saved before a setting existed show its default
   if (panel === 'zoom-selection') {
     const region = (state.plan?.regions ?? state.composition.zoom.regions).find(z => z.id === selection.id);
     if (region) return <ZoomPanel key={region.id} state={state} store={store} region={region} time={state.plan ? sourceAt(state.plan.timemap, time).t : 0} onClose={() => setSelection(null)} />;

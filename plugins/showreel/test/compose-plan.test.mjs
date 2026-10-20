@@ -86,3 +86,73 @@ test('timeline receives detached regions and edited/deleted auto zooms persist i
   input.composition = autoZoomRegenerate(input.composition,input.events,input.record);
   assert.ok(planRender(input).regions.length);
 });
+
+function pacingRun() {
+  const input = run();
+  input.events.steps = Array.from({length:3}, (_,i) => ({id:`s${i+1}`,tStart:i*8,holdStart:i*8+2,tEnd:(i+1)*8}));
+  input.storyboard.steps = input.events.steps.map(s => ({id:s.id,caption:`Sentence ${s.id}`}));
+  input.record.durationSec = 24;
+  input.composition = buildComposition({...input, overrides:{cards:{title:{enabled:false},outro:{enabled:false}},
+    zoom:{enabled:false},audio:{voice:{enabled:true}}}});
+  input.voiceClips = {steps:{s1:'a',s2:'b',s3:'c'}, clips:{a:{durationSec:2.5},b:{durationSec:3},c:{durationSec:4}}};
+  return input;
+}
+
+test('three narrated steps trim waits, retain pauses, and align captions and clips on a stable clock', async () => {
+  const { sourceAt, outputAt } = await import('../scripts/lib/compose/timemap.mjs');
+  const { narrationIdleTrims } = await import('../scripts/lib/audio/retime.mjs');
+  const { toSrt } = await import('../scripts/lib/compose/captions.mjs');
+  const input = pacingRun(), before = structuredClone(input), plan = planRender(input);
+  assert.deepEqual(input,before,'planning never writes recordings or edits');
+  assert.equal(plan.audio.tightened.length,3); near(plan.audio.removedSec,12.25);
+  near(plan.timemap.outputDuration,11.75);
+  assert.deepEqual(plan.notices,['Trimmed 12.3 s of waiting after narration']);
+  assert.ok(!plan.warnings.some(w => /Trimmed/.test(w)));
+  for (const [i,n] of plan.audio.narration.entries()) {
+    const step = input.events.steps[i], trim = plan.timemap.trims[i], end = n.outStart+n.durationSec;
+    assert.ok(trim.start >= step.holdStart);
+    assert.ok(trim.start >= sourceAt(plan.timemap,end).t+0.4-1e-9);
+    near(trim.end,step.tEnd-(i === 2 ? 0.5 : 0.05));
+    const cue = plan.cues.find(c => c.id === n.stepId);
+    assert.ok(cue.start <= sourceAt(plan.timemap,n.outStart).t);
+    assert.ok(cue.end >= sourceAt(plan.timemap,end).t);
+    const span = plan.audio.captionSpans.find(s => s.stepId === n.stepId);
+    near(span.outStart,n.outStart); near(span.outEnd,end);
+    near(outputAt(plan.timemap,step.tStart+0.15),n.outStart);
+    if (i < 2) assert.ok(plan.audio.narration[i+1].outStart-end >= 0.4-1e-9);
+  }
+  assert.equal(toSrt(plan.cues,plan.timemap).match(/-->/g).length,3);
+  const again = narrationIdleTrims({steps:input.events.steps,narration:plan.audio.narration,timemap:plan.timemap,
+    edits:input.composition.edits,pauseSec:0.4});
+  again.forEach((r,i) => {near(r.start,plan.timemap.trims[i].start);near(r.end,plan.timemap.trims[i].end);});
+  assert.deepEqual(planRender(input).audio,plan.audio,'repeated planning converges');
+  input.composition.audio.tighten.enabled = false;
+  const off = planRender(input);
+  near(off.timemap.outputDuration,24); assert.deepEqual(off.timemap.trims,[]);
+  assert.deepEqual(off.audio.tightened,[]); assert.equal(off.audio.removedSec,0); assert.deepEqual(off.notices,[]);
+  input.composition.audio.tighten.enabled = true; input.composition.audio.voice.enabled = false;
+  near(planRender(input).timemap.outputDuration,24);
+});
+
+test('overlapping user trims, speeds and holds win over automatic waits', () => {
+  for (const edits of [{trims:[{start:4,end:5}]}, {speeds:[{start:4,end:5,rate:2}]}, {holds:[{t:4,duration:1}]}]) {
+    const input = pacingRun(); Object.assign(input.composition.edits,edits);
+    const plan = planRender(input);
+    assert.deepEqual(plan.audio.tightened.map(r => r.stepId),['s2','s3']);
+    assert.deepEqual(plan.timemap.trims.filter(r => r.start < 8),edits.trims ?? []);
+    assert.deepEqual(plan.timemap.holds,edits.holds ?? []);
+  }
+});
+
+test('tightening preserves actions, missing holdStart, minimum cut size and final narration overrun', () => {
+  const input = pacingRun(); input.events.steps[0].holdStart = 7;
+  delete input.events.steps[1].holdStart; input.voiceClips.clips.c.durationSec = 10;
+  const plan = planRender(input);
+  near(plan.timemap.trims[0].start,7); assert.ok(plan.timemap.trims[1].start > 11);
+  assert.ok(!plan.audio.tightened.some(r => r.stepId === 's3'));
+  assert.ok(plan.audio.warnings.some(w => w.code === 'tail-hold'));
+  const last = plan.audio.narration.at(-1);
+  assert.ok(plan.timemap.mainEnd >= last.outStart+last.durationSec);
+  const short = pacingRun(); short.events.steps[0].holdStart = 7.8;
+  assert.ok(!planRender(short).audio.tightened.some(r => r.stepId === 's1'));
+});

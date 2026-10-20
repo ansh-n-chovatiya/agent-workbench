@@ -56,3 +56,6 @@ Problems seen: a help sentence under nearly every control makes panels very long
 8. **Rail:** 56 px, icons with tooltips and a selected pill; Zoom uses the ZoomIn/Focus icon (not a magnifier-search); a thin divider before 'Export settings'; the rail never scrolls at 640 px height (use 44 px targets at 36 px icon).
 9. **Panel header:** topic title (16 px semibold) + a one-line subtitle; actions (Reset section) in a kebab.
 10. **Polish:** consistent 8 px spacing, 8 px radius cards, 1 px hairlines with `--line`, subtle surface elevation (card = panel +3% lightness), 150 ms transitions, focus-visible rings, reduced-motion respected, selected/hover states, no clipped text at 280 to 360 px widths, dark and light both reviewed.
+
+## Narration pacing
+Audio > Voice > Narrator includes **Trim waiting after narration**, enabled by default, and **Pause after each sentence** (0.4 s by default, adjustable from 0.1 to 2 s). Exports and the timeline's Result length shorten idle holds after narration while preserving actions, overlapping user edits, and the last step's final half-second. Recordings and saved edits stay unchanged; disable the switch to restore the original pacing.

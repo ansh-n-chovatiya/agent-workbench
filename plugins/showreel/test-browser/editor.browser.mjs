@@ -491,8 +491,18 @@ test('real editor: load, edit, undo, autosave, play and export', { timeout: 2400
       await page.getByRole('button', { name: /^Remove clip, Open the report/ }).click();
       await until(async () => (await rows.first().locator('.status').innerText()).trim() === 'Not generated', 'clip removed');
       // Every audio setting is reachable in the Voice or Music panel.
+      await voiceTab.click();
+      const narrator = page.getByRole('region', { name: 'Narrator', exact: true });
+      for (const [setting, label] of [['audio.tighten.enabled', 'Trim waiting after narration'], ['audio.tighten.pauseSec', 'Pause after each sentence']]) {
+        const control = narrator.locator(`.scard-rows:not(.scard-rows-advanced) [id="setting-${setting}"]`);
+        // Slider thumbs are zero-size in this design, so presence in the primary (not Advanced) rows is the check; the visible label proves it renders.
+        await control.waitFor({ state: 'attached' });
+        assert.equal(await control.count(), 1, `${label} is a primary Narrator control`);
+        assert.equal(await narrator.getByText(label, { exact: true }).count(), 1, `${label} label`);
+      }
+      const inVoice = s => s.path.startsWith('audio.voice.') || s.path.startsWith('audio.tighten.');
       const missing = [];
-      for (const [tab, wanted] of [['Voice', SETTINGS.filter(s => s.path.startsWith('audio.voice.'))], ['Music', SETTINGS.filter(s => s.group === 'audio' && !s.path.startsWith('audio.voice.'))]]) {
+      for (const [tab, wanted] of [['Voice', SETTINGS.filter(s => s.group === 'audio' && inVoice(s))], ['Music', SETTINGS.filter(s => s.group === 'audio' && !inVoice(s))]]) {
         await page.getByRole('tab', { name: tab, exact: true }).click();
         for (const toggle of await page.locator('.scard-adv, .scard-toggle').all()) if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click(); // Advanced rows are collapsed by default
         for (const setting of wanted) if (await page.locator(`[id="setting-${setting.path}"]`).count() !== 1) missing.push(setting.path);

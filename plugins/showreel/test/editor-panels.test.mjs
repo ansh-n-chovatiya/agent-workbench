@@ -133,3 +133,12 @@ test('info tooltips sit above their row, flip only at the top of the window and 
   assert.equal(placeTip({ top: 300, bottom: 318, left: 60, width: 18 }, { left: 56, width: 400, height: 900 }).left, 64, 'clamped to the panel, not the rail');
   assert.equal(placeTip({ top: 300, bottom: 318, left: 440, width: 18 }, { left: 56, width: 400, height: 900 }).left, 56 + 400 - 240 - 8);
 });
+
+test('narration pacing controls are primary in Audio > Voice > Narrator', () => {
+  for (const path of ['audio.tighten.enabled','audio.tighten.pauseSec']) {
+    const place = locate(path);
+    assert.equal(place.topic,'audio'); assert.equal(place.card.tab,'voice');
+    assert.equal(place.card.id,'narrator'); assert.equal(place.advanced,false);
+    assert.equal(buildSearchIndex().find(e => e.path === path).tab,'voice');
+  }
+});

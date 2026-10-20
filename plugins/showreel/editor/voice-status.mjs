@@ -72,7 +72,7 @@ export function narrationSteps(composition, stepId, patch) {
 }
 
 // Which panel shows each audio setting. A test keeps this equal to the settings schema so none can go missing.
-export const VOICE_PANEL_PATHS = ['audio.voice.enabled', 'audio.voice.voiceId', 'audio.voice.speed', 'audio.voice.gainDb'];
+export const VOICE_PANEL_PATHS = ['audio.voice.enabled', 'audio.voice.voiceId', 'audio.voice.speed', 'audio.tighten.enabled', 'audio.tighten.pauseSec', 'audio.voice.gainDb'];
 export const MUSIC_PANEL_PATHS = {
   music: ['audio.music.enabled', 'audio.music.file', 'audio.music.gainDb', 'audio.music.loop', 'audio.music.fadeInSec', 'audio.music.fadeOutSec'],
   ducking: ['audio.music.duck.enabled', 'audio.music.duck.depthDb'], advanced: ['audio.music.duck.attackMs', 'audio.music.duck.releaseMs'],

@@ -11,7 +11,7 @@ async function helperBundle() {
   bundle ??= build({ stdin: { resolveDir: fileURLToPath(new URL('../../', import.meta.url)), contents: `
     import { Output, Mp4OutputFormat, BufferTarget, CanvasSource, canEncodeVideo,
       Input, UrlSource, ALL_FORMATS, CanvasSink } from 'mediabunny';
-    window.makeSynthetic = async ({ background = '#808080', duration = 4 } = {}) => {
+    window.makeSynthetic = async ({ background = '#808080', duration = 4, motionSize = 40 } = {}) => {
       const canvas = document.createElement('canvas'); canvas.width = 1280; canvas.height = 720;
       const ctx = canvas.getContext('2d');
       let codec;
@@ -28,7 +28,7 @@ async function helperBundle() {
           ctx.fillStyle = background; ctx.fillRect(0, 0, 1280, 720);
           ctx.fillStyle = '#ff0000'; ctx.fillRect(200, 100, 60, 60);
           ctx.fillStyle = '#0000ff'; ctx.fillRect(900, 500, 80, 80);
-          ctx.fillStyle = '#00ff00'; ctx.fillRect(40 + 280 * (k / 30), 650, 40, 40);
+          ctx.fillStyle = '#00ff00'; ctx.fillRect(40 + 280 * (k / 30), Math.min(650, 690 - motionSize), motionSize, motionSize);
           await source.add(k / 30, 1 / 30);
         }
         source.close(); await output.finalize(); done = true;
@@ -99,7 +99,7 @@ export async function inspectionPage(browser, rawFile, outFile, assets = new Map
   } catch (error) { try { await page?.close(); } finally { await server.close(); } throw error; }
 }
 
-export async function syntheticRun(browser, { name = 'synthetic', runId = '20261018-120000', background = '#808080', duration = 4 } = {}) {
+export async function syntheticRun(browser, { name = 'synthetic', runId = '20261018-120000', background = '#808080', duration = 4, motionSize = 40 } = {}) {
   const dir = projectDir(name), runDir = path.join(dir, 'runs', runId);
   await mkdir(runDir, { recursive: true });
   const rawFile = path.join(runDir, 'raw.mp4'), scratch = path.join(runDir, 'bootstrap.mp4');
@@ -107,7 +107,7 @@ export async function syntheticRun(browser, { name = 'synthetic', runId = '20261
   let session, encoded;
   try {
     session = await inspectionPage(browser, rawFile, scratch);
-    encoded = await session.page.evaluate(options => window.makeSynthetic(options), {background,duration});
+    encoded = await session.page.evaluate(options => window.makeSynthetic(options), {background,duration,motionSize});
   } finally { try { await session?.close(); } finally { await rm(scratch, { force: true }); } }
   const bytes = Buffer.from(encoded.base64, 'base64'); await writeFile(rawFile, bytes);
   const events = { version: 1, viewport: { width: 1280, height: 720 }, scale: 1,

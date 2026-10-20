@@ -4,7 +4,7 @@ import path from 'node:path';
 import { copyFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
-import { encoderHash, renderHash, editorHash } from './lib/record/bundle-hash.mjs';
+import { encoderHash, renderHash, editorHash, auditHash } from './lib/record/bundle-hash.mjs';
 
 const root = new URL('../', import.meta.url);
 await build({
@@ -21,6 +21,13 @@ await build({
   outfile: 'dist/render-page.js',
   bundle: true, format: 'iife', platform: 'browser', minify: false,
   banner: { js: `// showreel render sources sha256: ${await renderHash(root)}` },
+});
+
+await build({
+  absWorkingDir: fileURLToPath(root),
+  entryPoints: ['scripts/audit/audit-page.js'], outfile: 'dist/audit-page.js',
+  bundle: true, format: 'iife', platform: 'browser', minify: false,
+  banner: { js: `// showreel audit sources sha256: ${await auditHash(root)}` },
 });
 
 try { import.meta.resolve('preact'); }

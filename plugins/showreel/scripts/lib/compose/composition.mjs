@@ -31,7 +31,7 @@ export const DEFAULT_COMPOSITION = freeze({
   cards: { title: { ...cardDefaults, enabled: true, title: null, subtitle: null, durationSec: 2.2 },
     outro: { ...cardDefaults, enabled: true, text: 'Thank you', subtitle: null, durationSec: 2 }, fade: 0.4, transition: 'crossfade' },
   edits: { trims: [], speeds: [], holds: [], splits: [], mutes: [] },
-  audio: { voice: { enabled: null, voiceId: 'af_heart', speed: 1, gainDb: 0 },
+  audio: { tighten: { enabled: true, pauseSec: 0.4 }, voice: { enabled: null, voiceId: 'af_heart', speed: 1, gainDb: 0 },
     music: { enabled: false, file: null, gainDb: -18, loop: true, fadeInSec: 1, fadeOutSec: 2,
       duck: { enabled: true, depthDb: 12, attackMs: 150, releaseMs: 400 } },
     loudness: { enabled: true, targetLufs: -16, truePeakDb: -1 },
@@ -43,7 +43,7 @@ export const COMPOSITION_RANGES = [
     ['cursor.followThrough.distancePx',0,500],['cursor.followThrough.durationSec',0.1,5],['cursor.followThrough.startAfterClickSec',0,5],
     ['cursor.sizePct',1,8],['cursor.hideWhenIdleSec',0,60],['cursor.pressScale',0.1,1],['cursor.clickEffect.sizeMult',0.1,10],['cursor.clickEffect.durationSec',0.05,5],
     ['zoom.holdAfterClickSec',0,30],['zoom.leadInSec',0,5],['captions.bandHeightPct',6,25],['captions.fontSizePct',1,10],['cards.fade',0,1.5],
-    ['audio.voice.speed',0.5,2],['audio.voice.gainDb',-24,12],['audio.music.gainDb',-60,6],['audio.music.fadeInSec',0,30],['audio.music.fadeOutSec',0,30],
+    ['audio.tighten.pauseSec',0.1,2],['audio.voice.speed',0.5,2],['audio.voice.gainDb',-24,12],['audio.music.gainDb',-60,6],['audio.music.fadeInSec',0,30],['audio.music.fadeOutSec',0,30],
     ['audio.music.duck.depthDb',0,30],['audio.music.duck.attackMs',10,2000],['audio.music.duck.releaseMs',50,5000],
     ['audio.loudness.targetLufs',-30,-8],['audio.loudness.truePeakDb',-6,0],
   ];
@@ -55,7 +55,7 @@ export const SETTING_RANGES = Object.fromEntries([
   ...['arrow','hand','text'].flatMap(s => ['x','y'].map(k => [`cursor.custom.${s}.hotspot.${k}`,0,1])),
   ...['title','outro'].flatMap(k => [['durationSec',0,30],['titleSizePct',1,20],['subtitleSizePct',1,12],['accent.widthPct',0,100],['logo.heightPct',1,40]].map(([p,a,b]) => [`cards.${k}.${p}`,a,b])),
   ...['frame.background','cards.title.background','cards.outro.background'].map(p => [`${p}.angle`,0,360]),
-].map(([p,min,max,integer=false]) => [p,{min,max,step:integer ? 1 : 0.01}]));
+].map(([p,min,max,integer=false]) => [p,{min,max,step:p === 'audio.tighten.pauseSec' ? 0.05 : integer ? 1 : 0.01}]));
 export const SETTING_ENUMS = { ...COMPOSITION_ENUMS, theme:Object.keys(THEMES), 'output.fps':[30,60], 'output.quality':['standard','high'],
   ...Object.fromEntries(['title','outro'].flatMap(k => [[`cards.${k}.align`,['center','left']],[`cards.${k}.accent.shape`,['bar','underline','none']]])),
   ...Object.fromEntries(['frame.background','cards.title.background','cards.outro.background'].map(p => [`${p}.type`,['theme','gradient','solid','image']])),

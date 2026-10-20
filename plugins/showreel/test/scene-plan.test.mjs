@@ -17,7 +17,8 @@ function fixture() {
   return {brief,composition,scenes,voiceClips:{version:1,steps:{'sc1:s1':'a','sc2:s1':'b',s1:'wrong'},clips:{a:{durationSec:0.5},b:{durationSec:0.7},wrong:{durationSec:20}}}};
 }
 test('two scenes plan independent cursors, captions and namespaced narration with global offsets',()=>{
-  const input=fixture(),before=structuredClone(input),plan=planRender(input);
+  const input=fixture(); input.composition.audio.tighten.enabled=false;
+  const before=structuredClone(input),plan=planRender(input);
   assert.deepEqual(input,before);
   near(plan.timemap.outputDuration,4+3-0.5+2-0.4);
   const second=plan.scenes[1]; near(second.outputStart,4.3);
@@ -81,4 +82,18 @@ test('drawing composes whole scene frames, then applies the requested transition
       if(type==='zoom-through') assert.ok(canvas.calls.every(c=>c.mode==='lighter' && Math.abs(c.alpha-0.5)<1e-8));
     }
   } finally {globalThis.document=previous;}
+});
+
+
+test('sequence pacing uses tightened scene maps and reports one combined notice',()=>{
+  const input=fixture(),plan=planRender(input);
+  near(plan.timemap.outputDuration,4.4);
+  near(plan.audio.removedSec,3.7);
+  assert.deepEqual(plan.audio.tightened.map(r=>r.stepId),['sc1:s1','sc2:s1']);
+  assert.deepEqual(plan.notices,['Trimmed 3.7 s of waiting after narration']);
+  for (const scene of plan.scenes) {
+    const map=plan.timemap.scenes.find(s=>s.id===scene.id).timemap;
+    near(map.outputDuration,scene.plan.timemap.outputDuration);
+    assert.deepEqual(map.trims,scene.plan.timemap.trims);
+  }
 });

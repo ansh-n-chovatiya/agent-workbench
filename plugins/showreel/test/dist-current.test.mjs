@@ -7,9 +7,9 @@ import { readFile, readdir, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { encoderHash, bundleInputs, renderHash, renderBundleInputs, editorHash, editorBundleInputs } from '../scripts/lib/record/bundle-hash.mjs';
+import { encoderHash, bundleInputs, renderHash, renderBundleInputs, editorHash, editorBundleInputs, auditHash, auditBundleInputs } from '../scripts/lib/record/bundle-hash.mjs';
 
-for (const [name, hash] of [['encoder', encoderHash], ['render', renderHash], ['editor', editorHash]]) test(`committed ${name} bundle matches its sources`, async () => {
+for (const [name, hash] of [['encoder', encoderHash], ['render', renderHash], ['editor', editorHash], ['audit', auditHash]]) test(`committed ${name} bundle matches its sources`, async () => {
   let text = '';
   try { text = await readFile(new URL(name === 'editor' ? '../dist/editor/editor.js' : `../dist/${name}-page.js`, import.meta.url), 'utf8'); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -23,7 +23,7 @@ test('the source hash does not change when files are checked out with CRLF line 
     const roots = {};
     for (const [label, convert] of [['lf', (x) => x], ['crlf', (x) => x.replace(/\r?\n/g, '\r\n')]]) {
       const dir = path.join(base, label);
-      for (const name of new Set([...bundleInputs, ...renderBundleInputs, ...editorBundleInputs])) {
+      for (const name of new Set([...bundleInputs, ...renderBundleInputs, ...editorBundleInputs, ...auditBundleInputs])) {
         const source = await readFile(new URL('../' + name, import.meta.url), 'utf8');
         await mkdir(path.dirname(path.join(dir, name)), { recursive: true });
         await writeFile(path.join(dir, name), convert(source));
@@ -33,6 +33,7 @@ test('the source hash does not change when files are checked out with CRLF line 
     assert.equal(await encoderHash(roots.crlf), await encoderHash(roots.lf));
     assert.equal(await renderHash(roots.crlf), await renderHash(roots.lf));
     assert.equal(await editorHash(roots.crlf), await editorHash(roots.lf));
+    assert.equal(await auditHash(roots.crlf), await auditHash(roots.lf));
   } finally { await rm(base, { recursive: true, force: true }); }
 });
 
@@ -73,4 +74,14 @@ test('editor bundle matches all transitive sources, including export result and 
     banner: { js: `// showreel editor sources sha256: ${await editorHash()}` },
   });
   assert.equal(await readFile(new URL('../dist/editor/editor.js', import.meta.url), 'utf8'), result.outputFiles.find(file => file.path.endsWith('.js')).text, 'run npm run build');
+});
+
+test('audit bundle matches all transitive browser sources', async () => {
+  const result = await build({
+    absWorkingDir: fileURLToPath(new URL('../', import.meta.url)),
+    entryPoints: ['scripts/audit/audit-page.js'], outfile: 'dist/audit-page.js', write: false,
+    bundle: true, format: 'iife', platform: 'browser', minify: false,
+    banner: { js: `// showreel audit sources sha256: ${await auditHash()}` },
+  });
+  assert.equal(await readFile(new URL('../dist/audit-page.js', import.meta.url), 'utf8'), result.outputFiles.find(file => file.path.endsWith('.js')).text, 'run npm run build');
 });

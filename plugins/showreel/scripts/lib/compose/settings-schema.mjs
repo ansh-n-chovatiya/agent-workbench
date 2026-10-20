@@ -130,6 +130,8 @@ const copy = {
   "cursor.custom.text.image": ["Text cursor image", "Use your own pointer image when the cursor is over a text field."],
   "cursor.custom.text.hotspot.x": ["Text cursor click point across", "Position the text pointer across its image; zero aligns its left edge and one its right edge."],
   "cursor.custom.text.hotspot.y": ["Text cursor click point down", "Position the text pointer down its image; zero aligns its top edge and one its bottom edge."],
+  "audio.tighten.enabled": ["Trim waiting after narration", "Shorten waiting after the narrator finishes while keeping actions and your timeline edits."],
+  "audio.tighten.pauseSec": ["Pause after each sentence", "Keep this many seconds of quiet after narration before trimming the remaining wait."],
   "audio.voice.enabled": ["Voice-over", "Speak each step's narration; leave unset to follow the voice-over choice made when the project was planned."],
   "audio.voice.voiceId": ["Voice", "Choose which voice reads the narration."],
   "audio.voice.speed": ["Voice speed", "How fast the narrator speaks; one is the natural pace."],
@@ -149,7 +151,7 @@ const copy = {
   "audio.loudness.truePeakDb": ["Peak limit", "The loudest any moment may get, in decibels below the maximum, so the sound never distorts."],
   "cursor.custom.heightPct": ["Custom cursor height", "Set the height of your pointer images as a percentage of the video height."],
 };
-const audioSections = { voice: 'Voice', music: 'Music', loudness: 'Loudness' };
+const audioSections = { tighten: 'Voice', voice: 'Voice', music: 'Music', loudness: 'Loudness' };
 const sections = { shadow: 'Frame shadow', border: 'Frame border', background: 'Background', followThrough: 'Movement after clicks',
   clickEffect: 'Click effect', accent: 'Accent', logo: 'Logo', arrow: 'Arrow cursor', hand: 'Hand cursor', text: 'Text cursor' };
 const unitFor = path => /Pct$/.test(path) ? '%' : /Px$|output\.(width|height)$/.test(path) ? 'px'

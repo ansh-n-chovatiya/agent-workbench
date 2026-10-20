@@ -465,7 +465,7 @@ jobs:
       - name: Tests
         run: python -m pytest tests -q
 
-  # Showreel (preview plugin): unit tests plus capture, export and memory smoke tests on the three desktop
+  # Showreel: unit tests plus capture, export and memory smoke tests on the three desktop
   # operating systems. The smoke tests record what each OS can do (H.264 export, screencast frame rate at each
   # capture scale, 4K export memory) as artifacts; a failed smoke is a finding, not a build failure, until
   # the design is settled on all three.
@@ -489,6 +489,8 @@ jobs:
           node-version: "22"
       - name: Install locked dependencies
         run: npm ci
+      - name: Audit licences and third-party notices
+        run: node scripts/check-licences.mjs
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Unit tests

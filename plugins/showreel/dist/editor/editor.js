@@ -1,4 +1,4 @@
-// showreel editor sources sha256: 090a765d3f52c6d0a250e4d546fac1cdd5f17bbc143d322c333dc4a5bbe6a03a
+// showreel editor sources sha256: cf88e2e19be8401b54cd795839422a8995c1b29030b463e6cd7b593642185fb6
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -970,6 +970,7 @@
     },
     edits: { trims: [], speeds: [], holds: [], splits: [], mutes: [] },
     audio: {
+      tighten: { enabled: true, pauseSec: 0.4 },
       voice: { enabled: null, voiceId: "af_heart", speed: 1, gainDb: 0 },
       music: {
         enabled: false,
@@ -1007,6 +1008,7 @@
     ["captions.bandHeightPct", 6, 25],
     ["captions.fontSizePct", 1, 10],
     ["cards.fade", 0, 1.5],
+    ["audio.tighten.pauseSec", 0.1, 2],
     ["audio.voice.speed", 0.5, 2],
     ["audio.voice.gainDb", -24, 12],
     ["audio.music.gainDb", -60, 6],
@@ -1037,7 +1039,7 @@
     ...["arrow", "hand", "text"].flatMap((s3) => ["x", "y"].map((k4) => [`cursor.custom.${s3}.hotspot.${k4}`, 0, 1])),
     ...["title", "outro"].flatMap((k4) => [["durationSec", 0, 30], ["titleSizePct", 1, 20], ["subtitleSizePct", 1, 12], ["accent.widthPct", 0, 100], ["logo.heightPct", 1, 40]].map(([p3, a3, b3]) => [`cards.${k4}.${p3}`, a3, b3])),
     ...["frame.background", "cards.title.background", "cards.outro.background"].map((p3) => [`${p3}.angle`, 0, 360])
-  ].map(([p3, min2, max2, integer = false]) => [p3, { min: min2, max: max2, step: integer ? 1 : 0.01 }]));
+  ].map(([p3, min2, max2, integer = false]) => [p3, { min: min2, max: max2, step: p3 === "audio.tighten.pauseSec" ? 0.05 : integer ? 1 : 0.01 }]));
   var SETTING_ENUMS = {
     ...COMPOSITION_ENUMS,
     theme: Object.keys(THEMES),
@@ -1782,6 +1784,21 @@
       return out;
     }, []);
   }
+  function narrationIdleTrims({ steps, narration, timemap, edits, pauseSec, blocked = /* @__PURE__ */ new Set() }) {
+    return narration.flatMap((n2) => {
+      const step = steps.find((s3) => s3.id === n2.stepId);
+      if (!step || blocked.has(step.id)) return [];
+      const end = n2.outStart + n2.durationSec;
+      const parts = keptParts(timemap, step.tStart, step.tEnd);
+      if (!parts.length || end > parts.at(-1).outEnd + 1e-9) return [];
+      const start = Math.max(sourceAt(timemap, end).t + pauseSec, step.holdStart ?? step.tStart);
+      const idleEnd = step.tEnd - (step === steps.at(-1) ? 0.5 : 0.05);
+      if (idleEnd - start < 0.25 - 1e-9) return [];
+      const overlaps = (r4) => start < r4.end && idleEnd > r4.start;
+      if ((edits.trims ?? []).some(overlaps) || (edits.speeds ?? []).some(overlaps) || (edits.holds ?? []).some((h3) => h3.t >= start && h3.t <= idleEnd)) return [];
+      return [{ stepId: step.id, start, end: idleEnd }];
+    });
+  }
 
   // scripts/lib/compose/plan.mjs
   var DESKTOP_VERTICAL_WARNING = "This is a desktop recording in a vertical video: record with --profile phone for a better result";
@@ -1800,6 +1817,8 @@
       audio.narration = scenes.flatMap((s3) => s3.plan.audio.narration.map((n2) => ({ ...n2, stepId: `${s3.id}:${n2.stepId}`, outStart: n2.outStart + s3.outputStart })));
       audio.warnings = scenes.flatMap((s3) => s3.plan.audio.warnings.map((w4) => ({ ...w4, stepId: w4.stepId ? `${s3.id}:${w4.stepId}` : null, message: `${s3.id}: ${w4.message}` })));
       audio.mutes = scenes.flatMap((s3) => (s3.plan.audio.mutes ?? []).map((r4) => ({ start: r4.start + s3.outputStart, end: r4.end + s3.outputStart })));
+      audio.tightened = scenes.flatMap((s3) => s3.plan.audio.tightened.map((r4) => ({ ...r4, stepId: `${s3.id}:${r4.stepId}` })));
+      audio.removedSec = scenes.reduce((total, s3) => total + s3.plan.audio.removedSec, 0);
       audio.enabled = audio.narration.length > 0 || audio.music !== null;
       return audio;
     }
@@ -1853,9 +1872,11 @@
     const { output, cards } = composition;
     const captionTexts = (composition.captions.cues ?? cuesFromRun({ storyboard, events, captionsEnabled: composition.captions.enabled })).map((c3) => c3.text);
     const layout = layoutFor({ output, source: sourceSize2, composition, captionTexts });
+    let automaticTrims = [];
     const timeArgs = (extraHold) => ({
       duration: record.durationSec,
       ...composition.edits,
+      trims: [...composition.edits.trims, ...automaticTrims.map(({ start, end }) => ({ start, end }))].sort((a3, b3) => a3.start - b3.start),
       holds: extraHold ? [...composition.edits.holds ?? [], extraHold] : composition.edits.holds,
       lead: cards.title.enabled ? cards.title.durationSec : 0,
       tail: cards.outro.enabled ? cards.outro.durationSec : 0,
@@ -1875,6 +1896,24 @@
     const clone4 = (v3) => JSON.parse(JSON.stringify(v3));
     let cues = !composition.captions.enabled ? [] : composition.captions.cues !== void 0 ? clone4(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true });
     let audio = planAudio({ composition, brief, events, timemap, cues, voiceClips, audioUrls });
+    if (composition.audio.tighten.enabled && audio.narration.length) {
+      const blocked = new Set(audio.warnings.filter((w4) => w4.code === "voice-overruns-video").map((w4) => w4.stepId));
+      for (let pass = 0; pass < 2; pass++) {
+        const trims = narrationIdleTrims({
+          steps: events.steps,
+          narration: audio.narration,
+          timemap,
+          edits: composition.edits,
+          pauseSec: composition.audio.tighten.pauseSec,
+          blocked
+        });
+        const same5 = trims.length === automaticTrims.length && trims.every((r4, i3) => r4.stepId === automaticTrims[i3].stepId && Math.abs(r4.start - automaticTrims[i3].start) < 1e-9 && Math.abs(r4.end - automaticTrims[i3].end) < 1e-9);
+        if (same5) break;
+        automaticTrims = trims;
+        timemap = buildTimeMap(timeArgs(null));
+        audio = planAudio({ composition, brief, events, timemap, cues, voiceClips, audioUrls });
+      }
+    }
     const narrationEnd = Math.max(0, ...audio.narration.map((n2) => n2.outStart + n2.durationSec));
     if (narrationEnd > timemap.mainEnd + 0.05) {
       const extra = +(narrationEnd - timemap.mainEnd + 0.3).toFixed(3), last2 = timemap.segments.filter((x4) => x4.rate > 0).at(-1);
@@ -1887,6 +1926,8 @@
       } catch {
       }
     }
+    audio.tightened = automaticTrims.map(({ stepId, start, end }) => ({ stepId, removedSec: end - start }));
+    audio.removedSec = audio.tightened.reduce((total, r4) => total + r4.removedSec, 0);
     if (audio.captionSpans.length) cues = extendCues(cues, audio.captionSpans, timemap);
     return {
       brand: resolvedBrand,
@@ -1900,6 +1941,7 @@
       camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
       cues,
       audio,
+      notices: pacingNotices(audio),
       captions: clone4(composition.captions),
       cursor: {
         ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }),
@@ -2033,12 +2075,16 @@
       scenes: placed,
       cues,
       audio,
+      notices: pacingNotices(audio),
       warnings: [
         ...assetWarnings,
         ...placed.flatMap((s3) => s3.plan.warnings.map((w4) => `${s3.id}: ${w4}`)),
         ...profiles.size > 1 ? ["Recording profiles differ across scenes; desktop and phone frames have different aspect ratios."] : []
       ]
     };
+  }
+  function pacingNotices(audio) {
+    return audio.removedSec > 0 ? [`Trimmed ${audio.removedSec.toFixed(1)} s of waiting after narration`] : [];
   }
 
   // editor/state.js
@@ -30586,7 +30632,7 @@
     else delete steps[stepId];
     return steps;
   }
-  var VOICE_PANEL_PATHS = ["audio.voice.enabled", "audio.voice.voiceId", "audio.voice.speed", "audio.voice.gainDb"];
+  var VOICE_PANEL_PATHS = ["audio.voice.enabled", "audio.voice.voiceId", "audio.voice.speed", "audio.tighten.enabled", "audio.tighten.pauseSec", "audio.voice.gainDb"];
   var MUSIC_PANEL_PATHS = {
     music: ["audio.music.enabled", "audio.music.file", "audio.music.gainDb", "audio.music.loop", "audio.music.fadeInSec", "audio.music.fadeOutSec"],
     ducking: ["audio.music.duck.enabled", "audio.music.duck.depthDb"],
@@ -30755,7 +30801,7 @@
       { id: "caption-style", title: "Text style", icon: "Type", primary: ["captions.color", "captions.background"], advanced: ["captions.fontWeight", "captions.align"] }
     ],
     audio: [
-      { id: "narrator", title: "Narrator", icon: "Mic", tab: "voice", primary: VOICE_PANEL_PATHS.slice(0, 3), advanced: VOICE_PANEL_PATHS.slice(3) },
+      { id: "narrator", title: "Narrator", icon: "Mic", tab: "voice", primary: VOICE_PANEL_PATHS.slice(0, 5), advanced: VOICE_PANEL_PATHS.slice(5) },
       { id: "script", title: "Script", icon: "MessageSquareText", tab: "voice", special: "script" },
       { id: "music", title: "Background music", icon: "Music", tab: "music", primary: MUSIC_PANEL_PATHS.music.slice(0, 3), advanced: MUSIC_PANEL_PATHS.music.slice(3) },
       { id: "ducking", title: "Music under the voice", icon: "AudioLines", tab: "music", primary: MUSIC_PANEL_PATHS.ducking, advanced: MUSIC_PANEL_PATHS.advanced },
@@ -30921,6 +30967,8 @@
     "cursor.custom.text.image": ["Text cursor image", "Use your own pointer image when the cursor is over a text field."],
     "cursor.custom.text.hotspot.x": ["Text cursor click point across", "Position the text pointer across its image; zero aligns its left edge and one its right edge."],
     "cursor.custom.text.hotspot.y": ["Text cursor click point down", "Position the text pointer down its image; zero aligns its top edge and one its bottom edge."],
+    "audio.tighten.enabled": ["Trim waiting after narration", "Shorten waiting after the narrator finishes while keeping actions and your timeline edits."],
+    "audio.tighten.pauseSec": ["Pause after each sentence", "Keep this many seconds of quiet after narration before trimming the remaining wait."],
     "audio.voice.enabled": ["Voice-over", "Speak each step's narration; leave unset to follow the voice-over choice made when the project was planned."],
     "audio.voice.voiceId": ["Voice", "Choose which voice reads the narration."],
     "audio.voice.speed": ["Voice speed", "How fast the narrator speaks; one is the natural pace."],
@@ -30940,7 +30988,7 @@
     "audio.loudness.truePeakDb": ["Peak limit", "The loudest any moment may get, in decibels below the maximum, so the sound never distorts."],
     "cursor.custom.heightPct": ["Custom cursor height", "Set the height of your pointer images as a percentage of the video height."]
   };
-  var audioSections = { voice: "Voice", music: "Music", loudness: "Loudness" };
+  var audioSections = { tighten: "Voice", voice: "Voice", music: "Music", loudness: "Loudness" };
   var sections = {
     shadow: "Frame shadow",
     border: "Frame border",
@@ -32828,7 +32876,9 @@
       /* @__PURE__ */ k(SettingRow, { path: "audio.voice.enabled", ctx, render: ({ id, value, onChange }) => /* @__PURE__ */ k(Switch3, { id, "aria-label": settingFor("audio.voice.enabled").label, checked: value ?? project.brief?.voice?.enabled === true, onCheckedChange: onChange }) }),
       /* @__PURE__ */ k(SettingRow, { path: "audio.voice.voiceId", ctx, stacked: true, render: ({ id, value, onChange }) => /* @__PURE__ */ k(VoicePicker, { id, value, onChange, info, ctl, controller }) }),
       /* @__PURE__ */ k(VoiceBrowser, { info, ctl, controller, value: voiceId, onPick: (id) => store.change("audio.voice.voiceId", id) }),
-      /* @__PURE__ */ k(SettingRow, { path: "audio.voice.speed", ctx, setting: { min: SPEED_MIN, max: SPEED_MAX, step: 0.05 }, help: "How fast the narrator speaks; one is the natural pace. Changing it makes new voice-overs." })
+      /* @__PURE__ */ k(SettingRow, { path: "audio.voice.speed", ctx, setting: { min: SPEED_MIN, max: SPEED_MAX, step: 0.05 }, help: "How fast the narrator speaks; one is the natural pace. Changing it makes new voice-overs." }),
+      /* @__PURE__ */ k(SettingRow, { path: "audio.tighten.enabled", ctx }),
+      /* @__PURE__ */ k(SettingRow, { path: "audio.tighten.pauseSec", ctx })
     ), /* @__PURE__ */ k(SettingsCard, { id: "script", title: "Script", icon: MessageSquareText, badge: /* @__PURE__ */ k(Badge, { role: "status" }, summary.total ? `${summary.ready} of ${summary.total} ready` : "No narration yet") }, rows.length ? /* @__PURE__ */ k(S, null, /* @__PURE__ */ k("div", { class: "job-bar" }, job.running ? /* @__PURE__ */ k(S, null, /* @__PURE__ */ k("progress", { "aria-label": "Voice-over progress", max: Math.max(1, job.total), value: job.done + job.failed }), /* @__PURE__ */ k("span", { class: "srow-hint", role: "status" }, job.cancelling ? "Stopping after this step\u2026" : `Generating ${Math.min(job.total, job.done + job.failed + 1)} of ${job.total}\u2026`), /* @__PURE__ */ k(Button, { size: "sm", disabled: job.cancelling, onClick: () => controller.cancel() }, "Cancel")) : /* @__PURE__ */ k(Tooltip2, { text: !info.installed ? "Install the voice engine to generate voice-overs" : todo.length ? "Make voice-overs for every step that needs one" : "Every step already has an up-to-date voice-over" }, /* @__PURE__ */ k(Button, { variant: todo.length && info.installed ? "default" : "outline", size: "sm", disabled: !info.installed || !todo.length, onClick: () => controller.generate({ stepIds: todo.map((r4) => r4.id) }) }, /* @__PURE__ */ k(Sparkles, { size: 13, "aria-hidden": "true" }), todo.length ? `Generate all (${todo.length})` : "Generate all"))), !job.running && job.result && /* @__PURE__ */ k("p", { class: job.result.error || job.result.failed ? "error" : "srow-hint", role: "status" }, job.result.error ? job.result.error : job.result.kind === "cancelled" ? `Stopped. ${job.result.done} made.` : job.result.failed ? `${job.result.done} made, ${job.result.failed} could not be made.` : `Done. ${job.result.done} voice-over${job.result.done === 1 ? "" : "s"} ready.`), ctl.error && /* @__PURE__ */ k("p", { class: "error", role: "alert" }, ctl.error), /* @__PURE__ */ k("ul", { class: "script-list" }, rows.map((row) => /* @__PURE__ */ k(
       ScriptRow,
       {
@@ -33061,7 +33111,7 @@
       if (reveal?.tab) setAudioTab(reveal.tab);
     }, [reveal?.n]);
     const index2 = T2(() => buildSearchIndex(), []);
-    const panel = panelFor(selection, topic), values = compositionPaths(state.composition), defaults = compositionPaths({});
+    const panel = panelFor(selection, topic), defaults = compositionPaths({}), values = { ...defaults, ...compositionPaths(state.composition) };
     if (panel === "zoom-selection") {
       const region = (state.plan?.regions ?? state.composition.zoom.regions).find((z4) => z4.id === selection.id);
       if (region) return /* @__PURE__ */ k(ZoomPanel, { key: region.id, state, store, region, time: state.plan ? sourceAt(state.plan.timemap, time).t : 0, onClose: () => setSelection(null) });

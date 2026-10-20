@@ -45,6 +45,20 @@ class ManifestTests(unittest.TestCase):
     def test_valid_tree(self):
         self.assertEqual(checker.validate(self.root), [])
 
+    def test_showreel_entry_is_validated_by_generic_checker(self):
+        self.market["plugins"][0] = {"name": "showreel", "source": "./plugins/showreel"}
+        self.directory = self.root / "plugins/showreel"
+        self.manifest_path = self.directory / ".claude-plugin/plugin.json"
+        self.manifest["name"] = "showreel"
+        self.write_tree()
+        (self.directory / "LICENSE").write_text("MIT", encoding="utf-8")
+        self.assertEqual(checker.validate(self.root), [])
+        self.manifest["version"] = "invalid"
+        self.write_tree()
+        self.fails("semver")
+        self.manifest_path.unlink()
+        self.fails("cannot read JSON")
+
     def test_cli_exit_codes(self):
         # Copy only the checker into the fixture so its root detection is real.
         script = self.root / "scripts/check-manifests.py"

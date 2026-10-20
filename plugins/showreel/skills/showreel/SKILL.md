@@ -78,3 +78,5 @@ Each item uses action, selector, label, and optional url/value/key/role/tab.
   Do not read frames, logs or generated files in full unless a run fails.
 - Projects live in `SHOWREEL_HOME/projects/N` (default `~/.showreel`).
   Exports belong in the user's chosen folder outside project state.
+
+Run `showreel audit` only when the user asks for QA.

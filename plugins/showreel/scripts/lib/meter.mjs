@@ -12,7 +12,7 @@ export const countLines = text => text === '' ? 0 : text.split('\n').length - (t
 export const STAGES = ['intake', 'guide', 'storyboard', 'scenario', 'record', 'edit/render', 'voice', 'other'];
 export function stageFor(command) {
   const first = command.split(' ')[0];
-  return ({ brief: 'intake', init: 'intake', guide: 'guide', snapshot: 'guide', storyboard: 'storyboard', scenario: 'scenario', record: 'record', login: 'record', runs: 'record', edit: 'edit/render', render: 'edit/render', composition: 'edit/render', scenes: 'edit/render', brand: 'edit/render', voice: 'voice' })[first] ?? 'other';
+  return ({ brief: 'intake', init: 'intake', guide: 'guide', snapshot: 'guide', storyboard: 'storyboard', scenario: 'scenario', record: 'record', login: 'record', runs: 'record', edit: 'edit/render', render: 'edit/render', audit: 'edit/render', composition: 'edit/render', scenes: 'edit/render', brand: 'edit/render', voice: 'voice' })[first] ?? 'other';
 }
 export function appendSurface(dir, entry) {
   try {
@@ -59,7 +59,7 @@ function authoredFiles(dir, args, exitCode) {
 export async function meteredRun(args, run) {
   let dir;
   try {
-    const at = args.indexOf('--name');
+    const at = args.indexOf(args[0] === 'audit' ? '--project' : '--name');
     if (at >= 0) dir = projectDir(args[at + 1]);
     else if (existsSync(path.join(process.cwd(), 'brief.json')) && path.basename(path.dirname(process.cwd())) === 'projects') dir = process.cwd();
   } catch { /* Let the command report invalid names. */ }
@@ -77,7 +77,7 @@ export async function meteredRun(args, run) {
     for (const stream of ['stdout', 'stderr']) process[stream].write = originals[stream];
     if (!(args[0] === 'tokens' && args.includes('--reset'))) {
       const exitCode = Number(process.exitCode ?? 0);
-      const commands = ['make', 'tokens', 'doctor', 'init', 'brief', 'storyboard', 'scenario', 'guide', 'snapshot', 'record', 'login', 'runs', 'render', 'edit', 'composition', 'voice', 'scenes', 'brand', 'cursor-demo', '--help'];
+      const commands = ['make', 'tokens', 'doctor', 'init', 'brief', 'storyboard', 'scenario', 'guide', 'snapshot', 'record', 'login', 'runs', 'render', 'edit', 'composition', 'voice', 'scenes', 'brand', 'cursor-demo', 'audit', '--help'];
       const subs = ['init', 'show', 'set', 'questions', 'draft', 'validate', 'build', 'resolve', 'add', 'list', 'remove', 'move', 'reset', 'install', 'samples', 'generate', 'status', 'import', 'clean', 'apply', 'clear'];
       const command = (commands.includes(args[0]) ? args[0] : 'unknown') + (subs.includes(args[1]) ? ` ${args[1]}` : '');
       const files = authoredFiles(dir, args, exitCode);

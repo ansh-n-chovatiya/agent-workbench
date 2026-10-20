@@ -144,8 +144,21 @@ test('narration that would run past the end of the video holds the last frame in
   assert.ok(plan.timemap.outputDuration >= end, `video ${plan.timemap.outputDuration} must cover narration end ${end}`);
   assert.ok(plan.audio.warnings.some((w) => w.code === 'tail-hold'), 'a tail-hold notice is reported');
   assert.equal(plan.audio.durationSec, plan.timemap.outputDuration);
-  // Narration that fits changes nothing.
+  // Narration that fits needs no tail hold; disable tightening to check the original length.
+  input.composition.audio.tighten.enabled = false;
   const fits = planRender({ ...input, voiceClips: { ...longClips, clips: { ...longClips.clips, k2: { key: 'k2', durationSec: 2, source: 'tts' } } } });
   assert.ok(!fits.audio.warnings.some((w) => w.code === 'tail-hold'));
   assert.equal(fits.timemap.outputDuration, 7);
+});
+
+test('tightening defaults and validation preserve old audio documents', () => {
+  const c = run().composition; delete c.audio.tighten;
+  assert.ok(validateComposition(c).ok);
+  assert.deepEqual(resolveComposition(c).audio.tighten, {enabled:true,pauseSec:0.4});
+  for (const tighten of [{enabled:'yes'}, {pauseSec:0.09}, {pauseSec:2.01}, {pauseSec:NaN}, null])
+    assert.match(validateComposition({...c,audio:{...c.audio,tighten}}).errors.join('\n'), /audio.tighten/);
+  const enabled = SETTINGS.find(s => s.path === 'audio.tighten.enabled'), pause = SETTINGS.find(s => s.path === 'audio.tighten.pauseSec');
+  assert.equal(enabled.label, 'Trim waiting after narration'); assert.equal(enabled.control, 'toggle');
+  assert.equal(pause.label, 'Pause after each sentence');
+  assert.deepEqual([pause.min,pause.max,pause.step,pause.unit], [0.1,2,0.05,'s']);
 });

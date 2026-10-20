@@ -6,6 +6,7 @@ local voice-over, themes and branding. Finish and export in the local editor.
 Install in Claude Code:
 
 ```sh
+claude plugin marketplace add ansh-n-chovatiya/agent-workbench
 claude plugin install showreel@agent-workbench
 ```
 

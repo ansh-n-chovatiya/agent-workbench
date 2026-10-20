@@ -24,12 +24,12 @@ claude plugin marketplace add ansh-n-chovatiya/agent-workbench
 | --- | --- | --- |
 | [ctx](plugins/ctx) | Context Ledger: durable project state, stdlib Python | `claude plugin install ctx@agent-workbench` |
 | [ctx-optimize](plugins/ctx-optimize) | Token usage report per session, unit and review round; status line; agents pane | `claude plugin install ctx-optimize@agent-workbench` |
-| [skills-demo](plugins/skills-demo) | Node skill for demo videos from Playwright tests | `claude plugin install skills-demo@agent-workbench` |
-| [showreel](plugins/showreel) (preview) | Web-flow demo videos | `claude plugin install showreel@agent-workbench` |
+| [skills-demo](plugins/skills-demo) | Superseded by Showreel; to be removed after demo approval | `claude plugin install skills-demo@agent-workbench` |
+| [showreel](plugins/showreel) | Web-flow demo videos with a local editor and export | `claude plugin install showreel@agent-workbench` |
 
 Release and update process (bump the plugin manifest and CHANGELOG first):
 
-1. Tag `ctx-vX.Y.Z` or `skills-demo-vX.Y.Z` to create that plugin's GitHub Release.
+1. Tag `ctx-vX.Y.Z`, `skills-demo-vX.Y.Z` or `showreel-vX.Y.Z` to create that plugin's GitHub Release.
 2. Run `claude plugin marketplace update agent-workbench`.
 3. Run `claude plugin update <plugin>@agent-workbench`.
 4. Restart Claude Code.

@@ -9,7 +9,7 @@ import { validateComposition, resolveComposition, zoomOptions } from './composit
 import { layoutFor, isVertical } from './layout.mjs';
 import { THEMES } from './themes.mjs';
 import { EASING } from './easing.mjs';
-import { placeNarration, extendCues, mutedOutputRanges } from '../audio/retime.mjs';
+import { placeNarration, extendCues, mutedOutputRanges, narrationIdleTrims } from '../audio/retime.mjs';
 import { maxSharpZoom, validateRegions, suggestZoomRegions } from './zoom.mjs';
 
 export const DESKTOP_VERTICAL_WARNING = 'This is a desktop recording in a vertical video: record with --profile phone for a better result';
@@ -29,6 +29,8 @@ export function planAudio({ composition, brief, events, timemap, cues, voiceClip
     audio.narration = scenes.flatMap(s => s.plan.audio.narration.map(n => ({...n,stepId:`${s.id}:${n.stepId}`,outStart:n.outStart+s.outputStart})));
     audio.warnings = scenes.flatMap(s => s.plan.audio.warnings.map(w => ({...w,stepId:w.stepId ? `${s.id}:${w.stepId}` : null,message:`${s.id}: ${w.message}`})));
     audio.mutes = scenes.flatMap(s => (s.plan.audio.mutes ?? []).map(r => ({start:r.start+s.outputStart,end:r.end+s.outputStart})));
+    audio.tightened = scenes.flatMap(s => s.plan.audio.tightened.map(r => ({...r,stepId:`${s.id}:${r.stepId}`})));
+    audio.removedSec = scenes.reduce((total,s) => total+s.plan.audio.removedSec,0);
     audio.enabled = audio.narration.length > 0 || audio.music !== null;
     return audio;
   }
@@ -60,7 +62,9 @@ export function planRender({ composition, brief, storyboard, events, record, sou
   const { output, cards } = composition;
   const captionTexts = (composition.captions.cues ?? cuesFromRun({storyboard,events,captionsEnabled:composition.captions.enabled})).map(c=>c.text);
   const layout = layoutFor({ output, source: sourceSize, composition, captionTexts });
+  let automaticTrims = [];
   const timeArgs = (extraHold) => ({ duration: record.durationSec, ...composition.edits,
+    trims: [...composition.edits.trims, ...automaticTrims.map(({start,end}) => ({start,end}))].sort((a,b) => a.start-b.start),
     holds: extraHold ? [...(composition.edits.holds ?? []), extraHold] : composition.edits.holds,
     lead: cards.title.enabled ? cards.title.durationSec : 0,
     tail: cards.outro.enabled ? cards.outro.durationSec : 0, fade: cards.transition === 'cut' ? 0 : cards.fade });
@@ -77,6 +81,20 @@ export function planRender({ composition, brief, storyboard, events, record, sou
   const clone = (v) => JSON.parse(JSON.stringify(v));
   let cues = !composition.captions.enabled ? [] : composition.captions.cues !== undefined ? clone(composition.captions.cues) : cuesFromRun({ storyboard, events, captionsEnabled: true });
   let audio = planAudio({ composition, brief, events, timemap, cues, voiceClips, audioUrls });
+  if (composition.audio.tighten.enabled && audio.narration.length) {
+    // Steps that overrun the original edit must keep their existing overrun/tail-hold behaviour.
+    const blocked = new Set(audio.warnings.filter(w => w.code === 'voice-overruns-video').map(w => w.stepId));
+    for (let pass = 0; pass < 2; pass++) {
+      const trims = narrationIdleTrims({steps:events.steps, narration:audio.narration, timemap,
+        edits:composition.edits, pauseSec:composition.audio.tighten.pauseSec, blocked});
+      const same = trims.length === automaticTrims.length && trims.every((r,i) => r.stepId === automaticTrims[i].stepId
+        && Math.abs(r.start-automaticTrims[i].start) < 1e-9 && Math.abs(r.end-automaticTrims[i].end) < 1e-9);
+      if (same) break;
+      automaticTrims = trims;
+      timemap = buildTimeMap(timeArgs(null));
+      audio = planAudio({composition, brief, events, timemap, cues, voiceClips, audioUrls});
+    }
+  }
   // Narration that would run past the end of the video is never cut off: hold the last frame until the voice has finished.
   const narrationEnd = Math.max(0, ...audio.narration.map((n) => n.outStart + n.durationSec));
   if (narrationEnd > timemap.mainEnd + 0.05) {
@@ -88,11 +106,13 @@ export function planRender({ composition, brief, storyboard, events, record, sou
       audio.warnings = [...audio.warnings, { stepId: null, code: 'tail-hold', message: `The last frame is held for ${extra.toFixed(1)} s so the narration can finish.`, overrunSec: extra, fixes: [] }];
     } catch { /* an existing hold or edit blocks an automatic hold: the overrun warnings already tell the person */ }
   }
+  audio.tightened = automaticTrims.map(({stepId,start,end}) => ({stepId,removedSec:end-start}));
+  audio.removedSec = audio.tightened.reduce((total,r) => total+r.removedSec,0);
   if (audio.captionSpans.length) cues = extendCues(cues, audio.captionSpans, timemap);
   return { brand: resolvedBrand, watermark: clone(composition.watermark), output: clone(output), layout, theme: resolvedTheme, frame: clone(composition.frame), timemap,
     regions: clone(regions),
     camera: planCamera({ regions, duration: record.durationSec, source: cssSource, omega: { slow: 5, normal: 7, fast: 10 }[composition.zoom.speed] }),
-    cues, audio,
+    cues, audio, notices: pacingNotices(audio),
     captions: clone(composition.captions),
     cursor: { ...directCursor({ events, options: { ...composition.cursor, durationSec: record.durationSec } }), sizePx: (isVertical(output) ? output.width : output.height) * (composition.cursor.style === 'custom' ? composition.cursor.custom?.heightPct ?? composition.cursor.sizePct : composition.cursor.sizePct) / 100,
       color: THEMES[composition.theme].cursor.fill, ...composition.cursor },
@@ -174,7 +194,11 @@ function planSceneSequence({composition,brief,scenes,assetWarnings,voiceClips,au
   const audio = planAudio({composition:branded,brief,timemap,scenes:placed,audioUrls});
   const cues = placed.flatMap(s => s.plan.cues.map(c => ({...c,id:`${s.id}:${c.id}`,sceneId:s.id})));
   const profiles = new Set(scenes.map(s => s.record.profile ?? s.events.profile ?? 'desktop'));
-  return {...planned[0].plan,cards,timemap,scenes:placed,cues,audio,
+  return {...planned[0].plan,cards,timemap,scenes:placed,cues,audio,notices:pacingNotices(audio),
     warnings:[...assetWarnings,...placed.flatMap(s => s.plan.warnings.map(w => `${s.id}: ${w}`)),
       ...(profiles.size > 1 ? ['Recording profiles differ across scenes; desktop and phone frames have different aspect ratios.'] : [])]};
+}
+
+function pacingNotices(audio) {
+  return audio.removedSec > 0 ? [`Trimmed ${audio.removedSec.toFixed(1)} s of waiting after narration`] : [];
 }

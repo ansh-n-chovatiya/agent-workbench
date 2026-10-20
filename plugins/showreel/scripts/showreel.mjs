@@ -33,6 +33,7 @@ Commands:
   scenes <list|add|remove|move|set|validate> --name <name>    Manage scenes (--to is zero-based)
   runs --name <name>                            List completed recordings
   render --name <name> [--run <ID>] [--scene <ID>] [--format landscape|vertical|square] [--all] [--size 1080|4k] [--fps 30|60] [--out <FILE>] [--to <FOLDER>] [--rebuild] [--stills T1,T2]
+  audit --video FILE [--srt FILE] [--project NAME] [--json] [--strict]    Audit an export on request
   edit --name <name> [--run <ID>] [--no-open] [--port <P>]    Open the local editor
   composition show --name <name> [--paths]      Inspect settings or list every settable path
   composition validate --name <name>            Validate composition.json
@@ -185,6 +186,7 @@ async function snapshotCommand(flags) {
 
 async function main(args) {
   const [command, ...flags] = args;
+  if (command === 'audit') { const { auditCommand } = await import('./audit/audit.mjs'); return auditCommand(flags); }
   if (command === 'make') { const { makeCommand } = await import('./lib/make.mjs'); return makeCommand(flags); }
   if (command === 'tokens') return tokensCommand(flags);
   if (command === 'scenes') { const { scenesCommand } = await import('./lib/scene-commands.mjs'); return scenesCommand(flags); }

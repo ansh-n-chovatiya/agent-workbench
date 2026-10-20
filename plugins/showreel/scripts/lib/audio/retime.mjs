@@ -86,3 +86,22 @@ export function mutedOutputRanges(timemap, ranges = []) {
       return out;
     },[]);
 }
+
+// Return source-time cuts only; recordings and saved edits remain untouched. Evaluate against
+// the current map so shifted narration (including a previous step's overrun) stays intact.
+export function narrationIdleTrims({ steps, narration, timemap, edits, pauseSec, blocked = new Set() }) {
+  return narration.flatMap(n => {
+    const step = steps.find(s => s.id === n.stepId);
+    if (!step || blocked.has(step.id)) return [];
+    const end = n.outStart + n.durationSec;
+    const parts = keptParts(timemap, step.tStart, step.tEnd);
+    if (!parts.length || end > parts.at(-1).outEnd + 1e-9) return [];
+    const start = Math.max(sourceAt(timemap, end).t + pauseSec, step.holdStart ?? step.tStart);
+    const idleEnd = step.tEnd - (step === steps.at(-1) ? 0.5 : 0.05);
+    if (idleEnd - start < 0.25 - 1e-9) return [];
+    const overlaps = r => start < r.end && idleEnd > r.start;
+    if ((edits.trims ?? []).some(overlaps) || (edits.speeds ?? []).some(overlaps)
+      || (edits.holds ?? []).some(h => h.t >= start && h.t <= idleEnd)) return [];
+    return [{ stepId: step.id, start, end: idleEnd }];
+  });
+}

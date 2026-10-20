@@ -320,6 +320,7 @@ export async function renderRun({ name, runId, sceneId, format = 'landscape', si
     if (sceneInputs) for (const scene of sceneInputs) scene.sourceSize = await page.evaluate(url => window.probeRenderSource(url),new URL(`run/${encodeURIComponent(scene.run)}/raw.mp4`,server.url).href);
     plan = planRender({ composition, brief, storyboard, events, record, sourceSize, assetWarnings: assets.warnings, voiceClips, brand, scenes:sceneInputs });
     for (const warning of plan.warnings) if (!profileWarnings(record.profile ?? events.profile, format).includes(warning)) log(`warning: ${warning}`);
+    for (const notice of plan.notices) log(notice);
     for (const warning of plan.audio.warnings) log(`warning: ${warning.message}`);
     if (stills) {
       const files = [];

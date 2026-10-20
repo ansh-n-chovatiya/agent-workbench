@@ -6,6 +6,7 @@ on:
     tags:
       - "ctx-v*"
       - "skills-demo-v*"
+      - "showreel-v*"
 
 permissions:
   contents: read
@@ -232,3 +233,107 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
             --verify-tag "${notes[@]}"
+
+
+  showreel:
+    if: startsWith(github.ref_name, 'showreel-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: plugins/showreel
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Use the runner's Node, as skills-demo does; assert the package engine floor.
+      - name: Verify Node version
+        run: |
+          node --version
+          node --input-type=module - <<'JS'
+          const [major, minor] = process.versions.node.split('.').map(Number);
+          if (!((major === 20 && minor >= 19) || (major === 22 && minor >= 12) || major > 22)) {
+            throw new Error('Showreel requires Node ^20.19.0 || >=22.12.0');
+          }
+          JS
+      - name: The tag agrees with the source and marketplace
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          const read = file => JSON.parse(fs.readFileSync(file, 'utf8'));
+          const manifest = read('.claude-plugin/plugin.json');
+          const pkg = read('package.json');
+          const entries = read('../../.claude-plugin/marketplace.json').plugins.filter(entry => entry.name === 'showreel');
+          if (manifest.name !== 'showreel' || pkg.name !== 'showreel' ||
+              process.env.GITHUB_REF_NAME !== `showreel-v${manifest.version}` ||
+              pkg.version !== manifest.version || entries.length !== 1 ||
+              entries[0].source !== './plugins/showreel') {
+            throw new Error('Tag, plugin.json, package.json and marketplace must describe one Showreel release');
+          }
+          JS
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build and verify committed bundles
+        run: |
+          npm run build
+          test -n "$(git ls-files dist)"
+          git diff --exit-code -- dist
+      - name: Audit licences and third-party notices
+        run: node scripts/check-licences.mjs
+      # npm test is the full browser-free unit suite, including loopback and process tests.
+      - name: Unit tests
+        run: npm test
+      - name: Build plugin archive
+        run: |
+          git archive --format=zip --prefix=showreel/ --output="$RUNNER_TEMP/showreel-source.zip" HEAD:plugins/showreel
+          python3 - <<'PY'
+          import json, os, pathlib, zipfile
+
+          version = json.loads(pathlib.Path('.claude-plugin/plugin.json').read_text())["version"]
+          temporary = pathlib.Path(os.environ["RUNNER_TEMP"])
+          target = temporary / ("showreel-%s.zip" % version)
+          # Keep the committed dist and small demo app; omit test fixtures and spikes.
+          excluded = {"node_modules", ".npm-cache", "npm-cache", "spikes"}
+          with zipfile.ZipFile(temporary / "showreel-source.zip") as source, zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as output:
+              for item in source.infolist():
+                  parts = pathlib.PurePosixPath(item.filename).parts
+                  if excluded.intersection(parts) or parts[1:3] in (("test", "fixtures"), ("tests", "fixtures")):
+                      continue
+                  output.writestr(item, source.read(item.filename))
+              output.write("../../THIRD_PARTY_NOTICES.md", "showreel/THIRD_PARTY_NOTICES.md")
+          print(target)
+          PY
+      - name: Extract changelog notes
+        shell: python
+        run: |
+          import json, os, pathlib, re
+
+          version = json.loads(pathlib.Path(".claude-plugin/plugin.json").read_text())["version"]
+          changelog = pathlib.Path("CHANGELOG.md")
+          text = changelog.read_text(encoding="utf-8") if changelog.is_file() else ""
+          headings = list(re.finditer(r"^##[ \t]+(.+)$", text, re.MULTILINE))
+          for index, heading in enumerate(headings):
+              title = heading.group(1).strip()
+              if re.match(r"^(?:\[" + re.escape(version) + r"\]|v?" + re.escape(version) + r")(?=\s|$)", title):
+                  end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+                  body = text[heading.end():end].strip()
+                  if body:
+                      pathlib.Path(os.environ["RUNNER_TEMP"], "release-notes.md").write_text(body + "\n", encoding="utf-8")
+                  break
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: showreel-release
+          path: |
+            ${{ runner.temp }}/showreel-*.zip
+            !${{ runner.temp }}/showreel-source.zip
+          if-no-files-found: error
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p 'JSON.parse(require("fs").readFileSync(".claude-plugin/plugin.json", "utf8")).version')"
+          notes=(--generate-notes)
+          if [ -s "$RUNNER_TEMP/release-notes.md" ]; then
+            notes=(--notes-file "$RUNNER_TEMP/release-notes.md")
+          fi
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+            --verify-tag "${notes[@]}" "$RUNNER_TEMP/showreel-$version.zip"

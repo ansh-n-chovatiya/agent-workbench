@@ -1,4 +1,4 @@
-// showreel render sources sha256: fb35b16b7fba21aa15baaa55be6500d4ea00e9e923d90286b7699180cea5d50a
+// showreel render sources sha256: e43f1b0fb9225ff950791605a5da4b7b544f3f9a87e58f3018ad5f97cfc49efd
 (() => {
   // node_modules/mediabunny/dist/modules/src/misc.js
   function assert(x) {
@@ -31865,6 +31865,7 @@
     },
     edits: { trims: [], speeds: [], holds: [], splits: [], mutes: [] },
     audio: {
+      tighten: { enabled: true, pauseSec: 0.4 },
       voice: { enabled: null, voiceId: "af_heart", speed: 1, gainDb: 0 },
       music: {
         enabled: false,
@@ -31902,6 +31903,7 @@
     ["captions.bandHeightPct", 6, 25],
     ["captions.fontSizePct", 1, 10],
     ["cards.fade", 0, 1.5],
+    ["audio.tighten.pauseSec", 0.1, 2],
     ["audio.voice.speed", 0.5, 2],
     ["audio.voice.gainDb", -24, 12],
     ["audio.music.gainDb", -60, 6],
@@ -31932,7 +31934,7 @@
     ...["arrow", "hand", "text"].flatMap((s) => ["x", "y"].map((k) => [`cursor.custom.${s}.hotspot.${k}`, 0, 1])),
     ...["title", "outro"].flatMap((k) => [["durationSec", 0, 30], ["titleSizePct", 1, 20], ["subtitleSizePct", 1, 12], ["accent.widthPct", 0, 100], ["logo.heightPct", 1, 40]].map(([p, a, b]) => [`cards.${k}.${p}`, a, b])),
     ...["frame.background", "cards.title.background", "cards.outro.background"].map((p) => [`${p}.angle`, 0, 360])
-  ].map(([p, min, max, integer = false]) => [p, { min, max, step: integer ? 1 : 0.01 }]));
+  ].map(([p, min, max, integer = false]) => [p, { min, max, step: p === "audio.tighten.pauseSec" ? 0.05 : integer ? 1 : 0.01 }]));
   var SETTING_ENUMS = {
     ...COMPOSITION_ENUMS,
     theme: Object.keys(THEMES),
