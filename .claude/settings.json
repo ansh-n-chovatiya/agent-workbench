@@ -1,0 +1,11 @@
+{
+  "extraKnownMarketplaces": {
+    "agent-workbench": {
+      "source": { "source": "github", "repo": "ansh-n-chovatiya/agent-workbench" }
+    }
+  },
+  "enabledPlugins": {
+    "ctx@agent-workbench": true,
+    "ctx-optimize@agent-workbench": true
+  }
+}
