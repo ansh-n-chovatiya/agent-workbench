@@ -51,7 +51,7 @@ export async function doctor() {
     await access(chromium.executablePath());
     result.items.push({ id: 'browser', level: 'ok', detail: 'Playwright Chromium is installed' });
   } catch {
-    result.items.push({ id: 'browser', level: 'fail', detail: 'Playwright Chromium is missing', fix: 'npx playwright install chromium' });
+    result.items.push({ id: 'browser', level: 'fail', detail: 'Playwright Chromium is missing', fix: 'showreel setup' });
   }
   result.ok = !result.items.some((item) => item.level === 'fail');
   return result;

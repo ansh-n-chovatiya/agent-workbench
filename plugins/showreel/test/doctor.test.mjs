@@ -42,6 +42,6 @@ test('live doctor creates only temporary state and removes its write probe', asy
   assert.equal(item(result, 'home-writable').level, 'ok');
   assert.deepEqual(await readdir(process.env.SHOWREEL_HOME), []);
   const browser = item(result, 'browser');
-  if (browser.level === 'fail') assert.equal(browser.fix, 'npx playwright install chromium');
+  if (browser.level === 'fail') assert.equal(browser.fix, 'showreel setup');
   assert.equal(result.ok, !result.items.some(({ level }) => level === 'fail'));
 });
