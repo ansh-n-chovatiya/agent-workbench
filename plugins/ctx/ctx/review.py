@@ -25,7 +25,7 @@ import re
 import subprocess
 import time
 
-from . import atomic, callers, plan, redact, snapshot, testmap
+from . import atomic, callers, plan, redact, rules as rules_mod, snapshot, testmap
 
 REVIEW_SUBDIR = "reviews"
 
@@ -289,6 +289,38 @@ def _split_ignored(layout, paths):
     return [p for p in paths if p not in ignored], [p for p in paths if p in ignored]
 
 
+PR_DIFF_BYTES = 200_000
+
+
+def pr_package(layout, base="origin/main"):
+    """`(path, problem)`: one package for the whole change against `base`, for the PR-level pass.
+
+    Built from git (this is the merged change, not one unit's snapshot window): the project rules, the file stat
+    and the diff, capped. `problem` is non-empty when git cannot say.
+    """
+    root = layout.root.parent
+    try:
+        stat = subprocess.run(["git", "diff", "--stat", f"{base}...HEAD"], cwd=str(root),
+                              capture_output=True, text=True, timeout=60)
+        diff = subprocess.run(["git", "diff", "-U10", f"{base}...HEAD"], cwd=str(root),
+                              capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return None, f"git could not be run: {exc}"
+    if stat.returncode != 0 or diff.returncode != 0:
+        return None, f"git could not diff against {base!r}: {(stat.stderr or diff.stderr).strip()[:200]}"
+    body = diff.stdout
+    cut = len(body) > PR_DIFF_BYTES
+    out = ["# PR-level review package", "", f"Base: {base}", ""]
+    rule_lines = rules_mod.block(layout)
+    out += ["## Project rules", "", *(rule_lines or ["(none recorded)"]), "", "## Files changed", "",
+            stat.stdout.rstrip() or "(no changes against the base)", "", "## Diff", "",
+            body[:PR_DIFF_BYTES] + ("\n[diff truncated at the byte cap]" if cut else "")]
+    path = review_dir(layout) / "pr-review.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic.write_text(path, redact.scrub("\n".join(out) + "\n", []))
+    return path, ""
+
+
 def _split_committed(layout, paths, since):
     """(kept, arrived): `paths` split by whether they arrived by a commit inside the window.
 
@@ -503,10 +535,10 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
 
     test_lines = None
     if (config.get("review") or {}).get("tests_table", False):
-        test_lines = testmap.render(
-            unit.doc.list_items("acceptance criteria", "criteria"),
-            testmap.gather(lambda p: snapshot.stored_text(layout, head_key, p),
-                           [p for p in delta.added + delta.modified if not snapshot.is_ledger(p)]))
+        touched_tests = testmap.gather(lambda p: snapshot.stored_text(layout, head_key, p),
+                                       [p for p in delta.added + delta.modified if not snapshot.is_ledger(p)])
+        test_lines = (testmap.render(unit.doc.list_items("acceptance criteria", "criteria"), touched_tests)
+                      + testmap.render_modes(unit.failure_modes, touched_tests))
 
     text = _render(layout, config, unit, slug, delta, stray, base_key, head_key,
                    round_number, siblings, len(ignored), caller_lines, test_lines, len(arrived))
@@ -727,6 +759,10 @@ def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
         out += ["", f"Not scope-checked: {arrived} path(s) arrived by a git commit during this window (a pull, a "
                     "merge or another session's commit). They are clean in git, so this unit did not leave them."]
 
+    rule_lines = rules_mod.block(layout)
+    if rule_lines:
+        out += ["", "## Project rules", "", "Confirmed lessons for this project. Check the change against each.", "",
+                *rule_lines]
     if caller_lines is not None:
         out += ["", "## Callers", "", *caller_lines]
     if test_lines is not None:

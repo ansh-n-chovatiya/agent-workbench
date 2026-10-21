@@ -6,7 +6,7 @@ from pathlib import Path
 COMMANDS = Path(__file__).resolve().parent.parent / "commands"
 LIMIT = 80
 
-NAMES = set("""ask context decide doctor drop escalate findings handoff init load merge
+NAMES = set("""ask context decide doctor pr-review drop escalate findings handoff init load merge
 next phase plan preview resume review save spec start status task trust verify""".split())
 
 OLD_PHASE = ("Advance or inspect a unit's phase gate (reproduce/locate/fix/guard "
