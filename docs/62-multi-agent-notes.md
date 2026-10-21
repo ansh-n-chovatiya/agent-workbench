@@ -32,7 +32,8 @@ unit. Use `ctx start --worktree` only when you want physical separation; it is o
 ## The built flow (2026-10-21): `ctx review <unit> --with codex|gemini`
 
 Optional and off by default. It runs only when all three are true: you typed `--with`, the tool is installed
-(`codex` or `gemini` on the PATH), and `external.<name>.enabled: true` is in `.ctx/ctx.yaml`. If something is missing
+(`codex` or `gemini` on the PATH), and you switched it on for this machine in `~/.claude/ctx/external.yaml`
+(`codex:` with `enabled: true` indented under it). A project's `ctx.yaml` cannot switch it on. If something is missing
 ctx says what (not installed, with the install command; or installed but off, with the line to add and a reminder that
 the package contains code and goes to that provider), and the normal review carries on.
 

@@ -1550,7 +1550,8 @@ def cmd_resolve(args):
         _echo("no active spec — /ctx:spec «intent» first")
         return _advise("no-active-work")
     if not spec_mod.resolve(layout, slug, args.question, args.answer):
-        _echo(f"no open question matching {args.question!r}")
+        _echo(f"no open question matches {args.question!r} uniquely: use its id (`Q3` or the number `ctx ask` shows) or "
+              "more of its text; text that matches several questions resolves none of them")
         return 1
     journal.append(layout, config, "spec", slug, f"resolved: {args.question[:60]}")
     # Both halves of the gate `ctx plan` actually applies. Answering the last
@@ -1813,6 +1814,10 @@ def cmd_plan_unit(args):
     slug, code = _plan_or_report(layout, args, "plan-unit")
     if slug is None:
         return code
+    if not plan_mod.valid_unit_name(args.name):
+        _warn(f"unit name {args.name!r} must look like 01-kebab-case (two digits, a dash, lowercase words): the number "
+              "orders the plan, e.g. `ctx plan-unit 01-core`")
+        return 1
     path, fresh = plan_mod.scaffold_unit(
         layout, slug, args.name, objective=args.objective or "",
         tier=args.tier, owns=args.owns or [],
@@ -2210,6 +2215,7 @@ def _set_unit_status(layout, slug, units, status):
             # reading `status: half-done` must be corrected, not skipped.
             if str(unit.doc.meta.get("status") or "") != status:
                 unit.set(status=status)
+            contract_mod.stamp_done(layout, slug, unit.name, present=(status == "done"))
     return units
 
 
@@ -2536,11 +2542,15 @@ def cmd_review(args):
     """Build the review package for a unit. Spawns no reviewer itself."""
     layout, config = _loaded(args)
     if args.pr:  # the whole change, once, before merge; `name` is the base ref
-        path, problem = review_mod.pr_package(layout, args.name or "origin/main")
+        path, problem = review_mod.pr_package(layout, args.name or "origin/main", config)
         if problem:
             _warn(problem)
             return 1
         _echo(str(path))
+        _echo("Dispatch the `reviewer` agent against it (the `/ctx:pr-review` command does this); record what it "
+              "finds with `ctx findings`.")
+        if getattr(args, "with"):
+            _echo("--with applies to a unit's review, not to --pr; run `ctx review <unit> --with ...` for that.")
         return 0
     slug, unit = _unit_or_report(layout, args, "review")
     if unit is None:
@@ -3571,7 +3581,7 @@ def cmd_telemetry(args):
     return 0
 
 
-def _gateable_units(grouped):
+def _gateable_units(grouped, layout=None, slug=None):
     """The units of a plan a headless run holds to the done-gate.
 
     Dispatched and not finished — `running`, `blocked`, `verify_failed`. The
@@ -3583,9 +3593,14 @@ def _gateable_units(grouped):
         runs, and a pipeline that went red for that would be turned off.
       * `done` units were gated when they were marked done, and their `diff`
         checks are answered against a dispatch point that is now behind them.
+        Only when ctx marked them: a unit file edited by hand to say `done` has
+        no stamp, was never gated, and is held to the gate like a running one.
     """
+    def trusted_done(unit):
+        return layout is None or slug is None or contract_mod.is_done_stamped(layout, slug, unit.name)
+
     return [unit for level in sorted(grouped) for unit in grouped[level]
-            if unit.status not in ("pending", "done")]
+            if unit.status != "pending" and (unit.status != "done" or not trusted_done(unit))]
 
 
 def cmd_ci(args):
@@ -3725,7 +3740,7 @@ def cmd_ci(args):
         # plan does not describe a runnable wave, and gating units inside a
         # broken graph reports the same problem a second time in a worse voice.
         if not problems:
-            for unit in _gateable_units(grouped):
+            for unit in _gateable_units(grouped, layout, slug):
                 ok, reason, lines = verify.gate_check(
                     layout, config, slug, unit, record=False)
                 report(f"{unit.name} would pass the done-gate", ok, str(reason),

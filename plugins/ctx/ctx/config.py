@@ -50,8 +50,9 @@ DEFAULTS = {
     # outside any repo. Passive and local-only; nothing is sent anywhere.
     "improve": {"enabled": True},
     # Optional second reviewers, used only by `ctx review <unit> --with codex|gemini`, and only when the tool is
-    # installed and switched on here. Off: the review package contains code, and this sends it to that provider.
-    "external": {"timeout_seconds": 300, "codex": {"enabled": False}, "gemini": {"enabled": False}},
+    # installed and switched on in the user's own `~/.claude/ctx/external.yaml` (never by this project file: the
+    # package contains code and goes to that provider).
+    "external": {"timeout_seconds": 300},
     "gate": {
         "enabled": True,
         "max_attempts": 3,
@@ -483,9 +484,15 @@ def _read_policy(path, source):
 
 
 def _read_repo_config(path):
-    parsed = miniyaml.loads(path.read_text(encoding="utf-8")) or {}
+    try:
+        parsed = miniyaml.loads(path.read_text(encoding="utf-8")) or {}
+    except miniyaml.MiniYamlError as exc:
+        # Name the file: a bare "line 3: tab indentation is not allowed" sends the reader hunting, and in a hook the
+        # same unreadable file would otherwise switch the done-gate off with nothing said.
+        raise SystemExit(f"{path} is not valid ctx config ({exc}). Fix it, or move it aside to run with the "
+                         "defaults; until then ctx cannot read this project's settings.") from exc
     if not isinstance(parsed, dict):
-        raise miniyaml.MiniYamlError("ctx.yaml must be a mapping")
+        raise SystemExit(f"{path} must be a mapping of settings (key: value), not a list or a single value")
     found = parsed.get("schema", SCHEMA)
     if isinstance(found, int) and found > SCHEMA:
         raise SystemExit(

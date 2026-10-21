@@ -65,7 +65,7 @@ import time
 from pathlib import Path
 from types import MappingProxyType, ModuleType
 
-from . import atomic, config as config_mod, paths, phases, redact, reduce, snapshot, trust
+from . import atomic, config as config_mod, gitpaths, paths, phases, redact, reduce, snapshot, trust
 
 PASS, FAIL, ERROR, PENDING = "pass", "fail", "error", "pending"
 
@@ -1348,7 +1348,7 @@ def committed_since(cwd, commit):
         return [], error, False
     if code != 0:
         return [], "", True
-    code, out, error = _git(["diff", "--name-only", commit, "HEAD"], cwd)
+    code, out, error = _git(["diff", "--relative", "--name-only", commit, "HEAD"], cwd)
     if error:
         return [], error, False
     if code != 0:
@@ -1363,22 +1363,8 @@ def changed_files(cwd):
     check reads both. Kept as it was because `worktree.dirty_paths` wants
     exactly this question answered.
     """
-    code, stdout, error = _git(
-        ["status", "--porcelain", "--untracked-files=all"], cwd
-    )
-    if error:
-        return [], error
-    if code != 0:
-        return [], "not a git repository"
-    paths = []
-    for line in stdout.splitlines():
-        entry = line[3:].strip() if len(line) > 3 else ""
-        if " -> " in entry:  # renames report "old -> new"
-            entry = entry.split(" -> ", 1)[1]
-        entry = entry.strip('"')
-        if entry:
-            paths.append(entry)
-    return paths, ""
+    paths, error = gitpaths.status_paths(cwd)
+    return (paths, "") if not error else ([], "not a git repository" if "not a git" in error else error)
 
 
 def _within(path, scope):

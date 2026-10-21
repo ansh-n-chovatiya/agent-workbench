@@ -36,6 +36,10 @@ REQUIRED = ("unit", "tier", "owns")
 #: What a unit may be tagged as touching. A tagged unit is never reviewed on the cheapest tier (`dispatch.model_for`).
 RISK_TAGS = ("shared-interface", "auth", "data", "ui")
 _UNIT_NAME = re.compile(r"^[0-9]{2}-[a-z0-9][a-z0-9-]*$")
+
+
+def valid_unit_name(name):
+    return bool(_UNIT_NAME.match(str(name or "")))
 # What `publishes_interface` strips before deciding a `## Interfaces` section is
 # empty — the scaffolded template is only an HTML comment, so a unit that never
 # touched the section must not read as having published anything.

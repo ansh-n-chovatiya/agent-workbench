@@ -55,14 +55,9 @@ improve:
                               # transmitted, and nothing is changed by it.
 
 external:
-  timeout_seconds: 300        # how long a second reviewer may take before it is skipped
-  codex:
-    enabled: false            # optional second reviewer, used only by
-                              # `ctx review <unit> --with codex`, and only if the
-                              # `codex` CLI is installed. On means: send the review
-                              # package (it contains code) to OpenAI when asked.
-  gemini:
-    enabled: false            # likewise for the `gemini` CLI (Google)
+  timeout_seconds: 300        # how long a second reviewer may take before it is
+                              # skipped (capped at 900). Whether a tool may be used
+                              # is NOT set here: see `ctx review --with` below.
 
 gate:
   enabled: true               # false disables the done-gate
@@ -174,12 +169,15 @@ more than twelve files is summarised). It is a lead for the reviewer to read, no
 still mentioned is the likeliest breakage. Ledger files are never searched. With the key off the package is unchanged.
 
 `ctx review <unit> --with codex|gemini` asks an optional second reviewer. It runs only when the tool is on the PATH
-and `external.<name>.enabled` is true; otherwise it prints what is missing (not installed, or installed but off) and the
+and you switched it on **for this machine** in `~/.claude/ctx/external.yaml` (`codex:` with `enabled: true` indented
+under it; `$CTX_GLOBAL_ROOT` moves the folder). The project's own `ctx.yaml` cannot switch it on, because that file is
+committed and a repository's author would otherwise decide that your code is sent to a third party. Otherwise it prints what is missing (not installed, or installed but off) and the
 normal review carries on. The tool runs read-only in an empty temporary directory with the package on stdin, not in the
 repository, and is skipped after `external.timeout_seconds`. Its `FINDING | severity | file:line | summary | why` lines
 are recorded as **low-confidence** findings from that source, so they never block a unit on their own; confirm one with
 `ctx findings <unit> --set ID --confidence high` or dispute it. The raw answer is kept in
-`.ctx/runtime/reviews/<plan>-<unit>-rN-<tool>.md`, and `ctx doctor` lists the tools once any is switched on.
+`.ctx/runtime/reviews/<plan>-<unit>-rN-<tool>.md`, and `ctx doctor` lists the tools once any is switched on. Answers are scrubbed (paths, emails, secrets) and kept to one
+short line each before they can reach a later briefing.
 
 `ctx rules` keeps the project's rules in `.ctx/rules.md`: one line each, confirmed and general, capped at 40 rules of
 200 characters because every review and dispatch reads them. `--add "text"` records one (refused when the file is

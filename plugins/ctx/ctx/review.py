@@ -25,7 +25,7 @@ import re
 import subprocess
 import time
 
-from . import atomic, callers, plan, redact, rules as rules_mod, snapshot, testmap
+from . import atomic, callers, gitpaths, plan, redact, rules as rules_mod, snapshot, testmap
 
 REVIEW_SUBDIR = "reviews"
 
@@ -292,75 +292,83 @@ def _split_ignored(layout, paths):
 PR_DIFF_BYTES = 200_000
 
 
-def pr_package(layout, base="origin/main"):
+def pr_package(layout, base="origin/main", config=None):
     """`(path, problem)`: one package for the whole change against `base`, for the PR-level pass.
 
     Built from git (this is the merged change, not one unit's snapshot window): the project rules, the file stat
-    and the diff, capped. `problem` is non-empty when git cannot say.
+    and the diff, capped, with the project's `redact` patterns applied like every other package. `problem` is a
+    sentence when git cannot say (not a repository, an unknown base, a base that looks like an option).
     """
     root = layout.root.parent
+    base = str(base or "").strip()
+    if not base or base.startswith("-"):
+        return None, f"{base!r} is not a usable base ref; give a branch, tag or commit (default origin/main)"
+    spec = f"{base}...HEAD"
+
+    def git(*args, timeout=60):
+        done = subprocess.run(["git", *args], cwd=str(root), capture_output=True, timeout=timeout)
+        return done.returncode, done.stdout.decode("utf-8", "replace"), done.stderr.decode("utf-8", "replace")
+
     try:
-        stat = subprocess.run(["git", "diff", "--stat", f"{base}...HEAD"], cwd=str(root),
-                              capture_output=True, text=True, timeout=60)
-        diff = subprocess.run(["git", "diff", "-U10", f"{base}...HEAD"], cwd=str(root),
-                              capture_output=True, text=True, timeout=120)
+        inside, _out, _err = git("rev-parse", "--is-inside-work-tree")
+        if inside != 0:
+            return None, "not a git repository: `ctx review --pr` diffs the whole change against a base ref"
+        known, _out, _err = git("rev-parse", "--verify", "--quiet", f"{base}^{{commit}}")
+        if known != 0:
+            return None, (f"unknown base ref {base!r}: name a branch, tag or commit that exists here "
+                          "(`ctx review --pr main`; the default origin/main needs a remote)")
+        stat_code, stat, stat_err = git("diff", "--stat", spec, "--")
+        diff_code, body, diff_err = git("diff", "-U10", spec, "--", timeout=120)
     except (OSError, subprocess.SubprocessError) as exc:
         return None, f"git could not be run: {exc}"
-    if stat.returncode != 0 or diff.returncode != 0:
-        return None, f"git could not diff against {base!r}: {(stat.stderr or diff.stderr).strip()[:200]}"
-    body = diff.stdout
+    if stat_code != 0 or diff_code != 0:
+        return None, f"git could not diff {spec}: {(stat_err or diff_err).strip()[:200]}"
     cut = len(body) > PR_DIFF_BYTES
-    out = ["# PR-level review package", "", f"Base: {base}", ""]
     rule_lines = rules_mod.block(layout)
-    out += ["## Project rules", "", *(rule_lines or ["(none recorded)"]), "", "## Files changed", "",
-            stat.stdout.rstrip() or "(no changes against the base)", "", "## Diff", "",
-            body[:PR_DIFF_BYTES] + ("\n[diff truncated at the byte cap]" if cut else "")]
+    out = ["# PR-level review package", "", f"Base: {base}", "",
+           "## Project rules", "", *(rule_lines or ["(none recorded)"]), "", "## Files changed", "",
+           stat.rstrip() or "(no changes against the base)", "", "## Diff", "",
+           body[:PR_DIFF_BYTES] + ("\n[diff truncated at the byte cap]" if cut else "")]
     path = review_dir(layout) / "pr-review.md"
     path.parent.mkdir(parents=True, exist_ok=True)
-    atomic.write_text(path, redact.scrub("\n".join(out) + "\n", []))
+    atomic.write_text(path, redact.scrub("\n".join(out) + "\n", (config or {}).get("redact") or []))
     return path, ""
 
 
-def _split_committed(layout, paths, since):
+def _split_committed(layout, paths, since, head=""):
     """(kept, arrived): `paths` split by whether they arrived by a commit inside the window.
 
-    A unit's work is uncommitted (it is told not to commit), so a changed path that is clean in git and was
-    touched by a commit made after the unit's baseline came in by a pull, a merge or another session's commit,
-    not from this unit. One `git status` and one `git log` per call, never one per path. Fails closed: no
-    repository, no baseline time or any git error excuses nothing.
+    A unit's work is uncommitted (it is told not to commit), so a changed path that is clean in git and differs
+    between the baseline commit and HEAD came in by a pull, a merge or another session's commit, not from this unit.
+    `head` is the commit the baseline snapshot was taken at; without it (an older snapshot, or no commits then) the
+    commits made since `since` are used, which misses a pulled commit that carries an older date. One status, one
+    diff or log per call, never one per path. Fails closed: no repository or any git error excuses nothing.
     """
     paths = list(paths)
-    if not paths or not since:
+    if not paths or not (since or head):
         return paths, []
     root = layout.root.parent
+    dirty, error = gitpaths.status_paths(root)
+    if error:
+        return paths, []
     try:
-        prefix = subprocess.run(["git", "rev-parse", "--show-prefix"], cwd=str(root),
-                                capture_output=True, text=True, timeout=30)
-        status = subprocess.run(["git", "status", "--porcelain", "-z", "-uall"], cwd=str(root),
-                                capture_output=True, text=True, timeout=60)
-        stamp = time.strftime("%Y-%m-%d %H:%M:%S +0000", time.gmtime(float(since)))
-        log = subprocess.run(["git", "log", f"--since={stamp}", "--name-only", "--format=", "-z"],
-                             cwd=str(root), capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.SubprocessError, ValueError, OverflowError):
+        prefix = subprocess.run(["git", "rev-parse", "--show-prefix"], cwd=str(root), capture_output=True,
+                                text=True, timeout=30)
+        ancestor = bool(head) and subprocess.run(["git", "merge-base", "--is-ancestor", head, "HEAD"], cwd=str(root),
+                                                 capture_output=True, timeout=30).returncode == 0
+        if ancestor:
+            log = subprocess.run(["git", "diff", "--relative", "--name-only", "-z", head, "HEAD"], cwd=str(root),
+                                 capture_output=True, text=True, timeout=60)
+        else:
+            stamp = time.strftime("%Y-%m-%d %H:%M:%S +0000", time.gmtime(float(since)))
+            log = subprocess.run(["git", "log", f"--since={stamp}", "--relative", "--name-only", "--format=", "-z"],
+                                 cwd=str(root), capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError, ValueError, OverflowError, TypeError):
         return paths, []
-    if 0 != prefix.returncode or 0 != status.returncode or 0 != log.returncode:
+    if prefix.returncode != 0 or log.returncode != 0:
         return paths, []
-    base = prefix.stdout.strip()
-    dirty = set()
-    fields = status.stdout.split("\0")
-    skip = False
-    for field in fields:
-        if skip:  # the old name of a rename follows its entry
-            skip = False
-            dirty.add(field[len(base):] if base and field.startswith(base) else field)
-            continue
-        if len(field) < 4:
-            continue
-        name = field[3:]
-        dirty.add(name[len(base):] if base and name.startswith(base) else name)
-        skip = field[0] in "RC" or field[1] in "RC"
-    committed = {n[len(base):] if base and n.startswith(base) else n for n in log.stdout.split("\0") if n}
-    arrived = [p for p in paths if p in committed and p not in dirty]
+    committed = {n for n in log.stdout.split("\0") if n}
+    arrived = [p for p in paths if p in committed and p not in set(dirty)]
     return [p for p in paths if p not in set(arrived)], arrived
 
 
@@ -463,22 +471,8 @@ def _uncommitted_paths(layout):
     tracked to be "modified" yet, and skipping untracked entries would treat
     that as clean when it is exactly the uncommitted work this exists to spot.
     """
-    root = layout.root.parent
-    try:
-        completed = subprocess.run(
-            ["git", "status", "--porcelain", "--untracked-files=all"],
-            cwd=str(root), capture_output=True, text=True, timeout=30,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if completed.returncode != 0:
-        return None
-    paths = []
-    for line in completed.stdout.splitlines():
-        entry = line[3:].strip().strip('"')
-        if entry:
-            paths.append(entry)
-    return paths
+    paths, error = gitpaths.status_paths(layout.root.parent)
+    return None if error else paths
 
 
 def build(layout, config, unit, slug, root, round_number=1, previous=None):
@@ -511,7 +505,7 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
     # An unchanged fix gives the next reviewer no new evidence. Keep this on
     # the existing no-package/problem path so the caller cannot dispatch one.
     if (round_number > 1 and (config.get("review") or {}).get("stop_rule", False)
-            and not (delta.added or delta.modified or delta.deleted)):
+            and not any(not snapshot.is_ledger(p) for p in delta.added + delta.modified + delta.deleted)):
         return None, {}, (
             f"unchanged since the last review (round {round_number - 1}): "
             "no fix was made, so there is nothing to re-review — "
@@ -522,7 +516,7 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
     # See `wave_scope` for why that widening is the smallest one that works.
     scope, siblings = wave_scope(layout, slug, unit, since=base.get("taken_at"))
     stray, ignored = _split_ignored(layout, snapshot.out_of_scope(delta, scope))
-    stray, arrived = _split_committed(layout, stray, base.get("taken_at"))
+    stray, arrived = _split_committed(layout, stray, base.get("taken_at"), base.get("git_head", ""))
     # A path nobody declared has no captured "before", so its bytes were never
     # kept. Fill in the "after" side now that we know which paths those are —
     # otherwise the violation is named but never shown.
@@ -541,7 +535,7 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
                       + testmap.render_modes(unit.failure_modes, touched_tests))
 
     text = _render(layout, config, unit, slug, delta, stray, base_key, head_key,
-                   round_number, siblings, len(ignored), caller_lines, test_lines, len(arrived))
+                   round_number, siblings, len(ignored), caller_lines, test_lines, arrived)
     path = package_path(layout, slug, unit.name, round_number)
     path.parent.mkdir(parents=True, exist_ok=True)
     # `newline=""` writes the string's own "\n" through untranslated. On
@@ -613,7 +607,8 @@ def dispatch_stats(layout, slug, unit, round_number=1):
     delta = snapshot.compare(base, head)
     scope, _siblings = wave_scope(layout, slug, unit, since=base.get("taken_at") if base else None)
     stray, _ignored = _split_ignored(layout, snapshot.out_of_scope(delta, scope))
-    stray, _arrived = _split_committed(layout, stray, base.get("taken_at") if base else None)
+    stray, _arrived = _split_committed(layout, stray, base.get("taken_at") if base else None,
+                                       base.get("git_head", "") if base else "")
     return {
         "bytes": path.stat().st_size,
         "out_of_scope": len(stray),
@@ -639,7 +634,7 @@ def _caller_lines(layout, root, delta, base_key, head_key):
 
 
 def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
-            round_number, siblings=(), ignored=0, caller_lines=None, test_lines=None, arrived=0):
+            round_number, siblings=(), ignored=0, caller_lines=None, test_lines=None, arrived=()):
     patterns = config.get("redact") or []
     out = [
         f"# Review package — unit `{unit.name}` of plan `{slug}`, round {round_number}",
@@ -756,8 +751,11 @@ def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
         out += ["", f"Not scope-checked: {ignored} git-ignored path(s) changed (logs, caches, "
                     "generated output). They are nobody's source and are not violations."]
     if arrived:
-        out += ["", f"Not scope-checked: {arrived} path(s) arrived by a git commit during this window (a pull, a "
-                    "merge or another session's commit). They are clean in git, so this unit did not leave them."]
+        shown = ", ".join(arrived[:8]) + (f" and {len(arrived) - 8} more" if len(arrived) > 8 else "")
+        out += ["", f"Not scope-checked: {len(arrived)} path(s) arrived by a git commit during this window (a pull, a "
+                    "merge or another session's commit): " + shown + ". They are clean in git, so this unit did not "
+                    "leave them uncommitted; if one is outside `owns` and the unit committed it itself, that is a "
+                    "violation to raise."]
 
     rule_lines = rules_mod.block(layout)
     if rule_lines:

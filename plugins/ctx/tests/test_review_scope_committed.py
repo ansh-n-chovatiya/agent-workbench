@@ -55,6 +55,7 @@ class TestArrivedByCommit(CommittedFixture):
         text = self.text()
         self.assertEqual(violation_paths(text), set())
         self.assertIn("1 path(s) arrived by a git commit", text)
+        self.assertIn("src/other.py", text)
 
     def test_control_an_uncommitted_edit_is_still_a_violation(self):
         self.write("src/alpha.py", "alpha = 2\n")
