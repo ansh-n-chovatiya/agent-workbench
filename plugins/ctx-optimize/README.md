@@ -67,3 +67,12 @@ explicitly on the call wins; ctx's own agents (`ctx:*`) are left to the ledger; 
 cheaper than the main one, never dearer; if the main model is not recognised it does nothing; any error passes the
 spawn through unchanged. Each decision is logged to the plugin store (label cut to 60 characters, never the prompt).
 It ships off because D18 requires the same change to be run with and without it before any default moves.
+
+**Turn it on (optional):** in Claude Code open `/plugin`, pick `ctx-optimize`, choose configure, and switch on
+"Route subagents to cheaper models". Restart the session for the mod to load.
+
+**Check it works on your machine:** in a new session ask for something mechanical through a subagent (for example
+"use a subagent to list the files that mention TODO"), then run `ctx-optimize report`. The new subagent row should show
+`haiku` (or `sonnet`) where it used to show your main model. If it still shows the main model the router did not apply
+and nothing is wrong: the call fell through unchanged. Switch the option off again at any time. The mod's own logic is
+covered by `claude plugin test plugins/ctx-optimize` (19 tests); the live check above is the one thing a test kit cannot do.
