@@ -6,6 +6,11 @@ A monorepo and Claude Code marketplace of plugins for durable project context
 and demo video production. Planning and design documents live in
 [docs/00-README.md](docs/00-README.md).
 
+**Nothing to run if you open this repo in Claude Code:** the project's `.claude/settings.json` offers the marketplace and
+enables `ctx` and `ctx-optimize`, so Claude Code asks once to trust the folder and install them. For any other project or
+machine, use the command below. After installation everything else (the ledger hooks, the improvement log and digest) is
+automatic.
+
 One command sets up a machine (it shows what it would do and changes nothing until you add `--yes`; running it
 again changes nothing):
 
