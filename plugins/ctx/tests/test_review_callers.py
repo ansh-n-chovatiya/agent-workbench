@@ -104,8 +104,8 @@ class TestInThePackage(WaveFixture):
         self.assertEqual(problem, "")
         return built.read_text(encoding="utf-8")
 
-    def test_the_switch_ships_off(self):
-        self.assertIs(config_mod.DEFAULTS["review"]["callers"], False)
+    def test_the_switch_ships_on(self):
+        self.assertIs(config_mod.DEFAULTS["review"]["callers"], True)
 
     def test_on_the_package_names_the_untouched_caller(self):
         text = self.package(True)
