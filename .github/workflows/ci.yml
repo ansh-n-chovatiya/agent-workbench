@@ -565,6 +565,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # No checkout here, so the workflow-wide `plugins/ctx` default would be a folder that does not exist.
+    defaults:
+      run:
+        working-directory: .
     steps:
       - name: Everything that ran passed
         env:
