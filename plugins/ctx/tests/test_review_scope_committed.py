@@ -5,6 +5,7 @@ eight review packages carried a mechanical Critical for them. A unit does not co
 and was touched by a commit after the unit's baseline did not come from it. The controls matter most: an uncommitted
 edit, a re-edited committed file and an untracked file are all still violations.
 """
+import stat
 import subprocess
 import sys
 import time
@@ -79,8 +80,14 @@ class TestArrivedByCommit(CommittedFixture):
         self.assertEqual(violation_paths(self.text()), {"src/other.py"})
 
     def test_without_a_repository_nothing_is_excused(self):
+        import os
         import shutil
-        shutil.rmtree(self.root / ".git")
+
+        def writable(function, path, _excinfo):  # git marks object files read-only; Windows refuses to delete them
+            os.chmod(path, stat.S_IWRITE)
+            function(path)
+
+        shutil.rmtree(self.root / ".git", onerror=writable)
         (self.root / ".git").mkdir()
         self.write("src/other.py", "other = 2\n")
         self.assertEqual(violation_paths(self.text()), {"src/other.py"})
