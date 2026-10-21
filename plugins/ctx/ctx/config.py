@@ -180,11 +180,12 @@ DEFAULTS = {
         # D18/D20: built default-off; flip only after the quality gate.
         "stop_rule": False,
         # Add a `## Callers` section to each review package: functions and classes whose signature changed, and the
-        # files outside the change that still mention them. Computed in code, no model. Off until measured (D20).
-        "callers": False,
+        # files outside the change that still mention them. Computed in code, no model. On since 2026-10-21 (D20):
+        # run on every unit of the evidence changes, bounded, and it caught what a diff-only reader cannot see.
+        "callers": True,
         # Add a `## Tests by criterion` section: which acceptance criterion has a test in this change, which has
-        # none. Computed in code, no model. Off until measured (D20).
-        "tests_table": False,
+        # none. Computed in code, no model. On since 2026-10-21 (D20), same evidence as `callers`.
+        "tests_table": True,
     },
     "auto_load": [],
     "redact": [],
@@ -864,10 +865,10 @@ def render(config):
         "# Ships false; enable only after the D18/D20 quality gate.\n"
         "# review.callers adds a `## Callers` section to each review package:\n"
         "# changed function/class signatures and the files outside the change\n"
-        "# that still mention them (computed in code; ships false).\n"
+        "# that still mention them (computed in code; ships true).\n"
         "# review.tests_table adds a `## Tests by criterion` section: which\n"
         "# acceptance criterion has a test in the change and which has none\n"
-        "# (computed in code; ships false).\n"
+        "# (computed in code; ships true).\n"
         "# spec.failure_modes makes each new spec carry a `## Failure modes`\n"
         "# checklist (error paths, concurrency, existing data, callers, UI\n"
         "# states, cleanup) that must be answered before `ctx plan` will run.\n"

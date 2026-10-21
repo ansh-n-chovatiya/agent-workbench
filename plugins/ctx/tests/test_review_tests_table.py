@@ -106,8 +106,8 @@ class TestInThePackage(WaveFixture):
         self.assertEqual(problem, "")
         return built.read_text(encoding="utf-8")
 
-    def test_the_switch_ships_off(self):
-        self.assertIs(config_mod.DEFAULTS["review"]["tests_table"], False)
+    def test_the_switch_ships_on(self):
+        self.assertIs(config_mod.DEFAULTS["review"]["tests_table"], True)
 
     def test_on_a_criterion_without_a_test_reads_none(self):
         self.write("tests/test_alpha.py", "def test_empty():\n    # AC1\n    pass\n")
