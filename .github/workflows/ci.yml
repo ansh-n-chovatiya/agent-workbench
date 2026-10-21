@@ -30,7 +30,52 @@ defaults:
     working-directory: plugins/ctx
 
 jobs:
+  # Which part of the repository this change touches. Each product's jobs run only when their own files (or the
+  # shared plumbing: this workflow and the marketplace manifest) changed, so a ctx change no longer starts the
+  # showreel browser job and the reverse. The personal-data scan and the manifest check are seconds long and always run.
+  changes:
+    name: what changed
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: .
+    outputs:
+      ctx: ${{ steps.paths.outputs.ctx }}
+      optimize: ${{ steps.paths.outputs.optimize }}
+      showreel: ${{ steps.paths.outputs.showreel }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: paths
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          base="$PR_BASE"
+          [ "$EVENT" = "push" ] && base="$PUSH_BEFORE"
+          files=""
+          # A new branch, a force push or an unreachable base means "unknown": run everything.
+          if [ -n "$base" ] && [ "$base" != "0000000000000000000000000000000000000000" ] \
+             && files=$(git diff --name-only "$base" "$GITHUB_SHA" 2>/dev/null); then
+            known=1
+          else
+            known=0
+          fi
+          hit() { printf '%s\n' "$files" | grep -Eq "$1"; }
+          shared='^(\.github/workflows/ci\.yml|\.claude-plugin/)'
+          for product in ctx:plugins/ctx/ optimize:plugins/ctx-optimize/ showreel:plugins/showreel/; do
+            name="${product%%:*}"; dir="${product#*:}"
+            if [ "$known" = 0 ] || hit "$shared" || hit "^$dir"; then echo "$name=true" >> "$GITHUB_OUTPUT"
+            else echo "$name=false" >> "$GITHUB_OUTPUT"; fi
+          done
+
   test:
+    needs: changes
+    if: ${{ needs.changes.outputs.ctx == 'true' }}
     name: ${{ matrix.os }} · python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     # Read the source, and nothing else. No token write scope is needed
@@ -154,6 +199,8 @@ jobs:
   # it: the entry-point check below is a ubuntu-only job, so `bin/ctx.cmd`
   # shipped for six versions swallowing every non-zero exit with no coverage.
   windows-wrapper:
+    needs: changes
+    if: ${{ needs.changes.outputs.ctx == 'true' }}
     name: windows wrapper propagates exit codes
     runs-on: windows-latest
     # Read the source, and nothing else. No token write scope is needed
@@ -182,6 +229,8 @@ jobs:
           exit /b 0
 
   ledger:
+    needs: changes
+    if: ${{ needs.changes.outputs.ctx == 'true' }}
     name: ledger self-check
     runs-on: ubuntu-latest
     # Read the source, and nothing else. No token write scope is needed
@@ -234,6 +283,8 @@ jobs:
   # interpreter/OS combinations; ruff reading the same bytes nine times would
   # prove the same thing nine times, so it runs on ubuntu only.
   lint:
+    needs: changes
+    if: ${{ needs.changes.outputs.ctx == 'true' }}
     name: ruff
     runs-on: ubuntu-latest
     # Read the source, and nothing else. A linter needs no write scope.
@@ -274,6 +325,8 @@ jobs:
   # slightly per platform and a floor would then be enforcing whichever
   # runner happened to be least generous.
   coverage:
+    needs: changes
+    if: ${{ needs.changes.outputs.ctx == 'true' }}
     name: coverage floor
     runs-on: ubuntu-latest
     # Read the source, and nothing else.
@@ -425,6 +478,8 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
 
   ctx-optimize:
+    needs: changes
+    if: ${{ needs.changes.outputs.optimize == 'true' }}
     name: ctx-optimize · python ${{ matrix.python }}
     runs-on: ubuntu-latest
     permissions:
@@ -452,6 +507,8 @@ jobs:
   # capture scale, 4K export memory) as artifacts; a failed smoke is a finding, not a build failure, until
   # the design is settled on all three.
   showreel:
+    needs: changes
+    if: ${{ needs.changes.outputs.showreel == 'true' }}
     name: showreel · ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     permissions:
@@ -496,3 +553,21 @@ jobs:
           name: showreel-smoke-${{ matrix.os }}
           path: plugins/showreel/smoke-results/
           if-no-files-found: warn
+
+  # The one required check. A job skipped because its product did not change reports "skipped", and a skipped
+  # matrix job never reports its expanded names, so the individual jobs cannot be required. This passes when
+  # everything that ran passed, and fails on any failure or cancellation.
+  gate:
+    name: ci gate
+    if: always()
+    needs: [changes, test, windows-wrapper, ledger, lint, coverage, scan, manifests, ctx-optimize, showreel]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Everything that ran passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          case " $RESULTS " in *" failure "*|*" cancelled "*) exit 1;; esac
