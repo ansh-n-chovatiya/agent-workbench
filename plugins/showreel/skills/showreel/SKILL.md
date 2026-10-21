@@ -9,6 +9,9 @@ Commands use `showreel` as shorthand for `node <plugin>/scripts/showreel.mjs`.
 `N` is the project slug. Ask for the app URL, topic and desired flow if missing.
 Auto mode is the default for a described flow; use Guide mode for a person-led walkthrough.
 
+First run: if a command says Showreel is not set up, run `showreel setup` once (installs Playwright and
+Chromium, ~300 MB, a few minutes), then `showreel doctor`; continue only when it shows no `fail`.
+
 ## Auto mode (default)
 
 1. Write `plan.json` with a single Bash heredoc or the Write tool. Run make in

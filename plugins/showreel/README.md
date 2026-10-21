@@ -10,16 +10,18 @@ claude plugin marketplace add ansh-n-chovatiya/agent-workbench
 claude plugin install showreel@agent-workbench
 ```
 
-Requirements: Node >= 20.19 (supported: Node 20.19+ in the 20.x line, or
-Node 22.12+), and Chromium. From the installed plugin directory, set up dependencies:
+Requirements: Node >= 20.19 (or 22.12+). Nothing else to install by hand: the first time you use Showreel, run
 
 ```sh
-npm install
-npx playwright install chromium
-npm run build
+node scripts/showreel.mjs setup
 ```
 
-Quick start from that directory (or ask Claude to use `/showreel`):
+(or just ask Claude to use `/showreel`; it runs this for you). It installs Playwright and a Chromium browser once, about
+300 MB, into a folder that survives plugin updates, and finishes with `doctor`. `setup --check` only reports the state.
+Until it has run, every command prints that instruction instead of failing. Developing the plugin itself:
+`npm install && npx playwright install chromium && npm run build`.
+
+Quick start from the plugin directory (or ask Claude to use `/showreel`):
 
 ```sh
 node scripts/showreel.mjs doctor
