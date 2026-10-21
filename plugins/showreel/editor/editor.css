@@ -149,7 +149,8 @@ h2,p {margin:0;}h2 {font-size:15px;font-weight:600;}svg {flex-shrink:0;}
 .scard-menu {height:24px!important;width:24px!important;color:var(--muted);opacity:.6;transition:opacity .15s;}
 .scard:hover .scard-menu,.scard:focus-within .scard-menu {opacity:1;}
 .scard-advanced {margin-top:0;padding-top:0;}
-.scard-adv,.scard-toggle {display:flex;align-items:center;gap:6px;width:100%;max-width:100%;border:0;background:transparent;color:var(--muted);font-size:12px;font-weight:600;padding:5px 0;border-radius:6px;text-align:left;min-width:0;overflow:hidden;}.scard-adv>*,.scard-toggle>* {flex-shrink:0;}.scard-toggle>.scard-title {flex:1 1 auto;min-width:0;}
+.scard-adv,.scard-toggle {display:flex;align-items:center;gap:6px;width:100%;max-width:100%;border:0;background:transparent;color:var(--muted);font-size:12px;font-weight:600;padding:5px 0;border-radius:6px;text-align:left;min-width:0;overflow:hidden;}.scard-adv>*,.scard-toggle>* {flex-shrink:0;}.scard-toggle>.scard-title {flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.scard-toggle {overflow:visible;}
 .scard-adv:hover,.scard-toggle:hover {color:var(--ink);}
 .scard-toggle {padding:0;flex:1;}
 .scard-toggle .scard-title h3 {color:var(--ink);}
