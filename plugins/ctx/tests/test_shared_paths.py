@@ -40,7 +40,7 @@ ALL_MODULES = (
     "findings.py", "footprint.py", "frontmatter.py", "hooks.py", "improve.py", "improve_digest.py", "journal.py", "lock.py", "log.py",
     "migrate.py", "miniyaml.py", "paths.py", "phases.py", "plain.py",
     "plan.py", "preview.py", "preview_html.py", "preview_page.py",
-    "redact.py", "reduce.py", "review.py", "snapshot.py", "spec.py", "state.py",
+    "redact.py", "reduce.py", "review.py", "rules.py", "snapshot.py", "spec.py", "state.py",
     "telemetry.py", "testmap.py", "trust.py", "verify.py", "work.py", "worktree.py",
 )
 

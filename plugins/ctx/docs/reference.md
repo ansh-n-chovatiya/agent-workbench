@@ -163,11 +163,16 @@ or changed, and the files outside the change that still mention the name as a wh
 more than twelve files is summarised). It is a lead for the reviewer to read, not proof of a call; a removed name that is
 still mentioned is the likeliest breakage. Ledger files are never searched. With the key off the package is unchanged.
 
+`ctx rules` keeps the project's rules in `.ctx/rules.md`: one line each, confirmed and general, capped at 40 rules of
+200 characters because every review and dispatch reads them. `--add "text"` records one (refused when the file is
+full, empty or a duplicate), `--remove N` retires one, no flag lists them. Review packages gain a `## Project rules`
+section and the `ctx start` brief a rules block, both only when rules exist. Nothing adds a rule automatically. `ctx review --pr [base]` (the `/ctx:pr-review` command) builds one package for the whole change against a base (default `origin/main`): the rules, the file stat and a capped diff, for a single read-only reviewer pass before merge.
+
 `review.tests_table` is a boolean, default `false`. When enabled, each review package gains a `## Tests by criterion`
 section computed in code (no model) from the test files the change added or modified (`test_*.py`, `*_test.py`,
 `*.test.*`, `*.spec.*`). A test counts for criterion N when its name or body says `AC<N>`, `criterion <N>` or `c<N>`;
 a test with no such tag is matched, marked *guess*, when its name shares two or more significant words with the
-criterion. A criterion with no test reads **NONE**. A test that already existed and was not touched is not shown.
+criterion. A criterion with no test reads **NONE**. When the unit lists `failure_modes`, each mode gets a row too, matched by its phrase in a test's name or body or marked *guess* by a shared word. A test that already existed and was not touched is not shown.
 
 `spec.failure_modes` is a boolean, default `false`. When enabled, `ctx spec` adds a `## Failure modes` checklist
 (input boundaries, error and timeout paths, permissions and ownership, concurrency and repeated calls, existing data and

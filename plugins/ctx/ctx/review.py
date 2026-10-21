@@ -23,8 +23,9 @@ import hashlib
 import json
 import re
 import subprocess
+import time
 
-from . import atomic, callers, plan, redact, snapshot, testmap
+from . import atomic, callers, plan, redact, rules as rules_mod, snapshot, testmap
 
 REVIEW_SUBDIR = "reviews"
 
@@ -288,6 +289,81 @@ def _split_ignored(layout, paths):
     return [p for p in paths if p not in ignored], [p for p in paths if p in ignored]
 
 
+PR_DIFF_BYTES = 200_000
+
+
+def pr_package(layout, base="origin/main"):
+    """`(path, problem)`: one package for the whole change against `base`, for the PR-level pass.
+
+    Built from git (this is the merged change, not one unit's snapshot window): the project rules, the file stat
+    and the diff, capped. `problem` is non-empty when git cannot say.
+    """
+    root = layout.root.parent
+    try:
+        stat = subprocess.run(["git", "diff", "--stat", f"{base}...HEAD"], cwd=str(root),
+                              capture_output=True, text=True, timeout=60)
+        diff = subprocess.run(["git", "diff", "-U10", f"{base}...HEAD"], cwd=str(root),
+                              capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return None, f"git could not be run: {exc}"
+    if stat.returncode != 0 or diff.returncode != 0:
+        return None, f"git could not diff against {base!r}: {(stat.stderr or diff.stderr).strip()[:200]}"
+    body = diff.stdout
+    cut = len(body) > PR_DIFF_BYTES
+    out = ["# PR-level review package", "", f"Base: {base}", ""]
+    rule_lines = rules_mod.block(layout)
+    out += ["## Project rules", "", *(rule_lines or ["(none recorded)"]), "", "## Files changed", "",
+            stat.stdout.rstrip() or "(no changes against the base)", "", "## Diff", "",
+            body[:PR_DIFF_BYTES] + ("\n[diff truncated at the byte cap]" if cut else "")]
+    path = review_dir(layout) / "pr-review.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic.write_text(path, redact.scrub("\n".join(out) + "\n", []))
+    return path, ""
+
+
+def _split_committed(layout, paths, since):
+    """(kept, arrived): `paths` split by whether they arrived by a commit inside the window.
+
+    A unit's work is uncommitted (it is told not to commit), so a changed path that is clean in git and was
+    touched by a commit made after the unit's baseline came in by a pull, a merge or another session's commit,
+    not from this unit. One `git status` and one `git log` per call, never one per path. Fails closed: no
+    repository, no baseline time or any git error excuses nothing.
+    """
+    paths = list(paths)
+    if not paths or not since:
+        return paths, []
+    root = layout.root.parent
+    try:
+        prefix = subprocess.run(["git", "rev-parse", "--show-prefix"], cwd=str(root),
+                                capture_output=True, text=True, timeout=30)
+        status = subprocess.run(["git", "status", "--porcelain", "-z", "-uall"], cwd=str(root),
+                                capture_output=True, text=True, timeout=60)
+        stamp = time.strftime("%Y-%m-%d %H:%M:%S +0000", time.gmtime(float(since)))
+        log = subprocess.run(["git", "log", f"--since={stamp}", "--name-only", "--format=", "-z"],
+                             cwd=str(root), capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError, ValueError, OverflowError):
+        return paths, []
+    if 0 != prefix.returncode or 0 != status.returncode or 0 != log.returncode:
+        return paths, []
+    base = prefix.stdout.strip()
+    dirty = set()
+    fields = status.stdout.split("\0")
+    skip = False
+    for field in fields:
+        if skip:  # the old name of a rename follows its entry
+            skip = False
+            dirty.add(field[len(base):] if base and field.startswith(base) else field)
+            continue
+        if len(field) < 4:
+            continue
+        name = field[3:]
+        dirty.add(name[len(base):] if base and name.startswith(base) else name)
+        skip = field[0] in "RC" or field[1] in "RC"
+    committed = {n[len(base):] if base and n.startswith(base) else n for n in log.stdout.split("\0") if n}
+    arrived = [p for p in paths if p in committed and p not in dirty]
+    return [p for p in paths if p not in set(arrived)], arrived
+
+
 # --------------------------------------------------------------------------- #
 # what a done unit left behind
 # --------------------------------------------------------------------------- #
@@ -446,6 +522,7 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
     # See `wave_scope` for why that widening is the smallest one that works.
     scope, siblings = wave_scope(layout, slug, unit, since=base.get("taken_at"))
     stray, ignored = _split_ignored(layout, snapshot.out_of_scope(delta, scope))
+    stray, arrived = _split_committed(layout, stray, base.get("taken_at"))
     # A path nobody declared has no captured "before", so its bytes were never
     # kept. Fill in the "after" side now that we know which paths those are —
     # otherwise the violation is named but never shown.
@@ -458,13 +535,13 @@ def build(layout, config, unit, slug, root, round_number=1, previous=None):
 
     test_lines = None
     if (config.get("review") or {}).get("tests_table", False):
-        test_lines = testmap.render(
-            unit.doc.list_items("acceptance criteria", "criteria"),
-            testmap.gather(lambda p: snapshot.stored_text(layout, head_key, p),
-                           [p for p in delta.added + delta.modified if not snapshot.is_ledger(p)]))
+        touched_tests = testmap.gather(lambda p: snapshot.stored_text(layout, head_key, p),
+                                       [p for p in delta.added + delta.modified if not snapshot.is_ledger(p)])
+        test_lines = (testmap.render(unit.doc.list_items("acceptance criteria", "criteria"), touched_tests)
+                      + testmap.render_modes(unit.failure_modes, touched_tests))
 
     text = _render(layout, config, unit, slug, delta, stray, base_key, head_key,
-                   round_number, siblings, len(ignored), caller_lines, test_lines)
+                   round_number, siblings, len(ignored), caller_lines, test_lines, len(arrived))
     path = package_path(layout, slug, unit.name, round_number)
     path.parent.mkdir(parents=True, exist_ok=True)
     # `newline=""` writes the string's own "\n" through untranslated. On
@@ -536,6 +613,7 @@ def dispatch_stats(layout, slug, unit, round_number=1):
     delta = snapshot.compare(base, head)
     scope, _siblings = wave_scope(layout, slug, unit, since=base.get("taken_at") if base else None)
     stray, _ignored = _split_ignored(layout, snapshot.out_of_scope(delta, scope))
+    stray, _arrived = _split_committed(layout, stray, base.get("taken_at") if base else None)
     return {
         "bytes": path.stat().st_size,
         "out_of_scope": len(stray),
@@ -561,7 +639,7 @@ def _caller_lines(layout, root, delta, base_key, head_key):
 
 
 def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
-            round_number, siblings=(), ignored=0, caller_lines=None, test_lines=None):
+            round_number, siblings=(), ignored=0, caller_lines=None, test_lines=None, arrived=0):
     patterns = config.get("redact") or []
     out = [
         f"# Review package — unit `{unit.name}` of plan `{slug}`, round {round_number}",
@@ -677,7 +755,14 @@ def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
     if ignored:
         out += ["", f"Not scope-checked: {ignored} git-ignored path(s) changed (logs, caches, "
                     "generated output). They are nobody's source and are not violations."]
+    if arrived:
+        out += ["", f"Not scope-checked: {arrived} path(s) arrived by a git commit during this window (a pull, a "
+                    "merge or another session's commit). They are clean in git, so this unit did not leave them."]
 
+    rule_lines = rules_mod.block(layout)
+    if rule_lines:
+        out += ["", "## Project rules", "", "Confirmed lessons for this project. Check the change against each.", "",
+                *rule_lines]
     if caller_lines is not None:
         out += ["", "## Callers", "", *caller_lines]
     if test_lines is not None:

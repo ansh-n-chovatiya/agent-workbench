@@ -88,3 +88,40 @@ def gather(read_after, paths):
         for name, body in tests_in(read_after(path), path):
             out.append((path, name, body))
     return out
+
+
+def _norm(text):
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", text.lower()).split())
+
+
+def map_modes(modes, tests):
+    """`[(mode, [(test label, guessed)])]`: a test counts for a failure mode when its name or body says the mode's
+    phrase (explicit), or, marked as a guess, when its name shares one distinctive word with it."""
+    rows = []
+    for mode in modes:
+        phrase, words = _norm(mode), _words(mode)
+        found = []
+        for path, name, body in tests:
+            label = f"{path}::{name}"
+            if phrase and phrase in _norm(name + " " + body):
+                found.append((label, False))
+            elif words & _words(name):
+                found.append((label, True))
+        rows.append((mode, found))
+    return rows
+
+
+def render_modes(modes, tests):
+    """Lines for the failure-mode half of the section; empty when the unit lists none."""
+    if not modes:
+        return []
+    out = ["", "Failure modes the unit lists, matched to the tests it added or modified (the phrase in a test's name",
+           "or body, or a *guess* from a shared word). A mode marked NONE has no such test:", ""]
+    for mode, found in map_modes(modes, tests):
+        if not found:
+            out.append(f"- {mode}: **NONE**")
+            continue
+        shown = [f"`{label}`" + (" *guess*" if guessed else "") for label, guessed in found[:MAX_TESTS_PER_ROW]]
+        more = f" and {len(found) - MAX_TESTS_PER_ROW} more" if len(found) > MAX_TESTS_PER_ROW else ""
+        out.append(f"- {mode}: {', '.join(shown)}{more}")
+    return out
