@@ -14,8 +14,14 @@ EMAIL = re.compile(
     r"(?:[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}|localhost)(?![a-zA-Z0-9-])"
 )
 HOME = re.compile(r"/(?:Users|home)/[^/\s\"'`<>:;,()\[\]{}]+")
+# Claude Code names a project folder after its path with every separator turned into a dash (`-Users-you-Desktop-x`),
+# and Windows homes use backslashes: both carry the same account name.
+HOME_DASH = re.compile(r"(?<![A-Za-z0-9])-(Users|home)-([A-Za-z0-9._]+)(?=-|\b)")
+HOME_WIN = re.compile(r"[A-Za-z]:\\{1,2}Users\\{1,2}([^\\/\s\"'`<>:;,()\[\]{}]+)")
 ALLOWED_EMAILS = {"ansh.n.chovatiya@gmail.com", "noreply@anthropic.com"}
 ALLOWED_DOMAINS = {"example.com", "example.org", "localhost", "users.noreply.github.com"}
+# Account names that are obviously placeholders or CI accounts, for the dash-encoded and Windows forms.
+ALLOWED_PLACEHOLDER_NAMES = {"me", "name", "...", "public", "default", "runner~1", "runneradmin"}
 ALLOWED_HOMES = {"/Users/you", "/Users/example", "/Users/victim", "/Users/x", "/home/runner", "/home/user", "/home/you", "/home/victim"}
 
 
@@ -46,6 +52,13 @@ def findings(line, patterns):
             yield "email", email
     for match in HOME.finditer(line):
         if match.group() not in ALLOWED_HOMES:
+            yield "home path", match.group()
+    allowed_names = {home.rsplit("/", 1)[1] for home in ALLOWED_HOMES} | ALLOWED_PLACEHOLDER_NAMES
+    for match in HOME_DASH.finditer(line):
+        if match.group(2) not in allowed_names:
+            yield "home path", match.group()
+    for match in HOME_WIN.finditer(line):
+        if match.group(1).lower() not in {n.lower() for n in allowed_names}:
             yield "home path", match.group()
     for pattern in patterns:
         for match in pattern.finditer(line):

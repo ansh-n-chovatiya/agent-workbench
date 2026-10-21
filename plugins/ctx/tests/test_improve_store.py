@@ -125,8 +125,8 @@ class TestScrub(StoreCase):
         self.assert_scrubbed("see /home/victim/.ssh/config", "victim", "<path>")
 
     def test_AC3_windows_path(self):
-        self.assert_scrubbed(r"opened C:\Users\carol\secret.txt now",
-                             "carol", "<path>")
+        self.assert_scrubbed(r"opened C:\Users\victim\secret.txt now",
+                             "victim", "<path>")
 
     def test_AC3_email(self):
         self.assert_scrubbed("mail dave@example.com about it",

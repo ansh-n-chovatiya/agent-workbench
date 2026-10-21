@@ -48,6 +48,14 @@ key, value = sys.argv[1], sys.argv[2]
 sys.exit(0 if any(isinstance(x, dict) and x.get(key) == value for x in json.load(sys.stdin)) else 1)' "$1" "$2"
 }
 
+# 0. A settings file we cannot read as a JSON object is the user's to fix: say so before changing anything.
+if [ -f "$SETTINGS" ] && ! python3 -c 'import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+sys.exit(0 if isinstance(data, dict) else 1)' "$SETTINGS" 2>/dev/null; then
+  echo "bootstrap: $SETTINGS is not a valid JSON object; fix or move it first (nothing was changed)" >&2
+  exit 1
+fi
+
 # 1. marketplace
 if claude plugin marketplace list --json 2>/dev/null | json_has name "$MARKET"; then
   say "ok: marketplace $MARKET is already added"
@@ -57,7 +65,12 @@ fi
 
 # 2. plugins
 for p in $PLUGINS; do
-  if claude plugin list --json 2>/dev/null | json_has id "$p@$MARKET"; then
+  # Installed for this user, not merely present at some project scope or switched off: a project-scope copy is
+  # missing in every other project.
+  if claude plugin list --json 2>/dev/null | python3 -c 'import json, sys
+pid = sys.argv[1]
+sys.exit(0 if any(isinstance(x, dict) and x.get("id") == pid and x.get("scope", "user") == "user"
+                  and x.get("enabled", True) is not False for x in json.load(sys.stdin)) else 1)' "$p@$MARKET"; then
     say "ok: $p@$MARKET is already installed"
   else
     act "install $p@$MARKET" claude plugin install "$p@$MARKET" -s user
@@ -82,10 +95,12 @@ sys.exit(0 if "statusLine" in json.load(open(sys.argv[1])) else 1)' "$SETTINGS"
 }
 
 add_statusline() {
-  python3 - "$SETTINGS" "$BIN statusline" <<'PY'
-import json, os, shutil, sys, time
-path, command = sys.argv[1], sys.argv[2]
+  python3 - "$SETTINGS" "$BIN" <<'PY'
+import json, os, shlex, shutil, sys, time
+path, binary = sys.argv[1], sys.argv[2]
+command = shlex.quote(binary) + " statusline"
 data = {}
+real = os.path.realpath(path)  # a symlinked settings file stays a symlink; its target is what we update
 if os.path.exists(path):
     shutil.copy2(path, path + ".bak-bootstrap-" + time.strftime("%Y%m%d%H%M%S"))
     with open(path, encoding="utf-8") as fh:
@@ -93,12 +108,15 @@ if os.path.exists(path):
 if "statusLine" in data:
     sys.exit(0)
 data["statusLine"] = {"type": "command", "command": command, "refreshInterval": 10}
-os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-tmp = path + ".tmp"
-with open(tmp, "w", encoding="utf-8") as fh:
+os.makedirs(os.path.dirname(real) or ".", exist_ok=True)
+mode = (os.stat(real).st_mode & 0o7777) if os.path.exists(real) else 0o600
+tmp = real + ".tmp"
+fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+with os.fdopen(fd, "w", encoding="utf-8") as fh:
     json.dump(data, fh, indent=2)
     fh.write("\n")
-os.replace(tmp, path)
+os.chmod(tmp, mode)
+os.replace(tmp, real)
 PY
 }
 

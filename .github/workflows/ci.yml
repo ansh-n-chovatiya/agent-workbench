@@ -7,10 +7,11 @@ on:
     branches: [main]
   pull_request:
 
-# A newer push to the same pull request replaces the older run; main is never cancelled, so every merged commit
-# still gets a complete result.
+# A newer push to the same pull request replaces the older run. Every main commit gets its own group, because GitHub
+# also cancels a *pending* run in a shared group when a newer one queues, and the path filter diffs each push against
+# its own parent: a cancelled run would leave its changes untested by the Windows jobs that run only on main.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Every `uses:` below is pinned to a full commit SHA rather than a mutable
@@ -556,7 +557,7 @@ jobs:
 
   # The one required check. A job skipped because its product did not change reports "skipped", and a skipped
   # matrix job never reports its expanded names, so the individual jobs cannot be required. This passes when
-  # everything that ran passed, and fails on any failure or cancellation.
+  # everything that ran passed, and fails on anything that is not a success or a skip.
   gate:
     name: ci gate
     if: always()
@@ -564,10 +565,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # No checkout here, so the workflow-wide `plugins/ctx` default would be a folder that does not exist.
+    defaults:
+      run:
+        working-directory: .
     steps:
       - name: Everything that ran passed
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
           echo "results: $RESULTS"
-          case " $RESULTS " in *" failure "*|*" cancelled "*) exit 1;; esac
+          # Only success and skipped pass: a failed, cancelled or timed-out job (a matrix leg that hung and was
+          # cancelled once reported as passing here) must never read as green.
+          for result in $RESULTS; do
+            case "$result" in success|skipped) ;; *) echo "not green: $result"; exit 1;; esac
+          done

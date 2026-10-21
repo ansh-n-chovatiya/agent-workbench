@@ -106,6 +106,60 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn("left alone", out.stdout)
         self.assertEqual(self.settings()["statusLine"]["command"], "mine")
 
+    def test_a_symlinked_private_settings_file_keeps_its_mode_and_link(self):
+        self.config.mkdir()
+        target = self.tmp / "dotfiles-settings.json"
+        target.write_text(json.dumps({"env": {"KEY": "secret"}}))
+        target.chmod(0o600)
+        (self.config / "settings.json").symlink_to(target)
+        out = self.run_script("--yes")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertTrue((self.config / "settings.json").is_symlink())
+        self.assertEqual(oct(target.stat().st_mode & 0o777), "0o600")
+        self.assertIn("statusLine", json.loads(target.read_text()))
+        self.assertEqual(json.loads(target.read_text())["env"], {"KEY": "secret"})
+
+    def test_a_project_scope_or_disabled_copy_does_not_count_as_installed(self):
+        (self.state / "markets.json").write_text(
+            '[{"name":"agent-workbench","installLocation":"%s/clone"}]' % self.state)
+        (self.state / "plugins.json").write_text(json.dumps([
+            {"id": "ctx@agent-workbench", "scope": "project", "enabled": True},
+            {"id": "ctx-optimize@agent-workbench", "scope": "user", "enabled": False}]))
+        out = self.run_script()
+        self.assertIn("would: install ctx@agent-workbench", out.stdout)
+        self.assertIn("would: install ctx-optimize@agent-workbench", out.stdout)
+
+    def test_control_a_user_scope_enabled_copy_counts_as_installed(self):
+        (self.state / "markets.json").write_text(
+            '[{"name":"agent-workbench","installLocation":"%s/clone"}]' % self.state)
+        (self.state / "plugins.json").write_text(json.dumps([
+            {"id": "ctx@agent-workbench", "scope": "user", "enabled": True},
+            {"id": "ctx-optimize@agent-workbench", "scope": "user", "enabled": True}]))
+        out = self.run_script()
+        self.assertIn("ok: ctx@agent-workbench is already installed", out.stdout)
+
+    def test_the_status_line_command_is_shell_quoted(self):
+        spaced = self.tmp / "My Stuff"
+        (self.state / "markets.json").write_text(
+            json.dumps([{"name": "agent-workbench", "installLocation": str(spaced)}]))
+        out = self.run_script("--yes")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        command = self.settings()["statusLine"]["command"]
+        import shlex
+        self.assertEqual(shlex.split(command)[-1], "statusline")
+        self.assertEqual(shlex.split(command)[0], f"{spaced}/plugins/ctx-optimize/bin/ctx-optimize")
+
+    def test_a_malformed_settings_file_is_a_clear_message_before_anything_changes(self):
+        self.config.mkdir()
+        (self.config / "settings.json").write_text('{"theme": "dark",}')
+        for args in ((), ("--yes",)):
+            out = self.run_script(*args)
+            self.assertEqual(out.returncode, 1)
+            self.assertIn("not a valid JSON object", out.stderr)
+            self.assertNotIn("Traceback", out.stderr + out.stdout)
+        self.assertEqual(self.mutating_calls(), [])
+        self.assertEqual([p.name for p in self.config.glob("*.bak-bootstrap-*")], [])
+
     def test_bad_option_and_missing_claude(self):
         self.assertEqual(self.run_script("--nope").returncode, 2)
         env = dict(self.env, PATH="/usr/bin:/bin")
