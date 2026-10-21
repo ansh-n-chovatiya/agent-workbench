@@ -243,7 +243,7 @@ every slash command costs always-on context.
 | `ctx preview [name]` | Render the plan as [a page a non-technical reviewer can read](docs/reference.md#the-preview-page); `--check`, `--data`, `--open`, `--scaffold-plain` | `/ctx:preview` |
 | `ctx start [--wave N] [--worktree]` | Dispatch brief for the next wave; `--rebaseline`/`--reseal` a single unit | `/ctx:start` |
 | `ctx snapshot «unit» [--phase P]` | Capture a content snapshot by hand; `ctx start` takes the `before` phase itself | |
-| `ctx review «unit» [--round N]` | Build the review package: diff, scope violations, stat summary | `/ctx:review` |
+| `ctx review «unit» [--round N] [--with codex\|gemini]` | Build the review package: diff, scope violations, stat summary; `--with` asks an installed, switched-on second reviewer | `/ctx:review` |
 | `ctx findings «unit»` | List or update a unit's review findings; `--add`, `--set` | `/ctx:findings` |
 | `ctx phase «unit» [phase]` | Inspect a unit's phase gate, or record one phase against it | `/ctx:phase` |
 | `ctx merge «unit» [--skip-gate]` | Land a unit's worktree branch after its gate passes | `/ctx:merge` |

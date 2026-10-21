@@ -670,7 +670,9 @@ class TestDoneGate(Fixture):
         data = miniyaml.loads(self.layout.config.read_text(encoding="utf-8"))
         data["gate"]["enabled"] = False
         self.layout.config.write_text(miniyaml.dumps(data) + "\n", encoding="utf-8")
-        self.assertTrue(self.layout.config.read_text(encoding="utf-8").count("enabled: false") == 1)
+        # Only the gate's own switch was flipped; other blocks may legitimately carry `enabled: false`
+        # (the optional external reviewers ship off), so count the gate's, not the file's.
+        self.assertIs(miniyaml.loads(self.layout.config.read_text(encoding="utf-8"))["gate"]["enabled"], False)
 
         self.assertIsNone(self.stop())
 

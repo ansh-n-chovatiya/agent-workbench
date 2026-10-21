@@ -42,14 +42,14 @@ from . import (
 #     unit 04's six one-line detector/advice aliases. They were reachable as
 #     `cli.<name>` before the move and they still are.
 from .commands import (  # noqa: F401
-    cmd_ask, cmd_briefing, cmd_budget, cmd_ci, cmd_decide, cmd_digest, cmd_doctor, cmd_drop, cmd_escalate,
-    cmd_findings, cmd_handoff, cmd_improve, cmd_infer, cmd_init, cmd_journal, cmd_level, cmd_list, cmd_load,
-    cmd_merge, cmd_migrate, cmd_miss, cmd_next, cmd_phase, cmd_plan, cmd_plan_check, cmd_plan_unit, cmd_preview,
-    cmd_promote, cmd_prune, cmd_question, cmd_resolve, cmd_resume, cmd_review, cmd_rules, cmd_save, cmd_snapshot,
-    cmd_spec, cmd_spec_ready, cmd_start, cmd_status, cmd_task, cmd_telemetry, cmd_trust, cmd_unit, cmd_verify,
-    cmd_worktree, ADVISORY, DIGEST_IGNORE_LINE, _ADVISED, _PLAN_ARGUMENT, _RENDER, _advise, _availability,
-    _detect_profile, _echo, _emit, _env_flag, _next_action, _plan_or_report, _python_exe, _recent_hook_errors,
-    _runnable, _set_unit_status, _strict, _verify_candidates, _warn, duplicate_adrs,
+    cmd_ask, cmd_briefing, cmd_budget, cmd_ci, cmd_decide, cmd_digest, cmd_doctor, cmd_drop, cmd_escalate, cmd_findings,
+    cmd_handoff, cmd_improve, cmd_infer, cmd_init, cmd_journal, cmd_level, cmd_list, cmd_load, cmd_merge, cmd_migrate,
+    cmd_miss, cmd_next, cmd_phase, cmd_plan, cmd_plan_check, cmd_plan_unit, cmd_preview, cmd_promote, cmd_prune,
+    cmd_question, cmd_resolve, cmd_resume, cmd_review, cmd_rules, cmd_save, cmd_snapshot, cmd_spec, cmd_spec_ready,
+    cmd_start, cmd_status, cmd_task, cmd_telemetry, cmd_trust, cmd_unit, cmd_verify, cmd_worktree, ADVISORY,
+    DIGEST_IGNORE_LINE, _ADVISED, _PLAN_ARGUMENT, _RENDER, _advise, _availability, _detect_profile, _echo, _emit,
+    _env_flag, _next_action, _plan_or_report, _python_exe, _recent_hook_errors, _runnable, _set_unit_status, _strict,
+    _verify_candidates, _warn, duplicate_adrs,
 )
 
 
@@ -324,7 +324,7 @@ def commands():
             "review", "build the review package for a unit", cmd_review,
             NAME,
             PLAN,
-            flag("--round", type=int, default=None), flag("--pr", action="store_true"),
+            flag("--round", type=int, default=None), flag("--pr", action="store_true"), flag("--with", choices=["codex", "gemini"], default=None),
         ),
         command(
             "findings", "list or update a unit's review findings", cmd_findings,

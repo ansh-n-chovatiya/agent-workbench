@@ -49,6 +49,9 @@ DEFAULTS = {
     # blocked units), scrubbed and written to ~/.agent-workbench/improve/,
     # outside any repo. Passive and local-only; nothing is sent anywhere.
     "improve": {"enabled": True},
+    # Optional second reviewers, used only by `ctx review <unit> --with codex|gemini`, and only when the tool is
+    # installed and switched on here. Off: the review package contains code, and this sends it to that provider.
+    "external": {"timeout_seconds": 300, "codex": {"enabled": False}, "gemini": {"enabled": False}},
     "gate": {
         "enabled": True,
         "max_attempts": 3,

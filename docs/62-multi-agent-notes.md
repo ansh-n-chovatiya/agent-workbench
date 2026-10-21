@@ -29,7 +29,18 @@ A terminal multiplexer that shows each pane's state (herdr, tmux) is enough: one
 one per agent. Keep each agent on a separate unit with disjoint `owns`; if two agents must touch one file it is one
 unit. Use `ctx start --worktree` only when you want physical separation; it is off by default.
 
-## What would make this automatic
+## The built flow (2026-10-21): `ctx review <unit> --with codex|gemini`
 
-Used by hand at least a few times on real changes, with the findings recorded the same way and the improvement digest
-showing that the second reviewer catches things the first misses. Until then, no wrapper, no hooks.
+Optional and off by default. It runs only when all three are true: you typed `--with`, the tool is installed
+(`codex` or `gemini` on the PATH), and `external.<name>.enabled: true` is in `.ctx/ctx.yaml`. If something is missing
+ctx says what (not installed, with the install command; or installed but off, with the line to add and a reminder that
+the package contains code and goes to that provider), and the normal review carries on.
+
+When it runs, the tool gets the package on stdin, read-only, in an empty temporary directory (never the repository),
+with a timeout (`external.timeout_seconds`, 300). Its `FINDING | severity | file:line | summary | why` lines become
+**low-confidence** findings from that source, so they cannot block a unit: confirm one with
+`ctx findings <unit> --set ID --confidence high`, dispute the rest. The raw answer is kept next to the package.
+`ctx doctor` shows the tools once any is switched on. Each run also writes an `external-review` record to the
+improvement log, so after a few runs the digest can show whether the second reviewer earns its cost.
+
+Builders (Codex or Gemini doing a unit's work) stay manual, as described above.
