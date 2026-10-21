@@ -88,3 +88,49 @@ class TestSurfaces(WaveFixture):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPrPackage(WaveFixture):
+    """`ctx review --pr`: the whole change against a base, with the project rules, from real git."""
+
+    def setUp(self):
+        super().setUp()
+        import shutil
+        import subprocess
+        shutil.rmtree(self.root / ".git", ignore_errors=True)
+        self.git = lambda *a: subprocess.run(["git", "-c", "user.email=a@example.com", "-c", "user.name=a", *a],
+                                             cwd=str(self.root), check=True, capture_output=True)
+        self.git("init", "-q", "-b", "main")
+        self.write(".gitignore", ".ctx/\n")
+        self.write("a.py", "a = 1\n")
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "base")
+        self.git("checkout", "-q", "-b", "topic")
+        self.write("a.py", "a = 2\n")
+        self.git("commit", "-qam", "change")
+
+    def test_the_package_has_rules_stat_and_diff(self):
+        rules.add(self.layout, "never swallow an error")
+        path, problem = review_mod.pr_package(self.layout, "main")
+        self.assertEqual(problem, "")
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("1. never swallow an error", text)
+        self.assertIn("a.py", text)
+        self.assertIn("+a = 2", text)
+
+    def test_control_an_unknown_base_is_a_problem_not_a_package(self):
+        path, problem = review_mod.pr_package(self.layout, "no-such-ref")
+        self.assertIsNone(path)
+        self.assertIn("no-such-ref", problem)
+
+    def test_the_command_prints_the_path_and_refuses_a_bad_base(self):
+        from ctx import cli
+        import io
+        import contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = cli.main(["--cwd", str(self.root), "review", "--pr", "main"])
+        self.assertEqual(code, 0)
+        self.assertTrue(buf.getvalue().strip().endswith("pr-review.md"))
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(cli.main(["--cwd", str(self.root), "review", "--pr", "no-such-ref"]), 1)

@@ -2507,6 +2507,13 @@ def cmd_snapshot(args):
 def cmd_review(args):
     """Build the review package for a unit. Spawns no reviewer itself."""
     layout, config = _loaded(args)
+    if args.pr:  # the whole change, once, before merge; `name` is the base ref
+        path, problem = review_mod.pr_package(layout, args.name or "origin/main")
+        if problem:
+            _warn(problem)
+            return 1
+        _echo(str(path))
+        return 0
     slug, unit = _unit_or_report(layout, args, "review")
     if unit is None:
         return 0

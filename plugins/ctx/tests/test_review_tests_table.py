@@ -65,6 +65,27 @@ class TestRender(unittest.TestCase):
         self.assertIn("nothing to map", "\n".join(testmap.render([], [("t.py", "test_x", "")])))
 
 
+class TestFailureModes(unittest.TestCase):
+    TESTS = [("t.py", "test_input_boundaries_empty_list", ""),
+             ("t.py", "test_other", "# failure mode: error and timeout paths\n"),
+             ("t.py", "test_cleanup_runs", "")]
+
+    def rows(self, modes):
+        return dict(testmap.map_modes(modes, self.TESTS))
+
+    def test_the_phrase_in_name_or_body_is_explicit_and_a_shared_word_is_a_guess(self):
+        rows = self.rows(["input boundaries", "error and timeout paths", "cleanup of resources"])
+        self.assertEqual(rows["input boundaries"], [("t.py::test_input_boundaries_empty_list", False)])
+        self.assertEqual(rows["error and timeout paths"], [("t.py::test_other", False)])
+        self.assertEqual(rows["cleanup of resources"], [("t.py::test_cleanup_runs", True)])
+
+    def test_control_a_mode_with_no_test_reads_none_and_no_modes_render_nothing(self):
+        self.assertEqual(self.rows(["permissions and ownership"])["permissions and ownership"], [])
+        self.assertIn("- permissions and ownership: **NONE**",
+                      "\n".join(testmap.render_modes(["permissions and ownership"], self.TESTS)))
+        self.assertEqual(testmap.render_modes([], self.TESTS), [])
+
+
 class TestInThePackage(WaveFixture):
     def setUp(self):
         super().setUp()
@@ -97,6 +118,16 @@ class TestInThePackage(WaveFixture):
     def test_on_with_no_test_file_changed_says_so(self):
         body = "\n".join(section_lines(self.package(True), "Tests by criterion"))
         self.assertIn("No test file was added or modified", body)
+
+    def test_on_a_units_failure_modes_get_their_own_rows_in_the_package(self):
+        unit = self.unit_a
+        unit.doc.meta["failure_modes"] = ["input boundaries", "cleanup of resources"]
+        unit.doc.write(unit.path)
+        self.unit_a = plan_mod.Unit(unit.path, frontmatter.read(unit.path))
+        self.write("tests/test_alpha.py", "def test_input_boundaries_empty():\n    pass\n")
+        body = "\n".join(section_lines(self.package(True), "Tests by criterion"))
+        self.assertIn("- input boundaries: `tests/test_alpha.py::test_input_boundaries_empty`", body)
+        self.assertIn("- cleanup of resources: **NONE**", body)
 
     def test_control_off_the_package_has_no_such_section(self):
         self.write("tests/test_alpha.py", "def test_empty():\n    # AC1\n    pass\n")

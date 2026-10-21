@@ -185,6 +185,7 @@ both, end to end: [Walkthroughs](docs/walkthroughs.md).
 | `/ctx:start [--wave N] [--worktree] [--rebaseline UNIT] [--reseal UNIT]` | **L2** — dispatch brief for the next wave |
 | `/ctx:phase «unit» [phase]` | **L2** — inspect or advance a unit's phase gate |
 | `/ctx:review «unit» [--round N]` | **L2** — adversarial review of a completed unit, from a snapshot diff |
+| `/ctx:pr-review [base]` | One read-only review of the whole change (plus the project rules) before merge |
 | `/ctx:findings «unit»` | **L2** — findings raised against a unit; `--add`/`--set` to record or resolve one |
 | `/ctx:merge «unit»` | **L2** — land a unit's worktree branch after its gate passes |
 | `/ctx:decide «title»` | Record an ADR |

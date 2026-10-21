@@ -324,7 +324,7 @@ def commands():
             "review", "build the review package for a unit", cmd_review,
             NAME,
             PLAN,
-            flag("--round", type=int, default=None),
+            flag("--round", type=int, default=None), flag("--pr", action="store_true"),
         ),
         command(
             "findings", "list or update a unit's review findings", cmd_findings,

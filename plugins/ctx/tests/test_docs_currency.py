@@ -422,8 +422,9 @@ class SplitTests(unittest.TestCase):
     #
     # 307 since `ctx improve` and `ctx miss`: two CLI-table rows (the table test
     # needs one row per subcommand), so the cap moved by exactly those two lines;
-    # 308 since `ctx rules`: one more row, one more line.
-    CAP = 308
+    # 308 since `ctx rules`: one more row, one more line. 309 since
+    # `/ctx:pr-review`: its slash-command row.
+    CAP = 309
 
     def test_the_readme_stays_short_enough_to_read(self):
         lines = len(read(README).splitlines())
