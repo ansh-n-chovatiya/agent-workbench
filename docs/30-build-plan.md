@@ -113,6 +113,8 @@ a second run changes nothing.
 
 ## Phase 6: optional agents
 
+**Status 2026-10-21: manual notes written** (`docs/62-multi-agent-notes.md`; stubs exist). Automatic calls stay unbuilt per D6.
+
 herdr layout notes, `AGENTS.md` / `GEMINI.md` stubs, manual `codex review` flow that records into
 `ctx findings`. Automatic cross-agent calls only if used by hand at least a few times first (D6).
 
