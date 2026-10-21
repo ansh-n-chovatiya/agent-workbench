@@ -167,7 +167,7 @@ class TestBriefing(DigestFixture):
         self.rec("forced-done", "overrode the gate", 3)
         self.build()
         line = improve_digest.briefing_line(self.layout, self.cfg())
-        shown = "~" + str(improve_digest.digest_path(self.layout))[len(str(Path.home())):]
+        shown = "~/" + improve_digest.digest_path(self.layout).relative_to(Path.home()).as_posix()
         self.assertIn(shown, line)
         self.assertIn("smallest change", line)
         self.assertIn("itself changes only through review and the owner's merge", line)
