@@ -25,7 +25,7 @@ import time
 import traceback
 
 from . import (
-    briefing, bundle, config as config_mod, frontmatter, improve, journal, log, paths,
+    briefing, bundle, config as config_mod, frontmatter, improve, improve_digest, journal, log, paths,
     plan as plan_mod, state, telemetry, verify, work,
 )
 
@@ -198,7 +198,11 @@ def on_session_start(layout, config, payload):
     if session and session != current.get("last_session"):
         state.update(layout, last_session=session)
         current["last_session"] = session
-    return briefing.build(layout, config, current)
+    improve_digest.settle(layout, config, session)  # fail-open; a digest shown to an earlier session is now seen
+    text = briefing.build(layout, config, current)
+    if improve_digest.LINE_MARK in text:  # only a digest the session was actually shown counts as shown
+        improve_digest.mark_shown(layout, config, session)
+    return text
 
 
 def on_user_prompt_submit(layout, config, payload):
@@ -287,6 +291,7 @@ def on_pre_compact(layout, config, payload):
 def on_session_end(layout, config, payload):
     journal.append(layout, config, "session", "end", str(payload.get("reason") or ""))
     journal.write_digest(layout, config)
+    improve_digest.refresh(layout, config)  # fail-open, bounded: only when the log is newer than the digest
     return ""
 
 

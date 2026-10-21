@@ -966,6 +966,36 @@ SURFACE = {
              'escalate advisory conditions to exit 1'),
         ),
     ),
+    'improve': (
+        'build the improvement digest and print its path',
+        'cmd_improve',
+        (
+            ('-h/--help', 'help', 0, None, '<SUPPRESS>', None, None, False,
+             None, '_HelpAction',
+             'show this help message and exit'),
+            ('--backfill', 'backfill', 0, True, False, None, None, False,
+             None, '_StoreTrueAction',
+             're-scan the findings ledgers first'),
+            ('--strict', 'strict', 0, True, '<SUPPRESS>', None, None, False,
+             None, '_StoreTrueAction',
+             'escalate advisory conditions to exit 1'),
+        ),
+    ),
+    'miss': (
+        'record something ctx got wrong',
+        'cmd_miss',
+        (
+            ('-h/--help', 'help', 0, None, '<SUPPRESS>', None, None, False,
+             None, '_HelpAction',
+             'show this help message and exit'),
+            ('<positional>', 'rest', '*', None, None, None, None, False, None,
+             '_StoreAction',
+             'what went wrong'),
+            ('--strict', 'strict', 0, True, '<SUPPRESS>', None, None, False,
+             None, '_StoreTrueAction',
+             'escalate advisory conditions to exit 1'),
+        ),
+    ),
 }
 
 
@@ -1020,7 +1050,7 @@ class TestTheSurfaceIsUnchanged(unittest.TestCase):
     def test_the_same_commands_in_the_same_order(self):
         live = _live()
         self.assertEqual(list(live), list(SURFACE))
-        self.assertEqual(len(live), 43)
+        self.assertEqual(len(live), 45)
 
     def test_every_command_is_unchanged(self):
         live = _live()

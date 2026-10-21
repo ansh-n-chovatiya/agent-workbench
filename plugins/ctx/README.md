@@ -256,6 +256,8 @@ every slash command costs always-on context.
 | `ctx ci [--plan X]` | Every headless check in one exit code | |
 | `ctx unit «name» [--status S]` | Focus a unit, or record its outcome | |
 | `ctx handoff [name]` | Write a resume packet for a session, person or model | `/ctx:handoff` |
+| `ctx improve [--backfill]` | Build the private improvement digest now (it is built automatically at session end) | |
+| `ctx miss «text»` | Log a mistake by hand in the improvement log (optional; capture is automatic) | |
 
 Global flags: `--cwd PATH` resolves the ledger from elsewhere; `--version`;
 `--strict` escalates the three advisory conditions to exit 1; `--json` on the

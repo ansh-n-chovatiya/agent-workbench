@@ -517,7 +517,7 @@ class TestTheFlagOnlyChangesRendering(Scenario):
         Rejected by argparse, before anything runs — which is why this is a
         raised `SystemExit` rather than a return code.
         """
-        for name in ("briefing", "save", "start"):
+        for name in ("briefing", "save", "start", "improve", "miss"):
             with self.subTest(command=name):
                 self.assertNotIn(name, cli.JSON_COMMANDS)
                 with self.assertRaises(SystemExit) as raised:
