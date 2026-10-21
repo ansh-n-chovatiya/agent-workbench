@@ -86,10 +86,6 @@ class TestSurfaces(WaveFixture):
         self.assertIn("1. never swallow an error", with_rules)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestPrPackage(WaveFixture):
     """`ctx review --pr`: the whole change against a base, with the project rules, from real git."""
 
@@ -172,3 +168,7 @@ class TestPlanUnitName(Fixture):
         self.assertEqual(code, 1)
         self.assertIn("01-kebab-case", out)
         self.assertEqual(self.cli("plan-unit", "01-core", "--plan", "nm")[0], 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

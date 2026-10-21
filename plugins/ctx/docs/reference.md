@@ -186,7 +186,7 @@ section and the `ctx start` brief a rules block, both only when rules exist. Not
 
 `review.tests_table` is a boolean, default `true` (since 2026-10-21). When enabled, each review package gains a `## Tests by criterion`
 section computed in code (no model) from the test files the change added or modified (`test_*.py`, `*_test.py`,
-`*.test.*`, `*.spec.*`). A test counts for criterion N when its name or body says `AC<N>`, `criterion <N>` or `c<N>`;
+`*.test.js|jsx|mjs|cjs|ts|tsx`, `*.spec.*` likewise). A test counts for criterion N when its name or body says `AC<N>`, `criterion <N>` or `c<N>`;
 a test with no such tag is matched, marked *guess*, when its name shares two or more significant words with the
 criterion. A criterion with no test reads **NONE**. When the unit lists `failure_modes`, each mode gets a row too, matched by its phrase in a test's name or body or marked *guess* by a shared word. A test that already existed and was not touched is not shown.
 

@@ -111,12 +111,12 @@ DEFAULTS = {
         # everywhere at once instead of in whichever call site remembered to
         # check.
         "tiers": ["haiku", "sonnet", "opus"],
-        # A round that failed on its assigned tier escalates to the next one
-        # by default: the working assumption is that a failure is more likely
-        # a capability gap than bad luck, and silently re-running the same
-        # model is the more expensive way to find that out. A project that
-        # trusts its own judged-verify prompts enough to prefer a flat retry
-        # can turn this off here without touching the dispatcher.
+        # `escalate_on_failed_round` (off by default) moves a failed round to
+        # the next tier: the working assumption is that a failure is more
+        # likely a capability gap than bad luck, and silently re-running the
+        # same model is the more expensive way to find that out. A project
+        # that prefers that can turn it on here without touching the
+        # dispatcher.
         "escalate_on_failed_round": False,
     },
     # How `complexity-score` turns a unit's own frontmatter into a number, and

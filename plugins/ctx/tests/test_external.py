@@ -166,6 +166,17 @@ class TestRun(PathCase):
         self.assertEqual(rows, [])
         self.assertIn("did not answer within 1s", problem)
 
+    def test_the_configured_timeout_is_the_one_used(self):
+        self.assertEqual(external.timeout_seconds({"external": {"timeout_seconds": 7}}), 7)
+        self.assertEqual(external.timeout_seconds({"external": {"timeout_seconds": 99999}}), 900)
+        self.assertEqual(external.timeout_seconds({}), external.DEFAULT_TIMEOUT)
+        fake(self.bin, "gemini", "import time\ntime.sleep(5)\nprint('NONE')\n")
+        self.switch_on("gemini")
+        _rows, _raw, problem = external.run_review({"external": {"timeout_seconds": 1}}, "gemini", "x")
+        self.assertIn("within 1s", problem)  # not the 300s default
+        rows, _raw, problem = external.run_review({"external": {"timeout_seconds": 30}}, "gemini", "x")
+        self.assertEqual((rows, problem), ([], ""))
+
     def test_control_a_failing_tool_with_no_output_is_a_message(self):
         fake(self.bin, "gemini", "import sys\nsys.stderr.write('auth needed\\n')\nsys.exit(3)\n")
         self.switch_on("gemini")

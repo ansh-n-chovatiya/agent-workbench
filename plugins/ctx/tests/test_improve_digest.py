@@ -268,6 +268,15 @@ class TestCommands(DigestFixture):
         self.assertEqual(code, 1)
         self.assertFalse(improve_digest.digest_path(self.layout).exists())
 
+    def test_the_second_reviewer_and_review_round_records_reach_the_digest(self):
+        self.rec("external-review", "codex returned 2 finding(s)", 5)
+        self.rec("rounds", "2 review round(s)", 5)
+        text = self.build()
+        self.assertIn("Second reviewer runs", text)
+        self.assertIn("Review rounds", text)
+        self.assertIn("external-review: seen 5 time(s)", text)
+        self.assertIn("rounds: seen 5 time(s)", text)
+
 
 class TestReviewFindings(DigestFixture):
     """Round-1 review: placement, honest "shown", and no resurfacing on counts."""

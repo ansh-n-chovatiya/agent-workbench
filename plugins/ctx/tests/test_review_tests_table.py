@@ -1,7 +1,7 @@
 """The review package can say which acceptance criterion has a test and which has none (D12, phase 4).
 
 Computed in code at zero model cost, from the test files the change added or modified. It is opt-in
-(`review.tests_table`, default off, D20) and, when off, leaves the package as it was. The controls that matter: a
+(`review.tests_table`, on by default since 2026-10-21, D20) and, when switched off, leaves the package as it was. The controls that matter: a
 criterion with no test must read NONE, and a changed non-test file must never be mistaken for a test.
 """
 import sys

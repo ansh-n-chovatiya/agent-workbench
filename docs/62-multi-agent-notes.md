@@ -15,7 +15,7 @@ it finds goes into the same findings file, so the done-gate and the improvement 
    why`, no edits. Run it in its own terminal; paste nothing secret.
 3. Record each finding you accept: `ctx findings <unit> --add <severity> --summary "..." --where file:line`.
    Mark a finding you reject `disputed` with a ruling. Add `--confidence low` for a guess.
-4. Fix, then `ctx review <unit> --round 2`. The usual two-round cap applies.
+4. Fix, then `ctx review <unit> --round 2`. (The two-round cap only applies when `review.stop_rule` is on; it ships off.)
 
 ## Codex or Gemini as a builder
 

@@ -3,7 +3,7 @@ description: One read-only review of a whole change before merge
 allowed-tools: Bash, Read, Task
 argument-hint: [base-ref, default origin/main]
 ---
-!`"${CLAUDE_PLUGIN_ROOT}/bin/ctx" review --pr $ARGUMENTS || true`
+!`"${CLAUDE_PLUGIN_ROOT}/bin/ctx" review --pr "$ARGUMENTS" || true`
 
 The line above names a **PR-level review package**: the whole change against its base, plus the project rules.
 Do not read it here; that is the reviewer's context.
