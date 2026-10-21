@@ -218,6 +218,31 @@ def seal_path(layout, slug, unit_name):
     return store_dir(layout) / f"{_safe(f'{slug}@{unit_name}')}.json"
 
 
+def done_stamp_path(layout, slug, unit_name):
+    return store_dir(layout) / f"{_safe(f'{slug}@{unit_name}')}.done"
+
+
+def stamp_done(layout, slug, unit_name, present=True):
+    """Record, or clear, that ctx itself (not a hand edit of the unit file) marked this unit done.
+
+    `status` is deliberately not sealed (a runner holds Write over its unit file), so the status field alone proves
+    nothing; this stamp is what `ctx ci` checks before it trusts "done was gated when it was marked".
+    """
+    path = done_stamp_path(layout, slug, unit_name)
+    try:
+        if present:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            atomic.write_text(path, str(time.time()))
+        elif path.exists():
+            path.unlink()
+    except OSError:
+        pass
+
+
+def is_done_stamped(layout, slug, unit_name):
+    return done_stamp_path(layout, slug, unit_name).is_file()
+
+
 def load_seal(layout, slug, unit_name):
     """The recorded seal, or None when this unit was never dispatched by a ctx
     that knew how to record one."""

@@ -32,6 +32,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -276,6 +277,16 @@ def is_binary(data):
     return b"\x00" in data[:8192]
 
 
+def _git_head(root):
+    """The commit the tree was at, or "" (no repository, no commits, git missing). Lets a later review tell work
+    that arrived by a commit (a pull, another session) from work left uncommitted."""
+    try:
+        done = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(root), capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
 def capture(layout, config, key, root, content_paths=(), force=False):
     """Fingerprint the tree, storing bytes for the declared scope. Returns the
     manifest it wrote — or the one that was already there.
@@ -339,6 +350,7 @@ def capture(layout, config, key, root, content_paths=(), force=False):
         "key": str(key),
         "root": str(root),
         "taken_at": time.time(),
+        "git_head": _git_head(root),
         "truncated": truncated,
         "content_paths": [str(p) for p in content_paths],
         "stored": sorted(stored),

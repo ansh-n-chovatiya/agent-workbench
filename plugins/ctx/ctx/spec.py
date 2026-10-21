@@ -243,7 +243,9 @@ def failure_modes_open(layout, slug):
     items = [m for m in map(_FAILURE_ITEM.match, section.splitlines()) if m]
     if not items:
         return [f"failure mode: the '## {FAILURE_MODES_HEADING}' section lists no items"]
-    open_items = []
+    present = {m.group("name").strip().lower() for m in items}
+    open_items = [f"failure mode missing: {name} — restore the line and answer it, or `n/a — <reason>`"
+                  for name in FAILURE_MODES if name.lower() not in present]
     for m in items:
         answer = (m.group("answer") or "").strip()
         reason = re.sub(r"^n/a\s*[—:\-–]*\s*", "", answer, flags=re.IGNORECASE).strip() if answer.lower().startswith("n/a") else answer
@@ -358,31 +360,48 @@ def add_questions(layout, slug, items, blocking=True):
     return len(fresh)
 
 
+_ID = re.compile(r"^q?(\d+)$", re.IGNORECASE)
+_LEADING_ID = re.compile(r"^q?(\d+)\s*[:.)]\s", re.IGNORECASE)
+
+
 def resolve(layout, slug, question, answer):
-    """Tick the question off and record the answer with the date it was given."""
+    """Tick one open question off and record the answer with the date it was given.
+
+    `question` is an id (`Q3` or `3`: the question written `Q3: ...`, else the nth open *blocking* one, which is the
+    number `ctx ask` prints) or a piece of the text. An id never matches `Q30`, and a piece of text that matches
+    more than one open question resolves none of them: answering several at once with one answer is never what was
+    meant. Returns True when exactly one question was resolved.
+    """
     qpath = questions_path(layout, slug)
     doc = frontmatter.read(qpath)
     if doc is None:
         return False
     needle = question.strip().lower()
-    matched = []
-
     lines = doc.body.splitlines()
+    section, opens = "", []  # (line index, text, in the blocking section)
     for index, line in enumerate(lines):
+        if line.startswith("## "):
+            section = line[3:].strip().lower()
+            continue
         match = _OPEN.match(line)
-        if match and needle in match.group(1).strip().lower():
-            lines[index] = line.replace("[ ]", "[x]", 1)
-            matched.append(match.group(1).strip())
-    if not matched:
-        return False
+        if match:
+            opens.append((index, match.group(1).strip(), section == BLOCKING.lower()))
 
+    wanted = _ID.match(needle)
+    if wanted:
+        number = wanted.group(1)
+        hits = [o for o in opens if (_LEADING_ID.match(o[1]) or [None, None])[1] == number]
+        if not hits:
+            blocking = [o for o in opens if o[2]]
+            hits = [blocking[int(number) - 1]] if 0 < int(number) <= len(blocking) else []
+    else:
+        hits = [o for o in opens if needle and needle in o[1].lower()]
+    if len(hits) != 1:
+        return False
+    index, text, _blocking = hits[0]
+    lines[index] = lines[index].replace("[ ]", "[x]", 1)
     doc.body = _append_to_section(
-        "\n".join(lines), RESOLVED,
-        "".join(
-            f"- {item} → {answer.strip()} ({datetime.date.today().isoformat()})\n"
-            for item in matched
-        ),
-    )
+        "\n".join(lines), RESOLVED, f"- {text} → {answer.strip()} ({datetime.date.today().isoformat()})\n")
     doc.write(qpath)
     return True
 

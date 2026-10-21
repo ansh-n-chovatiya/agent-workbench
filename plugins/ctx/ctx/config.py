@@ -49,6 +49,10 @@ DEFAULTS = {
     # blocked units), scrubbed and written to ~/.agent-workbench/improve/,
     # outside any repo. Passive and local-only; nothing is sent anywhere.
     "improve": {"enabled": True},
+    # Optional second reviewers, used only by `ctx review <unit> --with codex|gemini`, and only when the tool is
+    # installed and switched on in the user's own `~/.claude/ctx/external.yaml` (never by this project file: the
+    # package contains code and goes to that provider).
+    "external": {"timeout_seconds": 300},
     "gate": {
         "enabled": True,
         "max_attempts": 3,
@@ -107,12 +111,12 @@ DEFAULTS = {
         # everywhere at once instead of in whichever call site remembered to
         # check.
         "tiers": ["haiku", "sonnet", "opus"],
-        # A round that failed on its assigned tier escalates to the next one
-        # by default: the working assumption is that a failure is more likely
-        # a capability gap than bad luck, and silently re-running the same
-        # model is the more expensive way to find that out. A project that
-        # trusts its own judged-verify prompts enough to prefer a flat retry
-        # can turn this off here without touching the dispatcher.
+        # `escalate_on_failed_round` (off by default) moves a failed round to
+        # the next tier: the working assumption is that a failure is more
+        # likely a capability gap than bad luck, and silently re-running the
+        # same model is the more expensive way to find that out. A project
+        # that prefers that can turn it on here without touching the
+        # dispatcher.
         "escalate_on_failed_round": False,
     },
     # How `complexity-score` turns a unit's own frontmatter into a number, and
@@ -180,11 +184,12 @@ DEFAULTS = {
         # D18/D20: built default-off; flip only after the quality gate.
         "stop_rule": False,
         # Add a `## Callers` section to each review package: functions and classes whose signature changed, and the
-        # files outside the change that still mention them. Computed in code, no model. Off until measured (D20).
-        "callers": False,
+        # files outside the change that still mention them. Computed in code, no model. On since 2026-10-21 (D20):
+        # run on every unit of the evidence changes, bounded, and it caught what a diff-only reader cannot see.
+        "callers": True,
         # Add a `## Tests by criterion` section: which acceptance criterion has a test in this change, which has
-        # none. Computed in code, no model. Off until measured (D20).
-        "tests_table": False,
+        # none. Computed in code, no model. On since 2026-10-21 (D20), same evidence as `callers`.
+        "tests_table": True,
     },
     "auto_load": [],
     "redact": [],
@@ -479,9 +484,15 @@ def _read_policy(path, source):
 
 
 def _read_repo_config(path):
-    parsed = miniyaml.loads(path.read_text(encoding="utf-8")) or {}
+    try:
+        parsed = miniyaml.loads(path.read_text(encoding="utf-8")) or {}
+    except miniyaml.MiniYamlError as exc:
+        # Name the file: a bare "line 3: tab indentation is not allowed" sends the reader hunting, and in a hook the
+        # same unreadable file would otherwise switch the done-gate off with nothing said.
+        raise SystemExit(f"{path} is not valid ctx config ({exc}). Fix it, or move it aside to run with the "
+                         "defaults; until then ctx cannot read this project's settings.") from exc
     if not isinstance(parsed, dict):
-        raise miniyaml.MiniYamlError("ctx.yaml must be a mapping")
+        raise SystemExit(f"{path} must be a mapping of settings (key: value), not a list or a single value")
     found = parsed.get("schema", SCHEMA)
     if isinstance(found, int) and found > SCHEMA:
         raise SystemExit(
@@ -864,10 +875,10 @@ def render(config):
         "# Ships false; enable only after the D18/D20 quality gate.\n"
         "# review.callers adds a `## Callers` section to each review package:\n"
         "# changed function/class signatures and the files outside the change\n"
-        "# that still mention them (computed in code; ships false).\n"
+        "# that still mention them (computed in code; ships true).\n"
         "# review.tests_table adds a `## Tests by criterion` section: which\n"
         "# acceptance criterion has a test in the change and which has none\n"
-        "# (computed in code; ships false).\n"
+        "# (computed in code; ships true).\n"
         "# spec.failure_modes makes each new spec carry a `## Failure modes`\n"
         "# checklist (error paths, concurrency, existing data, callers, UI\n"
         "# states, cleanup) that must be answered before `ctx plan` will run.\n"

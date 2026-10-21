@@ -86,10 +86,6 @@ class TestSurfaces(WaveFixture):
         self.assertIn("1. never swallow an error", with_rules)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestPrPackage(WaveFixture):
     """`ctx review --pr`: the whole change against a base, with the project rules, from real git."""
 
@@ -131,6 +127,48 @@ class TestPrPackage(WaveFixture):
         with contextlib.redirect_stdout(buf):
             code = cli.main(["--cwd", str(self.root), "review", "--pr", "main"])
         self.assertEqual(code, 0)
-        self.assertTrue(buf.getvalue().strip().endswith("pr-review.md"))
+        self.assertTrue(buf.getvalue().splitlines()[0].endswith("pr-review.md"))
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli.main(["--cwd", str(self.root), "review", "--pr", "no-such-ref"]), 1)
+
+
+class TestPrPackageHardening(TestPrPackage):
+    def test_an_option_shaped_base_is_refused_before_git_sees_it(self):
+        path, problem = review_mod.pr_package(self.layout, "--output=oops")
+        self.assertIsNone(path)
+        self.assertIn("not a usable base ref", problem)
+        self.assertFalse((self.root / "oops...HEAD").exists())
+
+    def test_the_configured_redact_patterns_are_applied(self):
+        self.write("a.py", "token = 'INTERNAL-12345'\n")
+        self.git("commit", "-qam", "secret-ish")
+        path, problem = review_mod.pr_package(self.layout, "main", {"redact": ["INTERNAL-[0-9]+"]})
+        self.assertEqual(problem, "")
+        self.assertNotIn("INTERNAL-12345", path.read_text(encoding="utf-8"))
+
+    def test_a_latin_1_file_in_the_diff_does_not_crash(self):
+        (self.root / "b.txt").write_bytes("caf\xe9\n".encode("latin-1"))
+        self.git("add", "-A")
+        self.git("commit", "-qm", "latin1")
+        path, problem = review_mod.pr_package(self.layout, "main")
+        self.assertEqual(problem, "")
+        self.assertIn("b.txt", path.read_text(encoding="utf-8"))
+
+    def test_an_unknown_base_and_no_repository_are_plain_sentences(self):
+        _path, problem = review_mod.pr_package(self.layout, "origin/main")
+        self.assertIn("unknown base ref", problem)
+        self.assertNotIn("fatal", problem)
+
+
+class TestPlanUnitName(Fixture):
+    def test_a_name_plan_check_would_reject_is_refused_at_creation(self):
+        from ctx import plan as plan_mod
+        plan_mod.create(self.layout, "nm")
+        code, out = self.cli("plan-unit", "core", "--plan", "nm")
+        self.assertEqual(code, 1)
+        self.assertIn("01-kebab-case", out)
+        self.assertEqual(self.cli("plan-unit", "01-core", "--plan", "nm")[0], 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

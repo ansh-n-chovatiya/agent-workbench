@@ -21,7 +21,8 @@ python3 scripts/scan-personal-data.py && \
 (cd plugins/ctx && python3 -m unittest discover -s tests -q)
 ```
 
-For `ctx-optimize`: `cd plugins/ctx-optimize && python3 -m unittest discover -s tests -q`.
+For `ctx-optimize` (needs pytest): `cd plugins/ctx-optimize && python3 -m pytest tests -q`. Also run `ruff check --no-cache ctx tests`
+with ruff 0.16.7 from `plugins/ctx` before pushing ctx changes; CI runs it.
 
 ## Rules
 

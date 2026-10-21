@@ -53,6 +53,21 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("sample.txt:1: home path: " + home, result.stdout)
 
+    def test_dash_encoded_home_path_fails(self):
+        name = "private-" + "person"
+        result = self.run_scan(f"~/.claude/projects/-Users-{name}-Desktop-app/abc.jsonl\n")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("home path", result.stdout)
+
+    def test_windows_home_path_fails(self):
+        result = self.run_scan("C:\\" + "Users\\" + "privateperson\\proj\n")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("home path", result.stdout)
+
+    def test_allowed_placeholder_homes_pass_in_every_form(self):
+        result = self.run_scan("-Users-you-Desktop-x and C:\\" + "Users\\" + "you\\p and C:\\" + "Users\\" + "runneradmin\\p\n")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_private_pattern_fails(self):
         result = self.run_scan("confidential-label\n", "# comment\n\nconfidential-label\n")
         self.assertEqual(result.returncode, 1, result.stderr)

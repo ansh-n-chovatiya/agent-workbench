@@ -125,8 +125,8 @@ class TestScrub(StoreCase):
         self.assert_scrubbed("see /home/victim/.ssh/config", "victim", "<path>")
 
     def test_AC3_windows_path(self):
-        self.assert_scrubbed(r"opened C:\Users\carol\secret.txt now",
-                             "carol", "<path>")
+        self.assert_scrubbed(r"opened C:\Users\victim\secret.txt now",
+                             "victim", "<path>")
 
     def test_AC3_email(self):
         self.assert_scrubbed("mail dave@example.com about it",
@@ -247,6 +247,24 @@ class TestReviewFindings(StoreCase):
 
     def test_AC7_records_with_a_bad_layout_yields_nothing_instead_of_raising(self):
         self.assertEqual(list(improve.records(None)), [])
+
+    def test_AC3_forms_the_first_scrub_missed_are_scrubbed(self):
+        for text, leaked in (("see file:///Users/you/proj/db.py", "/Users/you"),
+                             ("scp prod:/home/you/.ssh/id_rsa", "/home/you"),
+                             ("at -/Users/you/x and x</Users/you/y", "/Users/you"),
+                             ("mail you@localhost", "you@localhost"),
+                             ("open ~you/notes/a.txt", "~you"),
+                             ("pw=hunter2 and token: abc123", "hunter2")):
+            self.assertNotIn(leaked, improve.scrub_text(text), text)
+        self.assertEqual(improve.scrub_text("keep src/app/main.py and https://host/x and and/or"),
+                         "keep src/app/main.py and https://host/x and and/or")
+
+    def test_AC6_backfill_keeps_severity_only_never_the_finding_text(self):
+        self.add_finding("p", "u1", "query = f\"SELECT * FROM t WHERE pw='{pw}'\" leaks")
+        improve.backfill(self.layout, ON)
+        text = self.target.read_text(encoding="utf-8")
+        self.assertNotIn("SELECT", text)
+        self.assertIn("finding recorded", text)
 
 
 class TestBackfill(StoreCase):
