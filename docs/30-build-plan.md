@@ -113,7 +113,7 @@ a second run changes nothing.
 
 ## Phase 6: optional agents
 
-**Status 2026-10-21: manual notes written** (`docs/62-multi-agent-notes.md`; stubs exist). Automatic calls stay unbuilt per D6.
+**Status 2026-10-21: manual notes written** (`docs/62-multi-agent-notes.md`; stubs exist). Update 2026-10-21 (owner request): optional second reviewers are built as `ctx review --with codex|gemini`, off by default, only when installed and switched on, findings low-confidence; builders stay manual.
 
 herdr layout notes, `AGENTS.md` / `GEMINI.md` stubs, manual `codex review` flow that records into
 `ctx findings`. Automatic cross-agent calls only if used by hand at least a few times first (D6).

@@ -37,7 +37,7 @@ from . import (
     phases as phases_mod, plain as plain_mod, plan as plan_mod,
     preview, preview_page, spec as spec_mod,
     findings as findings_mod, review as review_mod, snapshot as snapshot_mod,
-    rules as rules_mod, state, telemetry, trust as trust_mod, verify, work, worktree,
+    external, rules as rules_mod, state, telemetry, trust as trust_mod, verify, work, worktree,
     footprint as footprint_mod,
 )
 
@@ -1397,6 +1397,13 @@ def cmd_doctor(args):
     out.extend(policy_lines)
     rows.extend(policy_rows)
 
+    # Only when something is switched on, so a project that never asked for a second reviewer sees nothing new
+    # (and the output does not depend on what happens to be installed on this machine).
+    if any(external.switched_on(config, name) for name in external.AGENTS):
+        say("## external reviewers (optional)")
+        for line in external.status_lines(config):
+            say(line)
+
     section = "gate"
     say("## gate")
     override = config_mod.gate_override(layout, config, "doctor")
@@ -2504,6 +2511,27 @@ def cmd_snapshot(args):
     return 0
 
 
+def _external_review(layout, config, name, slug, unit, path, round_number):
+    """`ctx review --with codex|gemini`: an optional second reviewer. Records its findings as low-confidence ones
+    from that source, so they never block by themselves. Every failure is a message; the review carries on."""
+    _echo("")
+    findings, raw, problem = external.run_review(config, name, path.read_text(encoding="utf-8"))
+    if problem:
+        _echo(f"external review ({name}): {problem}")
+        return
+    out = layout.root / "runtime" / "reviews" / f"{slug}-{unit.name}-r{round_number}-{name}.md"
+    atomic.write_text(out, raw)
+    ledger = findings_mod.load(layout, slug, unit.name)
+    for severity, where, summary, why in findings:
+        added = ledger.add(severity, summary, where=where, evidence=why, source=name, confidence="low")
+        contract_mod.seal_findings(layout, slug, unit.name, ledger, authoritative=True, only=[added.id])
+    improve_mod.record(layout, config, "external-review", unit=unit.name, plan=slug,
+                       summary=f"{name} returned {len(findings)} finding(s)", key=f"external:{slug}/{unit.name}/{round_number}/{name}")
+    _echo(f"external review ({name}): {len(findings)} finding(s), recorded as low confidence; raw answer in {layout.rel(out)}")
+    if findings:
+        _echo(f"  confirm one with `ctx findings {unit.name} --set «id» --confidence high`, dispute the rest")
+
+
 def cmd_review(args):
     """Build the review package for a unit. Spawns no reviewer itself."""
     layout, config = _loaded(args)
@@ -2597,6 +2625,8 @@ def cmd_review(args):
           f"on **{reviewer_model}**.")
     _echo("Do not read the package yourself — that is the reviewer's context, not")
     _echo("yours, and reading it here defeats the point of the separate seat.")
+    if getattr(args, "with"):
+        _external_review(layout, config, getattr(args, "with"), slug, unit, path, round_number)
     # The audit asked for this to be measurable rather than asserted: package
     # bytes are the context the orchestrator did *not* spend re-deriving a diff.
     # `model`/`role` are ordinary fields (see `telemetry.record`'s docstring),
