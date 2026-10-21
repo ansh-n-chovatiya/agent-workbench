@@ -11,7 +11,8 @@ context flat across a twenty-unit plan, and it is only enforceable because the
 plan already declares who owns what.
 """
 
-from . import complexity as complexity_mod, config as config_mod, plan as plan_mod, worktree as wt
+from . import (complexity as complexity_mod, config as config_mod, plan as plan_mod, rules as rules_mod,
+               worktree as wt)
 
 DISPATCHABLE = ("inline", "subagent")
 
@@ -251,6 +252,9 @@ def instructions(layout, config, slug, level, units, budget, worktrees=(),
         "no matter how large the plan is.",
         "",
     ]
+    rule_lines = rules_mod.block(layout)
+    if rule_lines:
+        lines += ["**Project rules** (`ctx rules`): put them in each unit's prompt or contract.", *rule_lines, ""]
 
     concurrent = [u for u in units if u.tier == "subagent"]
     inline = [u for u in units if u.tier == "inline"]

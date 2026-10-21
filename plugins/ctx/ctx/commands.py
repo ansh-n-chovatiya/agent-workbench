@@ -37,7 +37,7 @@ from . import (
     phases as phases_mod, plain as plain_mod, plan as plan_mod,
     preview, preview_page, spec as spec_mod,
     findings as findings_mod, review as review_mod, snapshot as snapshot_mod,
-    state, telemetry, trust as trust_mod, verify, work, worktree,
+    rules as rules_mod, state, telemetry, trust as trust_mod, verify, work, worktree,
     footprint as footprint_mod,
 )
 
@@ -3101,6 +3101,21 @@ def cmd_miss(args):
         return 1
     _echo("recorded; it reaches the digest at the next session end")
     return 0
+
+
+def cmd_rules(args):
+    """List, add or retire the project's rules (`.ctx/rules.md`)."""
+    layout, _config = _loaded(args)
+    if args.remove is not None:
+        ok, message = rules_mod.remove(layout, args.remove)
+    elif args.add:
+        ok, message = rules_mod.add(layout, args.add)
+    else:
+        lines = rules_mod.block(layout)
+        _echo("\n".join(lines) if lines else "no project rules yet: ctx rules --add \"one general lesson\"")
+        return 0
+    (_echo if ok else _warn)(message)
+    return 0 if ok else 1
 
 
 def cmd_handoff(args):

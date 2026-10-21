@@ -996,6 +996,24 @@ SURFACE = {
              'escalate advisory conditions to exit 1'),
         ),
     ),
+    'rules': (
+        "list, add or retire the project's rules",
+        'cmd_rules',
+        (
+            ('-h/--help', 'help', 0, None, '<SUPPRESS>', None, None, False,
+             None, '_HelpAction',
+             'show this help message and exit'),
+            ('--add', 'add', None, None, None, None, None, False, 'TEXT',
+             '_StoreAction',
+             None),
+            ('--remove', 'remove', None, None, None, 'int', None, False, 'N',
+             '_StoreAction',
+             None),
+            ('--strict', 'strict', 0, True, '<SUPPRESS>', None, None, False,
+             None, '_StoreTrueAction',
+             'escalate advisory conditions to exit 1'),
+        ),
+    ),
 }
 
 
@@ -1050,7 +1068,7 @@ class TestTheSurfaceIsUnchanged(unittest.TestCase):
     def test_the_same_commands_in_the_same_order(self):
         live = _live()
         self.assertEqual(list(live), list(SURFACE))
-        self.assertEqual(len(live), 45)
+        self.assertEqual(len(live), 46)
 
     def test_every_command_is_unchanged(self):
         live = _live()

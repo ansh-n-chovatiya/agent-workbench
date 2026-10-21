@@ -25,7 +25,7 @@ import re
 import subprocess
 import time
 
-from . import atomic, callers, plan, redact, snapshot, testmap
+from . import atomic, callers, plan, redact, rules as rules_mod, snapshot, testmap
 
 REVIEW_SUBDIR = "reviews"
 
@@ -727,6 +727,10 @@ def _render(layout, config, unit, slug, delta, stray, base_key, head_key,
         out += ["", f"Not scope-checked: {arrived} path(s) arrived by a git commit during this window (a pull, a "
                     "merge or another session's commit). They are clean in git, so this unit did not leave them."]
 
+    rule_lines = rules_mod.block(layout)
+    if rule_lines:
+        out += ["", "## Project rules", "", "Confirmed lessons for this project. Check the change against each.", "",
+                *rule_lines]
     if caller_lines is not None:
         out += ["", "## Callers", "", *caller_lines]
     if test_lines is not None:

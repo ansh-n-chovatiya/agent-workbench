@@ -421,8 +421,9 @@ class SplitTests(unittest.TestCase):
     # the cap moved by exactly those two lines.
     #
     # 307 since `ctx improve` and `ctx miss`: two CLI-table rows (the table test
-    # needs one row per subcommand), so the cap moved by exactly those two lines.
-    CAP = 307
+    # needs one row per subcommand), so the cap moved by exactly those two lines;
+    # 308 since `ctx rules`: one more row, one more line.
+    CAP = 308
 
     def test_the_readme_stays_short_enough_to_read(self):
         lines = len(read(README).splitlines())

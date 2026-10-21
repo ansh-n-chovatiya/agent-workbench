@@ -163,6 +163,11 @@ or changed, and the files outside the change that still mention the name as a wh
 more than twelve files is summarised). It is a lead for the reviewer to read, not proof of a call; a removed name that is
 still mentioned is the likeliest breakage. Ledger files are never searched. With the key off the package is unchanged.
 
+`ctx rules` keeps the project's rules in `.ctx/rules.md`: one line each, confirmed and general, capped at 40 rules of
+200 characters because every review and dispatch reads them. `--add "text"` records one (refused when the file is
+full, empty or a duplicate), `--remove N` retires one, no flag lists them. Review packages gain a `## Project rules`
+section and the `ctx start` brief a rules block, both only when rules exist. Nothing adds a rule automatically.
+
 `review.tests_table` is a boolean, default `false`. When enabled, each review package gains a `## Tests by criterion`
 section computed in code (no model) from the test files the change added or modified (`test_*.py`, `*_test.py`,
 `*.test.*`, `*.spec.*`). A test counts for criterion N when its name or body says `AC<N>`, `criterion <N>` or `c<N>`;
