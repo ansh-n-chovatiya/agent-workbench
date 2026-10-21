@@ -557,7 +557,7 @@ jobs:
 
   # The one required check. A job skipped because its product did not change reports "skipped", and a skipped
   # matrix job never reports its expanded names, so the individual jobs cannot be required. This passes when
-  # everything that ran passed, and fails on any failure or cancellation.
+  # everything that ran passed, and fails on anything that is not a success or a skip.
   gate:
     name: ci gate
     if: always()
@@ -575,4 +575,8 @@ jobs:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
           echo "results: $RESULTS"
-          case " $RESULTS " in *" failure "*|*" cancelled "*) exit 1;; esac
+          # Only success and skipped pass: a failed, cancelled or timed-out job (a matrix leg that hung and was
+          # cancelled once reported as passing here) must never read as green.
+          for result in $RESULTS; do
+            case "$result" in success|skipped) ;; *) echo "not green: $result"; exit 1;; esac
+          done
