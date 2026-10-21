@@ -129,3 +129,45 @@ class TestThroughTheCli(FailureModeSpec):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestReviewFindings(FailureModeSpec):
+    """Whole-repo review: deleting lines must not open the gate; ids must not match other ids."""
+
+    def test_deleting_all_but_one_item_does_not_open_the_gate(self):
+        self.make()
+        path = spec_mod.spec_path(self.layout, SLUG)
+        doc = frontmatter.read(path)
+        head = doc.body.split("## Failure modes", 1)[0]
+        tail = doc.body.split("## Out of scope", 1)[1]
+        doc.body = head + "## Failure modes\n- [x] input boundaries: criterion 1\n\n## Out of scope" + tail
+        doc.write(path)
+        missing = [b for b in self.open_items() if "missing" in b]
+        self.assertEqual(len(missing), len(spec_mod.FAILURE_MODES) - 1)
+
+    def test_resolving_q1_never_resolves_q10_and_text_matching_two_resolves_none(self):
+        spec_mod.create(self.layout, "ids", "Intent.")
+        qpath = spec_mod.questions_path(self.layout, "ids")
+        doc = frontmatter.read(qpath)
+        doc.body = doc.body.replace("## Blocking", "## Blocking\n" + "".join(
+            f"- [ ] Q{n}: question number {n} about keys\n" for n in (1, 10, 11)), 1)
+        doc.write(qpath)
+        self.assertTrue(spec_mod.resolve(self.layout, "ids", "Q1", "yes"))
+        body = frontmatter.read(qpath).body
+        self.assertIn("- [x] Q1:", body)
+        self.assertIn("- [ ] Q10:", body)
+        self.assertIn("- [ ] Q11:", body)
+        self.assertFalse(spec_mod.resolve(self.layout, "ids", "about keys", "yes"))  # matches two: none resolved
+        self.assertIn("- [ ] Q10:", frontmatter.read(qpath).body)
+        self.assertTrue(spec_mod.resolve(self.layout, "ids", "number 11", "yes"))
+
+    def test_a_bare_number_is_the_nth_open_blocking_question(self):
+        spec_mod.create(self.layout, "nth", "Intent.")
+        qpath = spec_mod.questions_path(self.layout, "nth")
+        doc = frontmatter.read(qpath)
+        doc.body = doc.body.replace("## Blocking", "## Blocking\n- [ ] first thing\n- [ ] second thing", 1)
+        doc.write(qpath)
+        self.assertTrue(spec_mod.resolve(self.layout, "nth", "2", "ok"))
+        body = frontmatter.read(qpath).body
+        self.assertIn("- [x] second thing", body)
+        self.assertIn("- [ ] first thing", body)

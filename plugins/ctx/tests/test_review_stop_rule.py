@@ -117,6 +117,7 @@ class StopRuleReviewTests(ReviewFixture):
     def test_cli_critical_allows_round_three_and_four_with_edits(self):
         unit = self.prepare()
         findings.load(self.layout, self.slug, unit.name).add("critical", "data loss")
+        self.write("src/a.py", "x = 3\n")  # the fix: a ledger write alone is not one
         # Each fix is compared with the immediately preceding reviewed tree,
         # not the original pre-work baseline.
         path, _stats, problem = self.next_build(unit)
@@ -140,9 +141,19 @@ class StopRuleReviewTests(ReviewFixture):
         self.assertIn("Dispatch", out)
         self.assertTrue(review.package_path(self.layout, self.slug, unit.name, 3).is_file())
 
-    def test_ledger_edit_is_not_an_empty_snapshot_delta(self):
+    def test_a_ledger_only_change_is_still_an_empty_delta(self):
+        """Every ctx command writes the journal and `findings --add` writes the findings file, so counting those as
+        a change meant the rule could never fire in real use (whole-repo review)."""
         unit = self.prepare()
         findings.load(self.layout, self.slug, unit.name).add("important", "still broken")
+        path, _stats, problem = self.next_build(unit)
+        self.assertIsNone(path)
+        self.assertIn("unchanged since the last review", problem)
+
+    def test_control_a_ledger_write_plus_a_real_edit_still_builds_the_package(self):
+        unit = self.prepare()
+        findings.load(self.layout, self.slug, unit.name).add("important", "still broken")
+        self.write("src/a.py", "x = 3\n")
         path, _stats, problem = self.next_build(unit)
         self.assertEqual(problem, "")
         self.assertTrue(path.is_file())

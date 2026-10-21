@@ -37,7 +37,7 @@ from . import (
     phases as phases_mod, plain as plain_mod, plan as plan_mod,
     preview, preview_page, spec as spec_mod,
     findings as findings_mod, review as review_mod, snapshot as snapshot_mod,
-    rules as rules_mod, state, telemetry, trust as trust_mod, verify, work, worktree,
+    external, rules as rules_mod, state, telemetry, trust as trust_mod, verify, work, worktree,
     footprint as footprint_mod,
 )
 
@@ -1397,6 +1397,13 @@ def cmd_doctor(args):
     out.extend(policy_lines)
     rows.extend(policy_rows)
 
+    # Only when something is switched on, so a project that never asked for a second reviewer sees nothing new
+    # (and the output does not depend on what happens to be installed on this machine).
+    if any(external.switched_on(config, name) for name in external.AGENTS):
+        say("## external reviewers (optional)")
+        for line in external.status_lines(config):
+            say(line)
+
     section = "gate"
     say("## gate")
     override = config_mod.gate_override(layout, config, "doctor")
@@ -1543,7 +1550,8 @@ def cmd_resolve(args):
         _echo("no active spec — /ctx:spec «intent» first")
         return _advise("no-active-work")
     if not spec_mod.resolve(layout, slug, args.question, args.answer):
-        _echo(f"no open question matching {args.question!r}")
+        _echo(f"no open question matches {args.question!r} uniquely: use its id (`Q3` or the number `ctx ask` shows) or "
+              "more of its text; text that matches several questions resolves none of them")
         return 1
     journal.append(layout, config, "spec", slug, f"resolved: {args.question[:60]}")
     # Both halves of the gate `ctx plan` actually applies. Answering the last
@@ -1806,6 +1814,10 @@ def cmd_plan_unit(args):
     slug, code = _plan_or_report(layout, args, "plan-unit")
     if slug is None:
         return code
+    if not plan_mod.valid_unit_name(args.name):
+        _warn(f"unit name {args.name!r} must look like 01-kebab-case (two digits, a dash, lowercase words): the number "
+              "orders the plan, e.g. `ctx plan-unit 01-core`")
+        return 1
     path, fresh = plan_mod.scaffold_unit(
         layout, slug, args.name, objective=args.objective or "",
         tier=args.tier, owns=args.owns or [],
@@ -2203,6 +2215,7 @@ def _set_unit_status(layout, slug, units, status):
             # reading `status: half-done` must be corrected, not skipped.
             if str(unit.doc.meta.get("status") or "") != status:
                 unit.set(status=status)
+            contract_mod.stamp_done(layout, slug, unit.name, present=(status == "done"))
     return units
 
 
@@ -2504,15 +2517,40 @@ def cmd_snapshot(args):
     return 0
 
 
+def _external_review(layout, config, name, slug, unit, path, round_number):
+    """`ctx review --with codex|gemini`: an optional second reviewer. Records its findings as low-confidence ones
+    from that source, so they never block by themselves. Every failure is a message; the review carries on."""
+    _echo("")
+    findings, raw, problem = external.run_review(config, name, path.read_text(encoding="utf-8"))
+    if problem:
+        _echo(f"external review ({name}): {problem}")
+        return
+    out = layout.root / "runtime" / "reviews" / f"{slug}-{unit.name}-r{round_number}-{name}.md"
+    atomic.write_text(out, raw)
+    ledger = findings_mod.load(layout, slug, unit.name)
+    for severity, where, summary, why in findings:
+        added = ledger.add(severity, summary, where=where, evidence=why, source=name, confidence="low")
+        contract_mod.seal_findings(layout, slug, unit.name, ledger, authoritative=True, only=[added.id])
+    improve_mod.record(layout, config, "external-review", unit=unit.name, plan=slug,
+                       summary=f"{name} returned {len(findings)} finding(s)", key=f"external:{slug}/{unit.name}/{round_number}/{name}")
+    _echo(f"external review ({name}): {len(findings)} finding(s), recorded as low confidence; raw answer in {layout.rel(out)}")
+    if findings:
+        _echo(f"  confirm one with `ctx findings {unit.name} --set «id» --confidence high`, dispute the rest")
+
+
 def cmd_review(args):
     """Build the review package for a unit. Spawns no reviewer itself."""
     layout, config = _loaded(args)
     if args.pr:  # the whole change, once, before merge; `name` is the base ref
-        path, problem = review_mod.pr_package(layout, args.name or "origin/main")
+        path, problem = review_mod.pr_package(layout, args.name or "origin/main", config)
         if problem:
             _warn(problem)
             return 1
         _echo(str(path))
+        _echo("Dispatch the `reviewer` agent against it (the `/ctx:pr-review` command does this); record what it "
+              "finds with `ctx findings`.")
+        if getattr(args, "with"):
+            _echo("--with applies to a unit's review, not to --pr; run `ctx review <unit> --with ...` for that.")
         return 0
     slug, unit = _unit_or_report(layout, args, "review")
     if unit is None:
@@ -2597,6 +2635,8 @@ def cmd_review(args):
           f"on **{reviewer_model}**.")
     _echo("Do not read the package yourself — that is the reviewer's context, not")
     _echo("yours, and reading it here defeats the point of the separate seat.")
+    if getattr(args, "with"):
+        _external_review(layout, config, getattr(args, "with"), slug, unit, path, round_number)
     # The audit asked for this to be measurable rather than asserted: package
     # bytes are the context the orchestrator did *not* spend re-deriving a diff.
     # `model`/`role` are ordinary fields (see `telemetry.record`'s docstring),
@@ -3541,7 +3581,7 @@ def cmd_telemetry(args):
     return 0
 
 
-def _gateable_units(grouped):
+def _gateable_units(grouped, layout=None, slug=None):
     """The units of a plan a headless run holds to the done-gate.
 
     Dispatched and not finished — `running`, `blocked`, `verify_failed`. The
@@ -3553,9 +3593,14 @@ def _gateable_units(grouped):
         runs, and a pipeline that went red for that would be turned off.
       * `done` units were gated when they were marked done, and their `diff`
         checks are answered against a dispatch point that is now behind them.
+        Only when ctx marked them: a unit file edited by hand to say `done` has
+        no stamp, was never gated, and is held to the gate like a running one.
     """
+    def trusted_done(unit):
+        return layout is None or slug is None or contract_mod.is_done_stamped(layout, slug, unit.name)
+
     return [unit for level in sorted(grouped) for unit in grouped[level]
-            if unit.status not in ("pending", "done")]
+            if unit.status != "pending" and (unit.status != "done" or not trusted_done(unit))]
 
 
 def cmd_ci(args):
@@ -3695,7 +3740,7 @@ def cmd_ci(args):
         # plan does not describe a runnable wave, and gating units inside a
         # broken graph reports the same problem a second time in a worse voice.
         if not problems:
-            for unit in _gateable_units(grouped):
+            for unit in _gateable_units(grouped, layout, slug):
                 ok, reason, lines = verify.gate_check(
                     layout, config, slug, unit, record=False)
                 report(f"{unit.name} would pass the done-gate", ok, str(reason),

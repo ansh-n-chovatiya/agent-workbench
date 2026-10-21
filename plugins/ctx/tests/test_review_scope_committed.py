@@ -5,6 +5,8 @@ eight review packages carried a mechanical Critical for them. A unit does not co
 and was touched by a commit after the unit's baseline did not come from it. The controls matter most: an uncommitted
 edit, a re-edited committed file and an untracked file are all still violations.
 """
+import os
+import stat
 import subprocess
 import sys
 import time
@@ -19,9 +21,12 @@ from test_review_scope_noise import real_git_repo  # noqa: E402
 from test_sibling_scope import WaveFixture, violation_paths  # noqa: E402
 
 
-def git(root, *args):
+def git(root, *args, date=None):
+    env = dict(os.environ)
+    if date:
+        env["GIT_COMMITTER_DATE"] = env["GIT_AUTHOR_DATE"] = date
     subprocess.run(["git", "-c", "user.email=a@example.com", "-c", "user.name=a", *args],
-                   cwd=str(root), check=True, capture_output=True)
+                   cwd=str(root), check=True, capture_output=True, env=env)
 
 
 class CommittedFixture(WaveFixture):
@@ -55,6 +60,7 @@ class TestArrivedByCommit(CommittedFixture):
         text = self.text()
         self.assertEqual(violation_paths(text), set())
         self.assertIn("1 path(s) arrived by a git commit", text)
+        self.assertIn("src/other.py", text)
 
     def test_control_an_uncommitted_edit_is_still_a_violation(self):
         self.write("src/alpha.py", "alpha = 2\n")
@@ -70,16 +76,28 @@ class TestArrivedByCommit(CommittedFixture):
         self.write("src/new.py", "new = 1\n")
         self.assertEqual(violation_paths(self.text()), {"src/new.py"})
 
-    def test_control_a_path_committed_before_the_window_is_not_excused_by_it(self):
-        # changed on disk without any commit after the baseline
+    def test_control_a_commit_made_before_the_window_does_not_excuse_a_later_uncommitted_edit(self):
+        # `src/other.py` was committed by someone before the baseline; the baseline is taken after that commit.
+        # Its later uncommitted change is therefore not "arrived by commit" and is a violation.
         self.write("src/other.py", "other = 9\n")
-        git(self.root, "stash", "-q")
-        git(self.root, "stash", "pop", "-q")
         self.assertEqual(violation_paths(self.text()), {"src/other.py"})
 
+    def test_control_a_historical_commit_outside_the_window_is_not_found_by_the_time_filter(self):
+        self.write("src/old.py", "old = 1\n")
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "ancient", date="2001-01-01T00:00:00+0000")
+        kept, arrived = review_mod._split_committed(self.layout, ["src/old.py"], time.time() - 0.5, "")
+        self.assertEqual((kept, arrived), (["src/old.py"], []))
+
     def test_without_a_repository_nothing_is_excused(self):
+        import os
         import shutil
-        shutil.rmtree(self.root / ".git")
+
+        def writable(function, path, _excinfo):  # git marks object files read-only; Windows refuses to delete them
+            os.chmod(path, stat.S_IWRITE)
+            function(path)
+
+        shutil.rmtree(self.root / ".git", onerror=writable)
         (self.root / ".git").mkdir()
         self.write("src/other.py", "other = 2\n")
         self.assertEqual(violation_paths(self.text()), {"src/other.py"})

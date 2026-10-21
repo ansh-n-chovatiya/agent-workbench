@@ -43,9 +43,11 @@ SECTIONS = (
     ("friction", "Process friction", ("forced-done", "blocked")),
     ("manual", "Manual fixes", ("manual-fix",)),
     ("redo", "Possible redos", ("possible-redo",)),
+    ("second", "Second reviewer runs", ("external-review",)),
+    ("rounds", "Review rounds", ("rounds",)),
 )
 #: Sections whose records are low confidence by nature: listed, never suggested.
-_LISTED_ONLY = ("manual", "redo")
+_LISTED_ONLY = ("manual", "redo", "second", "rounds")
 
 SUGGESTIONS = {
     "review-finding": "Add the recurring check to the unit template's acceptance criteria or its verify commands.",
@@ -185,7 +187,7 @@ def _render(slug, analysis, total):
                 lines.append(f"  - suggested change: {SUGGESTIONS[item['kind']]}")
         if sid not in _LISTED_ONLY and bucket["low"]:
             lines.append(f"- low confidence, listed apart and never counted: {bucket['low']}")
-        if sid in _LISTED_ONLY and patterns:
+        if sid in _LISTED_ONLY and sid not in ("second", "rounds") and patterns:
             lines.append("- low confidence: listed for a person to judge, never counted toward a suggestion")
     # Defence in depth: nothing leaves this function without one more scrub of its lines.
     return "\n".join(_final(line) for line in lines) + "\n"

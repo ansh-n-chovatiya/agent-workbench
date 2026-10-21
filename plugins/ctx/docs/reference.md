@@ -54,6 +54,11 @@ improve:
                               # paths, emails or tokens. Local-only; nothing is
                               # transmitted, and nothing is changed by it.
 
+external:
+  timeout_seconds: 300        # how long a second reviewer may take before it is
+                              # skipped (capped at 900). Whether a tool may be used
+                              # is NOT set here: see `ctx review --with` below.
+
 gate:
   enabled: true               # false disables the done-gate
   max_attempts: 3             # blocks before it escalates to you
@@ -120,9 +125,9 @@ review:
                               # unchanged fix rounds write no package
   small_package_bytes: 20000  # a clean review package under this earns the
                               # reviewer one tier *cheaper* than models.reviewer
-  callers: false              # opt in after the D18/D20 quality gate: add a
+  callers: true               # on since 2026-10-21 (D20): add a
                               # `## Callers` section to each review package
-  tests_table: false          # opt in likewise: add a `## Tests by criterion`
+  tests_table: true           # on likewise: add a `## Tests by criterion`
                               # section (which criterion has a test, which none)
 
 spec:
@@ -157,20 +162,31 @@ Remaining findings need a ruling or an owner decision (`/ctx:decide`). Fix round
 with no snapshot delta print an unchanged notice and exit 1 without a package
 or reviewer dispatch. Round 1 is always eligible to build a package.
 
-`review.callers` is a boolean, default `false`. When enabled, each review package gains a `## Callers` section computed
+`review.callers` is a boolean, default `true` (since 2026-10-21). When enabled, each review package gains a `## Callers` section computed
 in code (no model): functions and classes in Python, JavaScript and TypeScript files whose signature was added, removed
 or changed, and the files outside the change that still mention the name as a whole word, with line numbers (a name in
 more than twelve files is summarised). It is a lead for the reviewer to read, not proof of a call; a removed name that is
 still mentioned is the likeliest breakage. Ledger files are never searched. With the key off the package is unchanged.
+
+`ctx review <unit> --with codex|gemini` asks an optional second reviewer. It runs only when the tool is on the PATH
+and you switched it on **for this machine** in `~/.claude/ctx/external.yaml` (`codex:` with `enabled: true` indented
+under it; `$CTX_GLOBAL_ROOT` moves the folder). The project's own `ctx.yaml` cannot switch it on, because that file is
+committed and a repository's author would otherwise decide that your code is sent to a third party. Otherwise it prints what is missing (not installed, or installed but off) and the
+normal review carries on. The tool runs read-only in an empty temporary directory with the package on stdin, not in the
+repository, and is skipped after `external.timeout_seconds`. Its `FINDING | severity | file:line | summary | why` lines
+are recorded as **low-confidence** findings from that source, so they never block a unit on their own; confirm one with
+`ctx findings <unit> --set ID --confidence high` or dispute it. The raw answer is kept in
+`.ctx/runtime/reviews/<plan>-<unit>-rN-<tool>.md`, and `ctx doctor` lists the tools once any is switched on. Answers are scrubbed (paths, emails, secrets) and kept to one
+short line each before they can reach a later briefing.
 
 `ctx rules` keeps the project's rules in `.ctx/rules.md`: one line each, confirmed and general, capped at 40 rules of
 200 characters because every review and dispatch reads them. `--add "text"` records one (refused when the file is
 full, empty or a duplicate), `--remove N` retires one, no flag lists them. Review packages gain a `## Project rules`
 section and the `ctx start` brief a rules block, both only when rules exist. Nothing adds a rule automatically. `ctx review --pr [base]` (the `/ctx:pr-review` command) builds one package for the whole change against a base (default `origin/main`): the rules, the file stat and a capped diff, for a single read-only reviewer pass before merge.
 
-`review.tests_table` is a boolean, default `false`. When enabled, each review package gains a `## Tests by criterion`
+`review.tests_table` is a boolean, default `true` (since 2026-10-21). When enabled, each review package gains a `## Tests by criterion`
 section computed in code (no model) from the test files the change added or modified (`test_*.py`, `*_test.py`,
-`*.test.*`, `*.spec.*`). A test counts for criterion N when its name or body says `AC<N>`, `criterion <N>` or `c<N>`;
+`*.test.js|jsx|mjs|cjs|ts|tsx`, `*.spec.*` likewise). A test counts for criterion N when its name or body says `AC<N>`, `criterion <N>` or `c<N>`;
 a test with no such tag is matched, marked *guess*, when its name shares two or more significant words with the
 criterion. A criterion with no test reads **NONE**. When the unit lists `failure_modes`, each mode gets a row too, matched by its phrase in a test's name or body or marked *guess* by a shared word. A test that already existed and was not touched is not shown.
 

@@ -53,13 +53,19 @@ KIND_FALSE_ALARM = "reviewer-false-alarm"
 
 FALSE_ALARM_STATUSES = ("disputed", "parked")
 
-_EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+")
+_EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*")
 # Windows drive paths, UNC paths, then any absolute POSIX path of two or more
 # segments (so `and/or` and `https://host/x` are left alone).
 _WIN_PATH = re.compile(r"\b[A-Za-z]:[\\/][^\s'\"`,;)\]>]*")
 _UNC_PATH = re.compile(r"\\\\[^\s'\"`,;)\]>]+")
-_POSIX_PATH = re.compile(r"(?<![\w.:/\\<-])/(?:[^\s/'\"`,;)\]>]+/)+[^\s/'\"`,;)\]>]*")
-_HOME_PATH = re.compile(r"(?<![\w.:/\\<-])/(?:Users|home)/[^\s'\"`,;)\]>]*")
+_POSIX_PATH = re.compile(r"(?<![\w.:/\\])/(?:[^\s/'\"`,;)\]>]+/)+[^\s/'\"`,;)\]>]*")
+_HOME_PATH = re.compile(r"(?<![\w.:/\\])/(?:Users|home)/[^\s'\"`,;)\]>]*")
+# Forms that carry a home or a login without a leading slash: `file:///Users/x`, `host:/home/you`, `~bob/x`, and a
+# secret assigned in prose (`pw=hunter2`, `token: abc`).
+_FILE_URL = re.compile(r"\bfile:/{2,3}[^\s'\"`,;)\]>]+")
+_SCP_PATH = re.compile(r"(?<![/:\w])[\w.-]+:/(?!/)[^\s'\"`,;)\]>]+")
+_TILDE_PATH = re.compile(r"(?<![\w/])~[\w.-]*/[^\s'\"`,;)\]>]*")
+_ASSIGNED_SECRET = re.compile(r"(?i)\b(pw|pwd|pass|passwd|password|secret|token|api[_-]?key|apikey)\b(\s*[=:]\s*)\S+")
 _HEX = re.compile(r"\b[0-9a-fA-F]{20,}\b")
 # No `/`, `-` or `_`: a path, a hyphenated name or a snake_case identifier is not a key, and the unit and plan
 # names that go through this scrub are exactly that. Mixed letters and digits, 32 or more in a row, is.
@@ -108,8 +114,9 @@ def scrub_text(text, limit=MAX_SUMMARY, ident=False):
     one = " ".join(str(text or "")[:4000].split())
     one = redact.scrub(one)
     one = _EMAIL.sub("<email>", one)
-    for pattern in (_WIN_PATH, _UNC_PATH, _HOME_PATH, _POSIX_PATH):
+    for pattern in (_FILE_URL, _WIN_PATH, _UNC_PATH, _SCP_PATH, _TILDE_PATH, _HOME_PATH, _POSIX_PATH):
         one = pattern.sub("<path>", one)
+    one = _ASSIGNED_SECRET.sub(lambda m: m.group(1) + m.group(2) + "<secret>", one)
     one = _HEX.sub("<secret>", one)
     one = (_B64 if ident else _B64_WIDE).sub(_b64_repl, one)
     return one[:limit]
@@ -214,7 +221,7 @@ def _finding_entries(layout):
                 kind = (KIND_FALSE_ALARM if item.status in FALSE_ALARM_STATUSES
                         else KIND_FINDING)
                 entries.append(_build(
-                    kind, unit, plan_slug, item.summary, item.confidence,
+                    kind, unit, plan_slug, f"{item.severity} finding recorded", item.confidence,
                     f"backfill:{plan_slug}/{unit}/{item.id}"))
         except Exception as exc:  # one bad ledger must not stop the others
             log.failure("improve.backfill", exc, path=path)

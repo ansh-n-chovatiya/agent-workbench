@@ -55,7 +55,9 @@ LOCK_STALE_SECONDS = 120.0
 # `state` keeps the limits it was tuned to. Five seconds was not enough on
 # Windows under a wave — CI lost one increment in eighty — where creating and
 # unlinking a file costs far more than it does on a POSIX filesystem.
-_LIMITS = {"state": (30.0, 60.0)}
+# The improvement log is written from hooks whose own timeouts are 3 to 5 seconds: waiting longer than a second for
+# it would get the hook killed and lose the nudge that runs after it, to save one best-effort record.
+_LIMITS = {"state": (30.0, 60.0), "improve": (1.0, 30.0)}
 
 # `state.lock` predates this module and sits directly in `runtime/`. Moving it
 # would be a rename with no benefit and one cost: a process still running the

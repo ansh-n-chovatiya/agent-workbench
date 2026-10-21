@@ -34,7 +34,11 @@ def main(event, stream=None, out=None):
     stream = stream or sys.stdin
     out = out or sys.stdout
     payload = _read_payload(stream)
-    root = paths.ctx_dir(payload.get("cwd"))
+    try:
+        cwd = payload.get("cwd")
+        root = paths.ctx_dir(cwd if isinstance(cwd, str) else None)
+    except Exception:  # a hook must never be why a session fails
+        return 0
     if root is None:
         return 0  # untracked project: contribute nothing
     layout = paths.Layout(root)

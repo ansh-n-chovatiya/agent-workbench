@@ -1,7 +1,7 @@
 """The review package can say which acceptance criterion has a test and which has none (D12, phase 4).
 
 Computed in code at zero model cost, from the test files the change added or modified. It is opt-in
-(`review.tests_table`, default off, D20) and, when off, leaves the package as it was. The controls that matter: a
+(`review.tests_table`, on by default since 2026-10-21, D20) and, when switched off, leaves the package as it was. The controls that matter: a
 criterion with no test must read NONE, and a changed non-test file must never be mistaken for a test.
 """
 import sys
@@ -106,8 +106,8 @@ class TestInThePackage(WaveFixture):
         self.assertEqual(problem, "")
         return built.read_text(encoding="utf-8")
 
-    def test_the_switch_ships_off(self):
-        self.assertIs(config_mod.DEFAULTS["review"]["tests_table"], False)
+    def test_the_switch_ships_on(self):
+        self.assertIs(config_mod.DEFAULTS["review"]["tests_table"], True)
 
     def test_on_a_criterion_without_a_test_reads_none(self):
         self.write("tests/test_alpha.py", "def test_empty():\n    # AC1\n    pass\n")
